@@ -126,99 +126,105 @@ export default function KOT() {
             </div>
         )}
 
-        {orders.map(order => (
-          <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${getStatusColor((order.kitchenStatus || 'PENDING') as KitchenStatus, order.status)}`}>
-            
-            {/* Header */}
-            <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
-                <div>
-                    <h3 className="font-bold text-lg text-gray-800">#{order.orderNumber}</h3>
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <Clock size={12} /> {new Date(order.createdAt).toLocaleTimeString()}
-                    </div>
-                </div>
-                <div className="text-right">
-                    <span className="block text-xs font-bold uppercase text-gray-500">{order.orderType}</span>
-                    {order.tableNumber && <span className="block text-xs font-bold bg-blue-100 text-blue-700 px-1 rounded mt-1">T-{order.tableNumber}</span>}
-                </div>
-            </div>
+        {orders.map(order => {
+          // Explicitly handle kitchenStatus for TypeScript safety
+          const currentKitchenStatus: KitchenStatus = order.kitchenStatus || 'PENDING';
+          const cardColor = getStatusColor(currentKitchenStatus, order.status);
+          
+          return (
+            <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${cardColor}`}>
+              
+              {/* Header */}
+              <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
+                  <div>
+                      <h3 className="font-bold text-lg text-gray-800">#{order.orderNumber}</h3>
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <Clock size={12} /> {new Date(order.createdAt).toLocaleTimeString()}
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <span className="block text-xs font-bold uppercase text-gray-500">{order.orderType}</span>
+                      {order.tableNumber && <span className="block text-xs font-bold bg-blue-100 text-blue-700 px-1 rounded mt-1">T-{order.tableNumber}</span>}
+                  </div>
+              </div>
 
-            {/* Items */}
-            <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-60">
-                {order.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 text-sm">
-                        <span className="font-bold text-gray-800 w-6">{item.quantity}x</span>
-                        <span className="text-gray-700">{item.productName}</span>
-                    </div>
-                ))}
-                {order.note && (
-                    <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded mt-2 border border-yellow-200">
-                        <strong>Note:</strong> {order.note}
-                    </div>
-                )}
-            </div>
+              {/* Items */}
+              <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-60">
+                  {order.items.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 text-sm">
+                          <span className="font-bold text-gray-800 w-6">{item.quantity}x</span>
+                          <span className="text-gray-700">{item.productName}</span>
+                      </div>
+                  ))}
+                  {order.note && (
+                      <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded mt-2 border border-yellow-200">
+                          <strong>Note:</strong> {order.note}
+                      </div>
+                  )}
+              </div>
 
-            {/* Actions */}
-            <div className="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-2">
-                {order.status === OrderStatus.CANCELLED ? (
-                    <div className="text-center">
-                        <div className="text-red-600 font-bold mb-2">CANCELLED</div>
-                        <button 
-                            onClick={() => updateKitchenStatus(order, 'SERVED')}
-                            disabled={!canProcess}
-                            className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
-                        >
-                            Dismiss
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex gap-2">
-                            {(!order.kitchenStatus || order.kitchenStatus === 'PENDING') && (
-                                <button 
-                                    onClick={() => updateKitchenStatus(order, 'PREPARING')}
-                                    disabled={!canProcess}
-                                    className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
-                                >
-                                    <Loader size={16} /> Start
-                                </button>
-                            )}
-                            
-                            {order.kitchenStatus === 'PREPARING' && (
-                                <button 
-                                    onClick={() => updateKitchenStatus(order, 'READY')}
-                                    disabled={!canProcess}
-                                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
-                                >
-                                    <CheckCircle size={16} /> Ready
-                                </button>
-                            )}
+              {/* Actions */}
+              <div className="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-2">
+                  {order.status === OrderStatus.CANCELLED ? (
+                      <div className="text-center">
+                          <div className="text-red-600 font-bold mb-2">CANCELLED</div>
+                          <button 
+                              onClick={() => updateKitchenStatus(order, 'SERVED')}
+                              disabled={!canProcess}
+                              className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
+                          >
+                              Dismiss
+                          </button>
+                      </div>
+                  ) : (
+                      <>
+                          <div className="flex gap-2">
+                              {currentKitchenStatus === 'PENDING' && (
+                                  <button 
+                                      onClick={() => updateKitchenStatus(order, 'PREPARING')}
+                                      disabled={!canProcess}
+                                      className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                                  >
+                                      <Loader size={16} /> Start
+                                  </button>
+                              )}
+                              
+                              {currentKitchenStatus === 'PREPARING' && (
+                                  <button 
+                                      onClick={() => updateKitchenStatus(order, 'READY')}
+                                      disabled={!canProcess}
+                                      className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                                  >
+                                      <CheckCircle size={16} /> Ready
+                                  </button>
+                              )}
 
-                            {order.kitchenStatus === 'READY' && (
-                                <button 
-                                    onClick={() => updateKitchenStatus(order, 'SERVED')}
-                                    disabled={!canProcess}
-                                    className="flex-1 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
-                                >
-                                    <Check size={16} /> Serve
-                                </button>
-                            )}
-                        </div>
-                        
-                        {(order.kitchenStatus === 'PENDING' || order.kitchenStatus === 'PREPARING') && (
-                            <button 
-                                onClick={() => setCancelOrder(order)}
-                                disabled={!canProcess}
-                                className="w-full py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
-                            >
-                                Reject / Cancel
-                            </button>
-                        )}
-                    </>
-                )}
+                              {currentKitchenStatus === 'READY' && (
+                                  <button 
+                                      onClick={() => updateKitchenStatus(order, 'SERVED')}
+                                      disabled={!canProcess}
+                                      className="flex-1 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                                  >
+                                      <Check size={16} /> Serve
+                                  </button>
+                              )}
+                          </div>
+                          
+                          {(currentKitchenStatus === 'PENDING' || currentKitchenStatus === 'PREPARING') && (
+                              <button 
+                                  onClick={() => setCancelOrder(order)}
+                                  disabled={!canProcess}
+                                  className="w-full py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
+                              >
+                                  Reject / Cancel
+                              </button>
+                          )}
+                      </>
+                  )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {cancelOrder && (

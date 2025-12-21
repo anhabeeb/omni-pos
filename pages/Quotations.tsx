@@ -129,13 +129,15 @@ export default function Quotations() {
       }
   };
 
-  // Fixed: Added allUsers parameter to handle user lookup synchronously
   const generateQuotationHtml = (quote: Quotation, allUsers: User[], isAutoPrint = false) => {
-      if (!store) return '';
-      const scRate = store.serviceChargeRate ?? 0;
-      const taxRate = store.taxRate ?? 0;
+      // Create local reference for narrowing
+      const currentStore = store;
+      if (!currentStore) return '';
+      
+      const scRate: number = currentStore.serviceChargeRate ?? 0;
+      const taxRate: number = currentStore.taxRate ?? 0;
 
-      const settings: PrintSettings = store.quotationSettings || { 
+      const settings: PrintSettings = currentStore.quotationSettings || { 
           paperSize: 'a4', 
           fontSize: 'medium', 
           showLogo: true, 
@@ -151,7 +153,7 @@ export default function Quotations() {
           showCustomerDetails: true
       };
       
-      const currency = settings.currencySymbol || store.currency || '$';
+      const currency = settings.currencySymbol || currentStore.currency || '$';
       const paperSizeKey = settings.paperSize || 'a4';
       
       let width = '210mm';
@@ -172,10 +174,10 @@ export default function Quotations() {
 
       const storeDetailsBlock = settings.showStoreDetails !== false ? `
           <div style="margin-bottom: 10px;">
-              <h2 style="margin: 0; font-size: 24px;">${store.name}</h2>
-              <div style="color: #666;">${store.address}</div>
-              ${store.phone ? `<div>Tel: ${store.phone}</div>` : ''}
-              ${store.tin ? `<div>TIN: ${store.tin}</div>` : ''}
+              <h2 style="margin: 0; font-size: 24px;">${currentStore.name}</h2>
+              <div style="color: #666;">${currentStore.address}</div>
+              ${currentStore.phone ? `<div>Tel: ${currentStore.phone}</div>` : ''}
+              ${currentStore.tin ? `<div>TIN: ${currentStore.tin}</div>` : ''}
           </div>
       ` : '';
 
@@ -353,6 +355,10 @@ export default function Quotations() {
       } 
   };
 
+  // Derive static scRate for JSX logic to prevent TS narrowing flicker
+  const displayScRate = store?.serviceChargeRate ?? 0;
+  const displayTaxRate = store?.taxRate ?? 0;
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -460,10 +466,10 @@ export default function Quotations() {
                   <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                       <div className="space-y-2 mb-6">
                           <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Subtotal</span><span className="font-bold">{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
-                          {store && (store?.serviceChargeRate ?? 0) > 0 && (
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Service Charge (${store?.serviceChargeRate ?? 0}%)</span><span className="font-bold">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
+                          {displayScRate > 0 && (
+                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Service Charge (${displayScRate}%)</span><span className="font-bold">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
                           )}
-                          <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Tax (${store?.taxRate ?? 0}%)</span><span className="font-bold">{store?.currency}{totals.tax.toFixed(2)}</span></div>
+                          <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Tax (${displayTaxRate}%)</span><span className="font-bold">{store?.currency}{totals.tax.toFixed(2)}</span></div>
                           <div className="flex justify-between font-black text-2xl dark:text-white border-t border-gray-200 dark:border-gray-700 pt-3 mt-3"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
                       </div>
                       <button 
