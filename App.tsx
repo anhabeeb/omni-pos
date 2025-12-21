@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
@@ -29,10 +28,10 @@ import {
   AlertCircle,
   CheckCircle,
   Hash,
-  Loader2
+  Loader2,
+  Lock
 } from 'lucide-react';
 
-// --- Pages ---
 import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import GlobalUsers from './pages/GlobalUsers';
@@ -117,12 +116,13 @@ const ProfileModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: () 
                     emergencyContactNumber: formData.emergencyContactNumber
                 });
             }
+            
+            const updatedUser = { ...user };
             if (formData.password) {
-                await db.updateUser({
-                    ...user,
-                    password: formData.password
-                });
+                updatedUser.password = formData.password;
             }
+            await db.updateUser(updatedUser);
+            
             setSuccess("Profile updated successfully.");
             setTimeout(onClose, 1500);
         } catch (err) {
@@ -134,31 +134,101 @@ const ProfileModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: () 
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-6 border-b flex justify-between items-center bg-gray-50">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                    <h2 className="text-xl font-bold flex items-center gap-2 dark:text-white">
                         <UserCircle className="text-blue-600" />
                         Account Profile
                     </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-200 rounded-full transition-colors">
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-8">
+                <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
                     {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl border flex items-center gap-3 text-sm font-medium"><AlertCircle size={18} /> {error}</div>}
                     {success && <div className="bg-blue-50 text-blue-600 p-3 rounded-xl border flex items-center gap-3 text-sm font-medium"><CheckCircle size={18} /> {success}</div>}
+                    
                     <div className="space-y-4">
-                        <h3 className="text-xs uppercase font-black text-gray-400 tracking-widest border-b pb-2">Identity</h3>
+                        <h3 className="text-xs uppercase font-black text-gray-400 tracking-widest border-b dark:border-gray-700 pb-2">Identity</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-gray-50 rounded-xl border"><p className="text-[10px] uppercase font-bold text-gray-400">Account Name</p><p className="font-bold">{user.name}</p></div>
-                            <div className="p-3 bg-gray-50 rounded-xl border"><p className="text-[10px] uppercase font-bold text-gray-400">Employee ID</p><p className="font-mono">#{user.username}</p></div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
+                                <p className="text-[10px] uppercase font-bold text-gray-400">Account Name</p>
+                                <p className="font-bold dark:text-white">{user.name}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
+                                <p className="text-[10px] uppercase font-bold text-gray-400">System Username</p>
+                                <p className="font-mono font-bold dark:text-blue-400">@{user.username}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-xs uppercase font-black text-blue-600 tracking-widest border-b dark:border-gray-700 pb-2 flex items-center gap-2">
+                            <Lock size={14} /> Security Credentials
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase mb-1 ml-1">New Password</label>
+                                <input 
+                                    type="password" 
+                                    placeholder="Leave blank to keep current" 
+                                    className="w-full p-3 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.password}
+                                    onChange={e => setFormData({...formData, password: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase mb-1 ml-1">Confirm Password</label>
+                                <input 
+                                    type="password" 
+                                    placeholder="Verify new password" 
+                                    className="w-full p-3 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.confirmPassword}
+                                    onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-xs uppercase font-black text-gray-400 tracking-widest border-b dark:border-gray-700 pb-2 flex items-center gap-2">
+                            <Phone size={14} /> Contact Information
+                        </h3>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase mb-1 ml-1">Personal Phone</label>
+                            <input 
+                                type="text" 
+                                className="w-full p-3 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={formData.phoneNumber}
+                                onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase mb-1 ml-1">Emergency Contact Person</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-3 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.emergencyContactPerson}
+                                    onChange={e => setFormData({...formData, emergencyContactPerson: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase mb-1 ml-1">Relation</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-3 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.emergencyRelation}
+                                    onChange={e => setFormData({...formData, emergencyRelation: e.target.value})}
+                                />
+                            </div>
                         </div>
                     </div>
                 </form>
-                <div className="p-6 border-t flex justify-end gap-3">
-                    <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm hover:bg-gray-100 rounded-lg">Cancel</button>
-                    <button onClick={handleSave} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700">Update Profile</button>
+                <div className="p-6 border-t flex justify-end gap-3 bg-gray-50 dark:bg-gray-900/50">
+                    <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+                    <button onClick={handleSave} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 font-bold transition-all active:scale-95">Update Profile</button>
                 </div>
             </div>
         </div>
@@ -228,7 +298,7 @@ const Sidebar = ({
   const NavItem = ({ icon: Icon, label, onClick, isActive, nested }: any) => (
       <button
           onClick={onClick}
-          className={`flex items-center w-full rounded-xl transition-all mb-1 px-3 py-2 h-10 ${isActive ? 'bg-blue-600 shadow-md text-white' : 'hover:bg-blue-50 text-gray-500'}`}
+          className={`flex items-center w-full rounded-xl transition-all mb-1 px-3 py-2 h-10 ${isActive ? 'bg-blue-600 shadow-md text-white' : 'hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400'}`}
       >
           <Icon size={18} className="flex-shrink-0" />
           <span className={`ml-3 text-sm font-medium whitespace-nowrap ${nested ? 'text-xs opacity-80' : ''}`}>{label}</span>
@@ -244,12 +314,12 @@ const Sidebar = ({
             {hasPermission('VIEW_KOT') && <NavItem icon={ChefHat} label="Kitchen" onClick={() => handleNavigation(storeId, '/kot')} isActive={isActiveStore && location.pathname === '/kot'} />}
             {hasPermission('VIEW_REPORTS') && (
                 <div>
-                    <button onClick={(e) => toggleReports(storeId, e)} className={`flex items-center w-full rounded-xl px-3 py-2 justify-between hover:bg-blue-50 text-gray-500`}>
+                    <button onClick={(e) => toggleReports(storeId, e)} className={`flex items-center w-full rounded-xl px-3 py-2 justify-between hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400`}>
                         <div className="flex items-center"><BarChart3 size={18} /><span className="ml-3 text-sm font-medium">Reports</span></div>
                         <ChevronDown size={14} className={`transition-transform ${isReportsExpanded ? 'rotate-180' : ''}`} />
                     </button>
                     {isReportsExpanded && (
-                        <div className="ml-4 pl-3 border-l border-blue-200 mb-2">
+                        <div className="ml-4 pl-3 border-l border-blue-200 dark:border-blue-900 mb-2">
                             <NavItem icon={CalendarCheck} nested label="EOD" onClick={() => handleNavigation(storeId, '/reports?view=EOD')} isActive={isActiveStore && location.search.includes('EOD')} />
                             <NavItem icon={Circle} nested label="Analytics" onClick={() => handleNavigation(storeId, '/reports?view=SUMMARY')} isActive={isActiveStore && location.search.includes('SUMMARY')} />
                         </div>
@@ -269,18 +339,18 @@ const Sidebar = ({
   return (
     <>
         {isOpen && <div className="fixed inset-0 bg-black/30 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsOpen(false)} />}
-        <div className={`bg-white border-r h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 w-64`}>
-            <div className="flex items-center h-16 border-b px-6 justify-between">
+        <div className={`bg-white dark:bg-gray-800 border-r dark:border-gray-700 h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 w-64`}>
+            <div className="flex items-center h-16 border-b dark:border-gray-700 px-6 justify-between">
                 <div className="flex items-center cursor-pointer" onClick={() => navigate('/dashboard')}>
                     <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg"><Layout size={20} className="text-white" /></div>
-                    <span className="ml-3 text-lg font-bold">Omni<span className="text-blue-600">POS</span></span>
+                    <span className="ml-3 text-lg font-bold dark:text-white">Omni<span className="text-blue-600">POS</span></span>
                 </div>
-                <button onClick={() => setIsOpen(false)} className="md:hidden p-2 hover:bg-gray-100 rounded-lg"><X size={20}/></button>
+                <button onClick={() => setIsOpen(false)} className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X size={20} className="dark:text-white"/></button>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar pt-6 px-4">
-                <button onClick={onProfileClick} className="mb-8 flex items-center w-full hover:bg-gray-50 p-2 rounded-xl">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">{user.name.charAt(0)}</div>
-                    <div className="ml-3 overflow-hidden text-left"><p className="text-sm font-semibold truncate">{user.name}</p><p className="text-[10px] uppercase font-bold text-blue-600 opacity-70">{user.role}</p></div>
+                <button onClick={onProfileClick} className="mb-8 flex items-center w-full hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded-xl">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center font-bold">{user.name.charAt(0)}</div>
+                    <div className="ml-3 overflow-hidden text-left"><p className="text-sm font-semibold truncate dark:text-white">{user.name}</p><p className="text-[10px] uppercase font-bold text-blue-600 opacity-70">@{user.username}</p></div>
                 </button>
                 { (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN) && (
                     <div className="mb-6">
@@ -294,16 +364,16 @@ const Sidebar = ({
                     <p className="px-3 text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-3">Units</p>
                     {accessibleStores.map(store => (
                         <div key={store.id} className="mb-2">
-                            <button onClick={() => toggleStore(store.id)} className={`flex items-center w-full rounded-xl px-3 py-2.5 justify-between ${currentStoreId === store.id ? 'bg-blue-50 border-blue-100' : 'hover:bg-gray-50'}`}>
-                                <div className="flex items-center min-w-0"><div className={`p-1.5 rounded-lg ${currentStoreId === store.id ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}><StoreIcon size={16} /></div><span className="ml-3 text-sm font-semibold truncate">{store.name}</span></div>
-                                <ChevronRight size={14} className={`transition-transform ${expandedStoreIds.includes(store.id) ? 'rotate-90' : ''}`} />
+                            <button onClick={() => toggleStore(store.id)} className={`flex items-center w-full rounded-xl px-3 py-2.5 justify-between ${currentStoreId === store.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                                <div className="flex items-center min-w-0"><div className={`p-1.5 rounded-lg ${currentStoreId === store.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-300'}`}><StoreIcon size={16} /></div><span className="ml-3 text-sm font-semibold truncate dark:text-white">{store.name}</span></div>
+                                <ChevronRight size={14} className={`transition-transform dark:text-gray-400 ${expandedStoreIds.includes(store.id) ? 'rotate-90' : ''}`} />
                             </button>
                             {expandedStoreIds.includes(store.id) && renderStoreMenu(store.id)}
                         </div>
                     ))}
                 </div>
             </div>
-            <div className="border-t p-4"><button onClick={onLogout} className="flex items-center w-full p-2.5 hover:bg-red-50 rounded-xl text-red-600"><LogOut size={20}/><span className="ml-3 text-sm font-medium">Logout</span></button></div>
+            <div className="border-t dark:border-gray-700 p-4"><button onClick={onLogout} className="flex items-center w-full p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-red-600"><LogOut size={20}/><span className="ml-3 text-sm font-medium">Logout</span></button></div>
         </div>
     </>
   );
@@ -333,17 +403,17 @@ const AppLayout = ({ children, onProfileClick }: { children?: React.ReactNode, o
   if (!user) return null;
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-slate-50 dark:bg-gray-900 min-h-screen">
       <Sidebar user={user} currentStoreId={currentStoreId} onLogout={logout} hasPermission={hasPermission} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} onProfileClick={onProfileClick} />
       <main className="flex-1 flex flex-col h-screen w-full md:ml-64">
-        <div className="md:hidden bg-white border-b p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        <div className="md:hidden bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
             <div className="flex items-center gap-3">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
-                <h1 className="text-lg font-bold">{currentStore ? currentStore.name : 'OmniPOS'}</h1>
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 dark:text-white"><Menu size={24} /></button>
+                <h1 className="text-lg font-bold dark:text-white">{currentStore ? currentStore.name : 'OmniPOS'}</h1>
             </div>
             <button onClick={onProfileClick} className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</button>
         </div>
-        <div className={`flex-1 overflow-y-auto ${location.pathname === '/pos' ? '' : 'p-4 md:p-8'}`}>{children}</div>
+        <div className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname === '/pos' ? '' : 'p-4 md:p-8'}`}>{children}</div>
       </main>
     </div>
   );
@@ -359,7 +429,6 @@ export default function App() {
   useEffect(() => {
     const init = async () => {
         try {
-            // Force initialize locally
             await db.init();
             
             const storedUser = localStorage.getItem('currentUser');
@@ -372,7 +441,6 @@ export default function App() {
         } catch (err) {
             console.error("Critical: System failed to initialize.", err);
         } finally {
-            // Add a slight delay to ensure everything is mounted before lifting splash screen
             setTimeout(() => setIsReady(true), 500);
         }
     };

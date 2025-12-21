@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { User, UserRole, Store, Permission, RolePermissionConfig, Employee } from '../types';
@@ -28,14 +27,12 @@ export default function GlobalUsers() {
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'USERS' | 'ROLES'>('USERS');
   
-  // Data
   const [users, setUsers] = useState<User[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [formData, setFormData] = useState<{
@@ -54,11 +51,9 @@ export default function GlobalUsers() {
   });
   const [error, setError] = useState('');
 
-  // Filter State
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- Fix: Define isEditingSuperAdmin based on formData.id and original user role ---
   const isEditingSuperAdmin = formData.id ? users.find(u => u.id === formData.id)?.role === UserRole.SUPER_ADMIN : false;
 
   useEffect(() => {
@@ -74,7 +69,13 @@ export default function GlobalUsers() {
   }, []);
 
   const loadData = async () => {
-    setUsers(await db.getUsers());
+    const allUsers = await db.getUsers();
+    // PRIVACY: Only sys.admin can see themselves in the list.
+    const visibleUsers = allUsers.filter(u => {
+        if (u.username === 'sys.admin') return currentUser?.username === 'sys.admin';
+        return true;
+    });
+    setUsers(visibleUsers);
     setEmployees(await db.getEmployees());
     setStores(await db.getStores());
     setRolePermissions(await db.getRolePermissions());
@@ -85,11 +86,14 @@ export default function GlobalUsers() {
     setError('');
 
     if (formData.id) {
-        // Edit Mode
         const originalUser = users.find(u => u.id === formData.id);
         if (!originalUser) return;
 
-        // Restriction: Cannot change role of a Super Admin
+        if (originalUser.username === 'sys.admin' && currentUser?.username !== 'sys.admin') {
+            setError("Protected Account: Only the System Administrator can modify this account.");
+            return;
+        }
+
         if (originalUser.role === UserRole.SUPER_ADMIN && formData.role !== UserRole.SUPER_ADMIN) {
              setError("Access Denied: The System Administrator role is protected and cannot be changed.");
              return;
@@ -111,7 +115,6 @@ export default function GlobalUsers() {
         setIsModalOpen(false);
         resetForm();
     } else {
-        // Create Mode
         if (!selectedEmployeeId) {
             setError('Please select an employee first.');
             return;
@@ -133,7 +136,7 @@ export default function GlobalUsers() {
             id: '', 
             name: employee.fullName,
             username: employee.empId,
-            password: '123', // Default password
+            password: '123', 
             role: formData.role,
             storeIds: formData.storeIds
         });
@@ -155,6 +158,12 @@ export default function GlobalUsers() {
   };
 
   const handleEditClick = (user: User) => {
+      // PROTECT: Even if visible, prevent edit dialog for non-owners of sys.admin
+      if (user.username === 'sys.admin' && currentUser?.username !== 'sys.admin') {
+          alert("Protected Account: You do not have permission to edit the System Administrator.");
+          return;
+      }
+
       setFormData({
           id: user.id,
           name: user.name,
@@ -167,14 +176,12 @@ export default function GlobalUsers() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    // 1. Role Authorization
     const canDelete = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
     if (!canDelete) {
         alert("Permission Denied: Only Super Admins and Admins can delete user accounts.");
         return;
     }
 
-    // 2. Self-deletion Check
     if (userId === currentUser?.id) {
         alert("Action Denied: You cannot delete your own account.");
         return;
@@ -183,23 +190,20 @@ export default function GlobalUsers() {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
 
-    // 3. System Administrator Protection
-    if (targetUser.role === UserRole.SUPER_ADMIN) {
+    if (targetUser.role === UserRole.SUPER_ADMIN || targetUser.username === 'sys.admin') {
         alert("Protected Account: System Administrator accounts cannot be deleted.");
         return;
     }
 
-    // 4. Admin hierarchy protection (Admin can't delete other Admin)
     if (currentUser?.role === UserRole.ADMIN && targetUser.role === UserRole.ADMIN) {
         alert("Action Denied: Administrators cannot delete other Administrator accounts.");
         return;
     }
 
-    // 5. Final Confirmation
     if (confirm(`Are you sure you want to delete the system access for "${targetUser.name}"? They will no longer be able to log in, but their employee record will be preserved.`)) {
       try {
         await db.deleteUser(userId);
-        await loadData(); // Force refresh local state
+        await loadData(); 
         alert("User account deleted successfully.");
       } catch (err) {
         console.error("Deletion failed:", err);
@@ -329,7 +333,7 @@ export default function GlobalUsers() {
                                         </td>
                                         <td className="p-4 text-right space-x-1">
                                             <button onClick={() => handleEditClick(user)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"><Edit2 size={18} /></button>
-                                            {user.role !== UserRole.SUPER_ADMIN && <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><Trash2 size={18} /></button>}
+                                            {user.username !== 'sys.admin' && <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><Trash2 size={18} /></button>}
                                         </td>
                                     </tr>
                                 ))
@@ -410,7 +414,6 @@ export default function GlobalUsers() {
                   </div>
               )}
 
-              {/* Staff Linkage Section */}
               <div className="space-y-4">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Employee Selection</h3>
                 
@@ -467,7 +470,6 @@ export default function GlobalUsers() {
                 )}
               </div>
 
-              {/* System Credentials & Role */}
               <div className="space-y-4">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Access Control</h3>
                 
@@ -476,12 +478,12 @@ export default function GlobalUsers() {
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-tight">System Role *</label>
                         <select 
                             required
-                            disabled={isEditingSuperAdmin}
+                            disabled={isEditingSuperAdmin && currentUser?.username !== 'sys.admin'}
                             className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-900"
                             value={formData.role}
                             onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
                         >
-                            {isEditingSuperAdmin && <option value={UserRole.SUPER_ADMIN}>SUPER ADMINISTRATOR (SYSTEM)</option>}
+                            {(isEditingSuperAdmin || currentUser?.role === UserRole.SUPER_ADMIN) && <option value={UserRole.SUPER_ADMIN}>SUPER ADMINISTRATOR (SYSTEM)</option>}
                             {currentUser?.role === UserRole.SUPER_ADMIN && <option value={UserRole.ADMIN}>ADMINISTRATOR (GLOBAL)</option>}
                             <option value={UserRole.MANAGER}>STORE MANAGER</option>
                             <option value={UserRole.SUPERVISOR}>SUPERVISOR</option>
@@ -489,7 +491,7 @@ export default function GlobalUsers() {
                             <option value={UserRole.CHEF}>KITCHEN CHEF</option>
                             <option value={UserRole.WAITER}>WAITER / SERVER</option>
                         </select>
-                        {isEditingSuperAdmin && <p className="text-[10px] text-blue-600 font-bold mt-1 uppercase">System account role cannot be changed.</p>}
+                        {isEditingSuperAdmin && <p className="text-[10px] text-blue-600 font-bold mt-1 uppercase">Protected system account role.</p>}
                     </div>
 
                     {formData.id && (
@@ -510,7 +512,6 @@ export default function GlobalUsers() {
                 </div>
               </div>
 
-              {/* Station Assignments */}
               {(formData.role !== UserRole.ADMIN && formData.role !== UserRole.SUPER_ADMIN) && (
                   <div className="space-y-4">
                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Station Assignment (Stores)</h3>
@@ -526,24 +527,14 @@ export default function GlobalUsers() {
                                 <span className="text-xs font-black uppercase truncate">{store.name}</span>
                             </button>
                         ))}
-                        {stores.length === 0 && <p className="col-span-full text-center text-xs text-gray-400 py-4 italic">No stores defined in system.</p>}
                     </div>
                   </div>
               )}
             </form>
 
             <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-white dark:bg-gray-900/30">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)} 
-                className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSaveUser}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98]"
-              >
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400">Cancel</button>
+              <button onClick={handleSaveUser} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98]">
                 {formData.id ? 'Save Changes' : 'Finalize Account'}
               </button>
             </div>

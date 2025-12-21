@@ -1,4 +1,3 @@
-
 import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem } from '../types';
 
 const CLOUDFLARE_CONFIG = {
@@ -28,14 +27,10 @@ const setItem = <T>(key: string, value: T): void => {
     window.dispatchEvent(new CustomEvent('db_change_any'));
 };
 
-/**
- * Real Cloudflare D1 Synchronization
- */
 const centralSync = async (action: 'INSERT' | 'UPDATE' | 'DELETE' | 'INIT', table: string, data?: any) => {
     if (action === 'INIT') return true; 
 
     try {
-        // Use a 5-second timeout for sync requests to prevent hanging the UI
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -63,7 +58,6 @@ const centralSync = async (action: 'INSERT' | 'UPDATE' | 'DELETE' | 'INIT', tabl
 
 export const db = {
     init: async () => {
-        // 1. Check for basic system tables and populate locally (Sync bypassed for speed)
         let stores = getItem<Store[]>('global_stores', []);
         if (stores.length === 0) {
             const defaultStore: Store = {
@@ -81,11 +75,10 @@ export const db = {
             setItem('global_stores', stores);
         }
 
-        // 2. Ensure Admin account exists and has correct password '123'
         let users = getItem<User[]>('global_users', []);
-        let adminIndex = users.findIndex(u => u.username === 'sys.admin');
+        let adminExists = users.some(u => u.username === 'sys.admin');
         
-        if (adminIndex === -1) {
+        if (!adminExists) {
             console.log("Creating default system administrator...");
             const newAdmin: User = {
                 id: uuid(),
@@ -97,16 +90,8 @@ export const db = {
             };
             users.push(newAdmin);
             setItem('global_users', users);
-        } else {
-            // FORCE RE-SYNC: Always overwrite password to '123' on boot if it changed
-            if (users[adminIndex].password !== '123') {
-                console.log("Forcing sys.admin password reset to '123'...");
-                users[adminIndex].password = '123';
-                setItem('global_users', users);
-            }
         }
 
-        // 3. Ensure Permissions exist
         let perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
             setItem('global_permissions', [
@@ -120,7 +105,6 @@ export const db = {
         console.log("System initialization complete.");
     },
 
-    // Stores
     getStores: async () => getItem<Store[]>('global_stores', []),
     addStore: async (store: Store) => {
         const stores = await db.getStores();
@@ -140,7 +124,6 @@ export const db = {
         await centralSync('DELETE', 'stores', { id });
     },
 
-    // Users
     getUsers: async () => getItem<User[]>('global_users', []),
     addUser: async (user: User) => {
         const users = await db.getUsers();
@@ -160,7 +143,6 @@ export const db = {
         await centralSync('DELETE', 'users', { id });
     },
 
-    // Employees
     getEmployees: async () => getItem<Employee[]>('global_employees', []),
     addEmployee: async (emp: Partial<Employee>) => {
         const emps = await db.getEmployees();
@@ -180,7 +162,6 @@ export const db = {
         await centralSync('DELETE', 'employees', { id });
     },
 
-    // Products
     getProducts: async (storeId: string) => getItem<Product[]>(`store_${storeId}_products`, []),
     addProduct: async (storeId: string, product: Product) => {
         const products = await db.getProducts(storeId);
@@ -215,7 +196,6 @@ export const db = {
         await centralSync('DELETE', 'products', { id });
     },
 
-    // Categories
     getCategories: async (storeId: string) => getItem<Category[]>(`store_${storeId}_categories`, []),
     addCategory: async (storeId: string, category: Category) => {
         const categories = await db.getCategories(storeId);
@@ -230,7 +210,6 @@ export const db = {
         await centralSync('DELETE', 'categories', { id });
     },
 
-    // Customers
     getCustomers: async (storeId: string) => getItem<Customer[]>(`store_${storeId}_customers`, []),
     addCustomer: async (storeId: string, customer: Customer) => {
         const customers = await db.getCustomers(storeId);
@@ -250,7 +229,6 @@ export const db = {
         await centralSync('DELETE', 'customers', { id });
     },
 
-    // Orders
     getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
     getNextOrderNumber: async (storeId: string) => {
         const orders = await db.getOrders(storeId);
@@ -280,7 +258,6 @@ export const db = {
         await centralSync('UPDATE', 'orders', { id, status });
     },
 
-    // Quotations
     getQuotations: async (storeId: string) => getItem<Quotation[]>(`store_${storeId}_quotations`, []),
     addQuotation: async (storeId: string, quote: Partial<Quotation>) => {
         const quotes = await db.getQuotations(storeId);
@@ -296,7 +273,6 @@ export const db = {
         return newQuote;
     },
 
-    // Register Shifts
     getRegisterShifts: async (storeId: string) => getItem<RegisterShift[]>(`store_${storeId}_shifts`, []),
     getActiveShift: async (storeId: string) => {
         const shifts = await db.getRegisterShifts(storeId);
@@ -343,7 +319,6 @@ export const db = {
         return true;
     },
 
-    // Inventory
     getInventory: async (storeId: string) => getItem<InventoryItem[]>(`store_${storeId}_inventory`, []),
     addInventoryItem: async (storeId: string, item: InventoryItem) => {
         const items = await db.getInventory(storeId);
@@ -363,7 +338,6 @@ export const db = {
         await centralSync('DELETE', 'inventory', { id });
     },
 
-    // Permissions
     getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
     updateRolePermissions: async (config: RolePermissionConfig) => {
         const current = await db.getRolePermissions();
@@ -371,7 +345,6 @@ export const db = {
         await centralSync('UPDATE', 'permissions', config);
     },
 
-    // Heartbeat
     updateHeartbeat: async (userId: string, storeId: string | null) => {
         const sessions = getItem<ActiveSession[]>('global_sessions', []);
         const users = await db.getUsers();
