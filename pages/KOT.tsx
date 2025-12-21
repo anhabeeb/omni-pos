@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -13,12 +12,10 @@ export default function KOT() {
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
-  // Fixed: Made loadOrders async and awaited db.getOrders
   const loadOrders = async () => {
     if (currentStoreId) {
       const allOrders = await db.getOrders(currentStoreId);
       // Filter by Kitchen Status (Not SERVED)
-      // Show orders even if CANCELLED (as long as they aren't 'SERVED'/Dismissed from board yet)
       const activeKitchenOrders = allOrders.filter(o => 
         o.kitchenStatus !== 'SERVED'
       );
@@ -46,14 +43,10 @@ export default function KOT() {
     }
     if (currentStoreId) {
       const updates: Partial<Order> = { kitchenStatus: newKitchenStatus };
-      
-      // Sync with main status ONLY if main status is not already completed/archived by POS
-      // This allows waiters to see "PREPARING" etc, but doesn't un-archive a paid order.
       if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED) {
           if (newKitchenStatus === 'PREPARING') updates.status = OrderStatus.PREPARING;
           if (newKitchenStatus === 'READY') updates.status = OrderStatus.READY;
       }
-
       db.updateOrder(currentStoreId, { ...order, ...updates });
     }
   };
@@ -68,7 +61,6 @@ export default function KOT() {
               alert("Please provide a reason.");
               return;
           }
-
           const transaction: Transaction = {
               id: uuid(),
               type: 'CANCELLATION',
@@ -77,25 +69,21 @@ export default function KOT() {
               performedBy: user.id,
               note: `Kitchen Rejection: ${cancelReason}`
           };
-
           const updatedOrder: Order = {
               ...cancelOrder,
               status: OrderStatus.CANCELLED,
-              kitchenStatus: 'SERVED', // Remove from KOT board immediately if chef rejects
+              kitchenStatus: 'SERVED',
               transactions: [...(cancelOrder.transactions || []), transaction],
               cancellationReason: cancelReason
           };
-
           db.updateOrder(currentStoreId, updatedOrder);
           setCancelOrder(null);
           setCancelReason('');
       }
   };
 
-  // Helper for card styling
   const getStatusColor = (status: KitchenStatus, orderStatus: OrderStatus) => {
       if (orderStatus === OrderStatus.CANCELLED) return 'border-l-red-500 bg-red-50';
-      
       switch(status) {
           case 'PENDING': return 'border-l-blue-500';
           case 'PREPARING': return 'border-l-orange-500 bg-orange-50';
@@ -127,14 +115,13 @@ export default function KOT() {
         )}
 
         {orders.map(order => {
-          // Explicitly handle kitchenStatus for TypeScript safety
-          const currentKitchenStatus: KitchenStatus = order.kitchenStatus || 'PENDING';
-          const cardColor = getStatusColor(currentKitchenStatus, order.status);
-          
+          // Explicit narrowing to ensure TypeScript is satisfied
+          const kitchenStatusVal = order.kitchenStatus;
+          const currentStatus: KitchenStatus = (kitchenStatusVal && kitchenStatusVal !== undefined) ? kitchenStatusVal : 'PENDING';
+          const cardStyle = getStatusColor(currentStatus, order.status);
+
           return (
-            <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${cardColor}`}>
-              
-              {/* Header */}
+            <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${cardStyle}`}>
               <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                   <div>
                       <h3 className="font-bold text-lg text-gray-800">#{order.orderNumber}</h3>
@@ -148,7 +135,6 @@ export default function KOT() {
                   </div>
               </div>
 
-              {/* Items */}
               <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-60">
                   {order.items.map((item, idx) => (
                       <div key={idx} className="flex gap-2 text-sm">
@@ -163,7 +149,6 @@ export default function KOT() {
                   )}
               </div>
 
-              {/* Actions */}
               <div className="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-2">
                   {order.status === OrderStatus.CANCELLED ? (
                       <div className="text-center">
@@ -179,7 +164,7 @@ export default function KOT() {
                   ) : (
                       <>
                           <div className="flex gap-2">
-                              {currentKitchenStatus === 'PENDING' && (
+                              {currentStatus === 'PENDING' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'PREPARING')}
                                       disabled={!canProcess}
@@ -188,8 +173,7 @@ export default function KOT() {
                                       <Loader size={16} /> Start
                                   </button>
                               )}
-                              
-                              {currentKitchenStatus === 'PREPARING' && (
+                              {currentStatus === 'PREPARING' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'READY')}
                                       disabled={!canProcess}
@@ -198,8 +182,7 @@ export default function KOT() {
                                       <CheckCircle size={16} /> Ready
                                   </button>
                               )}
-
-                              {currentKitchenStatus === 'READY' && (
+                              {currentStatus === 'READY' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'SERVED')}
                                       disabled={!canProcess}
@@ -209,8 +192,7 @@ export default function KOT() {
                                   </button>
                               )}
                           </div>
-                          
-                          {(currentKitchenStatus === 'PENDING' || currentKitchenStatus === 'PREPARING') && (
+                          {(currentStatus === 'PENDING' || currentStatus === 'PREPARING') && (
                               <button 
                                   onClick={() => setCancelOrder(order)}
                                   disabled={!canProcess}
@@ -237,7 +219,7 @@ export default function KOT() {
                   <textarea 
                       autoFocus
                       className="w-full p-2 border rounded-lg mb-4 text-sm"
-                      placeholder="e.g. Out of stock, Customer request..."
+                      placeholder="e.g. Out of stock..."
                       rows={3}
                       value={cancelReason}
                       onChange={e => setCancelReason(e.target.value)}
