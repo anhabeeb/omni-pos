@@ -132,6 +132,9 @@ export default function Quotations() {
   // Fixed: Added allUsers parameter to handle user lookup synchronously
   const generateQuotationHtml = (quote: Quotation, allUsers: User[], isAutoPrint = false) => {
       if (!store) return '';
+      const scRate = store.serviceChargeRate ?? 0;
+      const taxRate = store.taxRate ?? 0;
+
       const settings: PrintSettings = store.quotationSettings || { 
           paperSize: 'a4', 
           fontSize: 'medium', 
@@ -213,15 +216,15 @@ export default function Quotations() {
                       <span>${currency}${quote.subtotal.toFixed(2)}</span>
                   </div>
               ` : ''}
-              ${(settings.showServiceCharge !== false && (store.serviceChargeRate ?? 0) > 0) ? `
+              ${(settings.showServiceCharge !== false && scRate > 0) ? `
                   <div style="width: 250px; display: flex; justify-content: space-between; font-size: 14px;">
-                      <span>Service Charge (${store.serviceChargeRate ?? 0}%):</span>
-                      <span>${currency}${(quote.subtotal * (store.serviceChargeRate ?? 0) / 100).toFixed(2)}</span>
+                      <span>Service Charge (${scRate}%):</span>
+                      <span>${currency}${(quote.subtotal * scRate / 100).toFixed(2)}</span>
                   </div>
               ` : ''}
               ${settings.showTax !== false ? `
                   <div style="width: 250px; display: flex; justify-content: space-between; font-size: 14px;">
-                      <span>Tax (${store.taxRate}%):</span>
+                      <span>Tax (${taxRate}%):</span>
                       <span>${currency}${quote.tax.toFixed(2)}</span>
                   </div>
               ` : ''}
