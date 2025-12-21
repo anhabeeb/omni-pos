@@ -213,10 +213,10 @@ export default function Quotations() {
                       <span>${currency}${quote.subtotal.toFixed(2)}</span>
                   </div>
               ` : ''}
-              ${(settings.showServiceCharge !== false && store.serviceChargeRate > 0) ? `
+              ${(settings.showServiceCharge !== false && (store.serviceChargeRate ?? 0) > 0) ? `
                   <div style="width: 250px; display: flex; justify-content: space-between; font-size: 14px;">
-                      <span>Service Charge (${store.serviceChargeRate}%):</span>
-                      <span>${currency}${(quote.subtotal * store.serviceChargeRate / 100).toFixed(2)}</span>
+                      <span>Service Charge (${store.serviceChargeRate ?? 0}%):</span>
+                      <span>${currency}${(quote.subtotal * (store.serviceChargeRate ?? 0) / 100).toFixed(2)}</span>
                   </div>
               ` : ''}
               ${settings.showTax !== false ? `
@@ -457,8 +457,8 @@ export default function Quotations() {
                   <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                       <div className="space-y-2 mb-6">
                           <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Subtotal</span><span className="font-bold">{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
-                          {store && store.serviceChargeRate > 0 && (
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Service Charge (${store.serviceChargeRate}%)</span><span className="font-bold">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
+                          {store && (store.serviceChargeRate ?? 0) > 0 && (
+                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Service Charge (${store.serviceChargeRate ?? 0}%)</span><span className="font-bold">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
                           )}
                           <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400"><span>Tax (${store?.taxRate || 0}%)</span><span className="font-bold">{store?.currency}{totals.tax.toFixed(2)}</span></div>
                           <div className="flex justify-between font-black text-2xl dark:text-white border-t border-gray-200 dark:border-gray-700 pt-3 mt-3"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>

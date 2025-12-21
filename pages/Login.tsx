@@ -1,14 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { db } from '../services/db';
 import { User, Store, UserRole } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Store as StoreIcon, ArrowRight } from 'lucide-react';
+// Add AlertCircle to imports from lucide-react
+import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [availableStores, setAvailableStores] = useState<Store[]>([]);
   const [tempUser, setTempUser] = useState<User | null>(null);
@@ -42,30 +45,48 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const users = await db.getUsers();
-    const foundUser = users.find(u => u.username === username && u.password === password);
-    
-    if (foundUser) {
-      if (foundUser.role === UserRole.SUPER_ADMIN || foundUser.role === UserRole.ADMIN) {
-        login(foundUser);
-        navigate('/dashboard');
-      } else {
-        const allStores = await db.getStores();
-        const stores = allStores.filter(s => foundUser.storeIds.includes(s.id) && s.isActive);
-        
-        if (stores.length === 0) {
-            setError('Account not assigned to any active stores.');
-        } else if (stores.length === 1) {
-            login(foundUser, stores[0].id);
-            navigate(getRedirectPath(foundUser.role));
-        } else {
-            setTempUser(foundUser);
-            setAvailableStores(stores);
-            setIsStoreSelectorOpen(true);
+    setError('');
+    setIsLoggingIn(true);
+
+    try {
+        const cleanUsername = username.trim();
+        const cleanPassword = password.trim();
+
+        if (!cleanUsername || !cleanPassword) {
+            setError('Please enter both username and password.');
+            return;
         }
-      }
-    } else {
-      setError('Invalid credentials');
+
+        const users = await db.getUsers();
+        const foundUser = users.find(u => u.username === cleanUsername && u.password === cleanPassword);
+        
+        if (foundUser) {
+            if (foundUser.role === UserRole.SUPER_ADMIN || foundUser.role === UserRole.ADMIN) {
+                login(foundUser);
+                navigate('/dashboard');
+            } else {
+                const allStores = await db.getStores();
+                const stores = allStores.filter(s => foundUser.storeIds.includes(s.id) && s.isActive);
+                
+                if (stores.length === 0) {
+                    setError('Account not assigned to any active stores.');
+                } else if (stores.length === 1) {
+                    login(foundUser, stores[0].id);
+                    navigate(getRedirectPath(foundUser.role));
+                } else {
+                    setTempUser(foundUser);
+                    setAvailableStores(stores);
+                    setIsStoreSelectorOpen(true);
+                }
+            }
+        } else {
+            setError('Invalid credentials. Please check your username and password.');
+        }
+    } catch (err) {
+        setError('A system error occurred during login.');
+        console.error(err);
+    } finally {
+        setIsLoggingIn(false);
     }
   };
 
@@ -104,11 +125,18 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border">
         <div className="text-center mb-8"><h1 className="text-3xl font-bold text-blue-600">OmniPOS</h1><p className="text-gray-500 mt-2">Sign in to your account</p></div>
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-medium">{error}</div>}
+        {/* Fixed: AlertCircle is now imported */}
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-medium flex items-center gap-2 animate-in fade-in duration-300"><AlertCircle size={16}/> {error}</div>}
         <form onSubmit={handleLogin} className="space-y-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter username" /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter password" /></div>
-          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 shadow-sm">Sign In</button>
+          <button 
+            type="submit" 
+            disabled={isLoggingIn}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Sign In'}
+          </button>
         </form>
       </div>
     </div>

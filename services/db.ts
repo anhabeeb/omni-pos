@@ -12,8 +12,14 @@ const DB_PREFIX = 'omnipos_';
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
 const getItem = <T>(key: string, defaultValue: T): T => {
-    const data = localStorage.getItem(DB_PREFIX + key);
-    return data ? JSON.parse(data) : defaultValue;
+    try {
+        const data = localStorage.getItem(DB_PREFIX + key);
+        if (!data || data === "undefined") return defaultValue;
+        return JSON.parse(data);
+    } catch (e) {
+        console.error(`DB Error: Failed to parse key "${key}"`, e);
+        return defaultValue;
+    }
 };
 
 const setItem = <T>(key: string, value: T): void => {
@@ -26,14 +32,21 @@ const setItem = <T>(key: string, value: T): void => {
  * Real Cloudflare D1 Synchronization
  */
 const centralSync = async (action: 'INSERT' | 'UPDATE' | 'DELETE' | 'INIT', table: string, data?: any) => {
-    if (action === 'INIT') return true; // Handled by table creation
+    if (action === 'INIT') return true; 
 
     try {
+        // Use a 5-second timeout for sync requests to prevent hanging the UI
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, table, data }) 
+            body: JSON.stringify({ action, table, data }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
             const err = await response.json();
@@ -43,19 +56,18 @@ const centralSync = async (action: 'INSERT' | 'UPDATE' | 'DELETE' | 'INIT', tabl
         console.debug(`%c[D1 SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${action} -> ${table}`);
         return true;
     } catch (err) {
-        console.warn(`[D1 SYNC OFFLINE] Change cached locally for ${table}.`, err);
+        console.warn(`[D1 SYNC OFFLINE/FAIL] ${table} update stored locally only.`, err);
         return false;
     }
 };
 
 export const db = {
     init: async () => {
-        const isInitialized = localStorage.getItem(DB_PREFIX + 'system_initialized');
-        
-        if (!isInitialized) {
-            const defaultStoreId = uuid();
-            const mainStore = {
-                id: defaultStoreId,
+        // 1. Check for basic system tables and populate locally (Sync bypassed for speed)
+        let stores = getItem<Store[]>('global_stores', []);
+        if (stores.length === 0) {
+            const defaultStore: Store = {
+                id: uuid(),
                 name: 'Main Bistro',
                 currency: '$',
                 address: '123 Gourmet Way',
@@ -65,27 +77,47 @@ export const db = {
                 serviceChargeRate: 5,
                 numberOfTables: 20
             };
-            await db.addStore(mainStore as Store);
+            stores = [defaultStore];
+            setItem('global_stores', stores);
+        }
 
-            const adminId = uuid();
-            const adminUser = {
-                id: adminId,
+        // 2. Ensure Admin account exists and has correct password '123'
+        let users = getItem<User[]>('global_users', []);
+        let adminIndex = users.findIndex(u => u.username === 'sys.admin');
+        
+        if (adminIndex === -1) {
+            console.log("Creating default system administrator...");
+            const newAdmin: User = {
+                id: uuid(),
                 name: 'System Admin',
                 username: 'sys.admin',
                 password: '123',
                 role: UserRole.SUPER_ADMIN,
                 storeIds: []
             };
-            await db.addUser(adminUser as User);
+            users.push(newAdmin);
+            setItem('global_users', users);
+        } else {
+            // FORCE RE-SYNC: Always overwrite password to '123' on boot if it changed
+            if (users[adminIndex].password !== '123') {
+                console.log("Forcing sys.admin password reset to '123'...");
+                users[adminIndex].password = '123';
+                setItem('global_users', users);
+            }
+        }
 
+        // 3. Ensure Permissions exist
+        let perms = getItem<RolePermissionConfig[]>('global_permissions', []);
+        if (perms.length === 0) {
             setItem('global_permissions', [
                 { role: UserRole.SUPER_ADMIN, permissions: ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_EDIT_ORDER', 'POS_DELETE_ORDER', 'POS_REFUND', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER', 'VIEW_REPORTS', 'MANAGE_CUSTOMERS', 'MANAGE_SETTINGS', 'MANAGE_PRINT_DESIGNER', 'MANAGE_STAFF', 'VIEW_KOT', 'PROCESS_KOT', 'MANAGE_INVENTORY', 'VIEW_LIVE_ACTIVITY'] },
                 { role: UserRole.CASHIER, permissions: ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER', 'VIEW_KOT', 'MANAGE_CUSTOMERS'] },
                 { role: UserRole.CHEF, permissions: ['VIEW_KOT', 'PROCESS_KOT'] }
             ]);
-
-            localStorage.setItem(DB_PREFIX + 'system_initialized', 'true');
         }
+
+        localStorage.setItem(DB_PREFIX + 'system_initialized', 'true');
+        console.log("System initialization complete.");
     },
 
     // Stores

@@ -127,7 +127,7 @@ export default function KOT() {
         )}
 
         {orders.map(order => (
-          <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${getStatusColor(order.kitchenStatus, order.status)}`}>
+          <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${getStatusColor(order.kitchenStatus || 'PENDING', order.status)}`}>
             
             {/* Header */}
             <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">

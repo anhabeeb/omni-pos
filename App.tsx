@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
@@ -27,7 +28,8 @@ import {
   UserCircle,
   AlertCircle,
   CheckCircle,
-  Hash
+  Hash,
+  Loader2
 } from 'lucide-react';
 
 // --- Pages ---
@@ -138,7 +140,7 @@ const ProfileModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: () 
                         <UserCircle className="text-blue-600" />
                         Account Profile
                     </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                    <button onClick={onClose} className="p-2 hover:bg-200 rounded-full transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -352,16 +354,27 @@ export default function App() {
   const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
+  const [isReady, setIsReady] = useState(false);
   
   useEffect(() => {
     const init = async () => {
-        await db.init();
-        const storedUser = localStorage.getItem('currentUser');
-        const storedStoreId = localStorage.getItem('currentStoreId');
-        if (storedUser) setUser(JSON.parse(storedUser));
-        if (storedStoreId) setCurrentStoreId(storedStoreId);
-        const perms = await db.getRolePermissions();
-        setRolePermissions(perms);
+        try {
+            // Force initialize locally
+            await db.init();
+            
+            const storedUser = localStorage.getItem('currentUser');
+            const storedStoreId = localStorage.getItem('currentStoreId');
+            if (storedUser) setUser(JSON.parse(storedUser));
+            if (storedStoreId) setCurrentStoreId(storedStoreId);
+            
+            const perms = await db.getRolePermissions();
+            setRolePermissions(perms);
+        } catch (err) {
+            console.error("Critical: System failed to initialize.", err);
+        } finally {
+            // Add a slight delay to ensure everything is mounted before lifting splash screen
+            setTimeout(() => setIsReady(true), 500);
+        }
     };
     init();
   }, []);
@@ -406,6 +419,21 @@ export default function App() {
       const roleConfig = rolePermissions.find(rp => rp.role === user.role);
       return roleConfig ? roleConfig.permissions.includes(permission) : false;
   };
+
+  if (!isReady) {
+      return (
+          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+              <div className="relative">
+                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                      <Layout className="text-blue-600" size={24} />
+                  </div>
+              </div>
+              <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-6">Secure System Link Active</p>
+              <p className="text-gray-400 text-[10px] mt-1 italic animate-pulse">Initializing local environment...</p>
+          </div>
+      );
+  }
 
   return (
     <AuthContext.Provider value={{ user, currentStoreId, login, logout, switchStore, hasPermission, openProfile: () => setIsProfileModalOpen(true) }}>
