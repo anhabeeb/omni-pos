@@ -1,0 +1,5 @@
+{
+  "name": "OmniPOS - Multi-Store Restaurant System",
+  "description": "A comprehensive offline-capable POS system for multi-location restaurants with role-based access, KOT, and advanced reporting.",
+  "requestFramePermissions": []
+}
