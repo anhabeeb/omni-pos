@@ -1,27 +1,33 @@
-
 interface Env {
-  // Fix: Use any for DB to resolve missing D1Database type error
   DB: any;
 }
 
-// Fix: Explicitly type the function context to resolve missing PagesFunction type error
 export const onRequestPost = async (context: { env: Env; request: Request }): Promise<Response> => {
   const { DB } = context.env;
-  const { action, table, data } = await context.request.json() as any;
+  
+  let payload: any;
+  try {
+    payload = await context.request.json();
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), { status: 400 });
+  }
+
+  const { action, table, data } = payload;
 
   try {
     let query = '';
     let params: any[] = [];
 
     switch (action) {
-      case 'INSERT':
+      case 'INSERT': {
         const keys = Object.keys(data).join(', ');
         const placeholders = Object.keys(data).map(() => '?').join(', ');
         query = `INSERT INTO ${table} (${keys}) VALUES (${placeholders})`;
         params = Object.values(data);
         break;
+      }
 
-      case 'UPDATE':
+      case 'UPDATE': {
         const sets = Object.keys(data)
           .filter(k => k !== 'id')
           .map(k => `${k} = ?`)
@@ -29,11 +35,13 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         query = `UPDATE ${table} SET ${sets} WHERE id = ?`;
         params = [...Object.entries(data).filter(([k]) => k !== 'id').map(([, v]) => v), data.id];
         break;
+      }
 
-      case 'DELETE':
+      case 'DELETE': {
         query = `DELETE FROM ${table} WHERE id = ?`;
         params = [data.id];
         break;
+      }
 
       default:
         return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400 });
@@ -46,6 +54,21 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     });
 
   } catch (err: any) {
+    // Handle SQLITE UNIQUE CONSTRAINT error (Duplicate ID)
+    const isDuplicate = err.message?.toLowerCase().includes('unique constraint') || 
+                       err.message?.toLowerCase().includes('already exists');
+
+    if (isDuplicate) {
+      return new Response(JSON.stringify({ 
+        error: 'Conflict: ID already exists',
+        code: 'DUPLICATE_ID'
+      }), { 
+        status: 409, // Conflict status
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.error(`D1 Error on ${table} [${action}]:`, err.message);
     return new Response(JSON.stringify({ error: err.message }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }

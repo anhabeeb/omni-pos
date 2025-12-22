@@ -10,7 +10,9 @@ import {
   Hash,
   FileImage,
   Percent,
-  MapPin
+  MapPin,
+  Loader2,
+  Activity
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -37,6 +39,7 @@ export default function POS() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerResults, setShowCustomerResults] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
     name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: ''
@@ -131,9 +134,11 @@ export default function POS() {
       if (savedCart) setCart(JSON.parse(savedCart));
       if (savedType) setOrderType(savedType as OrderType);
       if (savedCust) {
-          const cust = JSON.parse(savedCust);
-          setSelectedCustomer(cust);
-          if (cust) setCustomerSearch(cust.name);
+          try {
+              const cust = JSON.parse(savedCust);
+              setSelectedCustomer(cust);
+              if (cust) setCustomerSearch(cust.name);
+          } catch(e) { /* ignore parse error */ }
       }
       if (savedTable) setTableNumber(savedTable);
       if (savedNote) setOrderNote(savedNote);
@@ -200,17 +205,27 @@ export default function POS() {
       }).filter(item => item.quantity > 0));
   };
 
+  const resetOrderUI = () => {
+    setCart([]); 
+    setSelectedCustomer(null); 
+    setCustomerSearch(''); 
+    setTableNumber(''); 
+    setOrderNote(''); 
+    setOrderType(OrderType.DINE_IN); 
+    setDiscountPercent(0);
+    if (currentStoreId) {
+        const keys = getStorageKeys(currentStoreId);
+        localStorage.removeItem(keys.cart);
+        localStorage.removeItem(keys.customer);
+        localStorage.removeItem(keys.table);
+        localStorage.removeItem(keys.note);
+        localStorage.removeItem(keys.discount);
+    }
+  };
+
   const clearCart = () => { 
       if (confirm("Are you sure you want to clear the current order?")) {
-        setCart([]); setSelectedCustomer(null); setCustomerSearch(''); setTableNumber(''); setOrderNote(''); setOrderType(OrderType.DINE_IN); setDiscountPercent(0);
-        if (currentStoreId) {
-            const keys = getStorageKeys(currentStoreId);
-            localStorage.removeItem(keys.cart);
-            localStorage.removeItem(keys.customer);
-            localStorage.removeItem(keys.table);
-            localStorage.removeItem(keys.note);
-            localStorage.removeItem(keys.discount);
-        }
+          resetOrderUI();
       }
   };
 
@@ -236,6 +251,42 @@ export default function POS() {
     showToast(`Order #${order.orderNumber} moved to Held`, "INFO");
   };
 
+  const handleHoldCart = async () => {
+    if (!currentStoreId || !user || !shift || cart.length === 0 || isSaving) return;
+    if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
+    
+    setIsSaving(true);
+    const newOrder: Order = {
+        id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
+        items: [...cart], subtotal: totals.subtotal, 
+        discountPercent: discountPercent, 
+        discountAmount: totals.discountAmount,
+        tax: totals.tax, serviceCharge: totals.serviceCharge,
+        total: totals.total, orderType, status: OrderStatus.ON_HOLD, kitchenStatus: 'PENDING',
+        tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
+        note: orderNote, 
+        customerName: selectedCustomer?.name, 
+        customerPhone: selectedCustomer?.phone,
+        customerTin: selectedCustomer?.tin,
+        customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
+        createdBy: user.id, createdAt: Date.now()
+    } as Order;
+
+    resetOrderUI();
+    setActiveTab('HELD');
+    showToast("Holding order...", "INFO");
+
+    try {
+        await db.addOrder(currentStoreId, newOrder);
+        showToast("Order placed on hold.", "SUCCESS");
+    } catch (e) {
+        console.error(e);
+        showToast("Order saved locally", "INFO");
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const handleActivateOrder = async (order: Order, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!shift) { showToast("Register is closed. Please open shift first.", "ERROR"); setIsShiftModalOpen(true); return; }
@@ -246,11 +297,13 @@ export default function POS() {
   };
 
   const handleSendToKitchen = async () => {
-      if (!currentStoreId || !user || !shift || cart.length === 0) return;
+      if (!currentStoreId || !user || !shift || cart.length === 0 || isSaving) return;
       if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
-      const newOrder: Order = {
+      
+      setIsSaving(true);
+      const newOrderData: Order = {
           id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
-          items: cart, subtotal: totals.subtotal, 
+          items: [...cart], subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
           tax: totals.tax, serviceCharge: totals.serviceCharge,
@@ -263,15 +316,26 @@ export default function POS() {
           customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
           createdBy: user.id, createdAt: Date.now()
       } as Order;
-      await db.addOrder(currentStoreId, newOrder);
-      setCart([]); setSelectedCustomer(null); setCustomerSearch(''); setTableNumber(''); setOrderNote(''); setOrderType(OrderType.DINE_IN); setDiscountPercent(0);
+
+      resetOrderUI();
       setActiveTab('ORDERS');
-      showToast("Order created & sent to kitchen.", "SUCCESS");
+      showToast("Sending order to kitchen...", "INFO");
+
+      try {
+          await db.addOrder(currentStoreId, newOrderData);
+          showToast("Order created & sent to kitchen.", "SUCCESS");
+      } catch (e) {
+          console.error(e);
+          showToast("Order sent locally", "INFO");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const totals = useMemo(() => {
       const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const discountAmount = (subtotal * discountPercent) / 100;
+      const dPercent = discountPercent || 0;
+      const discountAmount = (subtotal * dPercent) / 100;
       const subtotalAfterDiscount = subtotal - discountAmount;
       
       const taxRate = store?.taxRate || 0;
@@ -296,47 +360,73 @@ export default function POS() {
       setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); setIsPaymentModalOpen(true);
   };
 
-  const handleQuickSettleActive = (order: Order, e: React.MouseEvent) => {
-      e.stopPropagation();
+  const handleQuickSettle = (order: Order, e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
       setOrderToSettle(order); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); setIsPaymentModalOpen(true);
   };
 
   const finalizePayment = async () => {
-      if (!currentStoreId || !user || !shift) return;
+      if (!currentStoreId || !user || !shift || isSaving) return;
       const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
       const tendered = parseFloat(amountTendered) || 0;
-      if (paymentMethod === 'CASH' && tendered < payableTotal) { setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); return; }
+      
+      if (paymentMethod === 'CASH' && tendered < payableTotal) { 
+          setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
+          return; 
+      }
+      
+      setIsSaving(true);
       const transaction: Transaction = {
           id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
           timestamp: Date.now(), performedBy: user.id, 
           tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
           changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
       };
-      let finalOrder: Order;
-      if (orderToSettle) {
-          finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod, transactions: [...(orderToSettle.transactions || []), transaction] };
-          await db.updateOrder(currentStoreId, finalOrder);
-          showToast(`Order #${orderToSettle.orderNumber} settled.`, "SUCCESS");
-      } else {
-          finalOrder = { 
-            id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
-            items: cart, 
-            subtotal: totals.subtotal, 
-            discountPercent: discountPercent,
-            discountAmount: totals.discountAmount,
-            tax: totals.tax, serviceCharge: totals.serviceCharge, 
-            total: totals.total, orderType, status: OrderStatus.COMPLETED, paymentMethod, note: orderNote, transactions: [transaction], tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined, 
-            customerName: selectedCustomer?.name, 
-            customerPhone: selectedCustomer?.phone, 
-            customerTin: selectedCustomer?.tin,
-            customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
-            createdBy: user.id, createdAt: Date.now() 
-          } as Order;
-          finalOrder = await db.addOrder(currentStoreId, finalOrder);
-          setCart([]); setSelectedCustomer(null); setCustomerSearch(''); setTableNumber(''); setOrderNote(''); setOrderType(OrderType.DINE_IN); setDiscountPercent(0);
-          showToast("Payment completed.", "SUCCESS");
+
+      const localCart = [...cart];
+      const localTotals = {...totals};
+      const localNote = orderNote;
+      const localTable = tableNumber;
+      const localType = orderType;
+      const localCust = selectedCustomer;
+      const localDisc = discountPercent;
+
+      setIsPaymentModalOpen(false);
+      resetOrderUI();
+      showToast("Processing payment...", "INFO");
+
+      try {
+          let finalOrder: Order;
+          if (orderToSettle) {
+              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod, transactions: [...(orderToSettle.transactions || []), transaction] };
+              await db.updateOrder(currentStoreId, finalOrder);
+          } else {
+              finalOrder = { 
+                id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
+                items: localCart, 
+                subtotal: localTotals.subtotal, 
+                discountPercent: localDisc,
+                discountAmount: localTotals.discountAmount,
+                tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
+                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod, note: localNote, transactions: [transaction], tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
+                customerName: localCust?.name, 
+                customerPhone: localCust?.phone, 
+                customerTin: localCust?.tin,
+                customerAddress: localCust ? formatAddress(localCust) : undefined,
+                createdBy: user.id, createdAt: Date.now() 
+              } as Order;
+              finalOrder = await db.addOrder(currentStoreId, finalOrder);
+          }
+          setOrderToSettle(null); 
+          setPreviewOrder(finalOrder); 
+          setPrintModalOpen(true);
+          showToast("Payment completed successfully.", "SUCCESS");
+      } catch (e) {
+          console.error(e);
+          showToast("Payment recorded locally", "INFO");
+      } finally {
+          setIsSaving(false);
       }
-      setIsPaymentModalOpen(false); setOrderToSettle(null); setPreviewOrder(finalOrder); setPrintModalOpen(true);
   };
 
   const generateReceiptHtml = (order: Order, isAutoPrint = false) => {
@@ -534,14 +624,19 @@ export default function POS() {
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
       e.preventDefault(); 
-      if (!currentStoreId || !newCustData.name) return;
-      const newCust: Customer = { ...newCustData, id: uuid() } as Customer;
-      await db.addCustomer(currentStoreId, newCust); 
-      setSelectedCustomer(newCust); 
-      setCustomerSearch(newCust.name); 
-      setIsCustomerModalOpen(false); 
-      resetNewCustForm();
-      showToast("Customer Added", "SUCCESS");
+      if (!currentStoreId || !newCustData.name || isSaving) return;
+      setIsSaving(true);
+      try {
+          const newCust: Customer = { ...newCustData, id: uuid() } as Customer;
+          await db.addCustomer(currentStoreId, newCust); 
+          setSelectedCustomer(newCust); 
+          setCustomerSearch(newCust.name); 
+          setIsCustomerModalOpen(false); 
+          resetNewCustForm();
+          showToast("Customer Added", "SUCCESS");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const resetNewCustForm = () => {
@@ -558,36 +653,54 @@ export default function POS() {
   };
 
   const handleOpenShift = async () => {
-      if (!currentStoreId || !user) return;
+      if (!currentStoreId || !user || isSaving) return;
       const total = calculateDenomTotal();
       if (total <= 0) { setShiftError("Starting float cannot be zero."); return; }
-      await db.openShift(currentStoreId, user.id, total, denominations);
-      setIsShiftModalOpen(false); setDenominations({}); setShiftError(''); loadData(); showToast("Register Opened", "SUCCESS");
+      setIsSaving(true);
+      try {
+          await db.openShift(currentStoreId, user.id, total, denominations);
+          setIsShiftModalOpen(false); setDenominations({}); setShiftError(''); loadData(); showToast("Register Opened", "SUCCESS");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const initiateCloseShift = () => {
     if (!currentStoreId) return;
     setShiftError('');
     if (cart.length > 0) { setShiftError("Cannot close: An unsaved order is in the cart."); return; }
-    if (activeOrders.length > 0) { setShiftError(`Blocked: There are still ${activeOrders.length} active orders in progress.`); return; }
+    if (activeOrders.length > 0) { setShiftError(`Blocked: There are still ${activeOrders.length} active orders in preparation.`); return; }
     
     if (!shift) { showToast("No active session found.", "ERROR"); setIsShiftModalOpen(false); return; }
     setIsShiftConfirmOpen(true);
   };
 
   const executeCloseShift = async () => {
-    if (!currentStoreId || !shift) return;
+    if (!currentStoreId || !shift || isSaving) return;
     const totalCount = calculateDenomTotal();
-    const success = await db.closeShift(currentStoreId, shift.id, totalCount, shiftNote, denominations);
-    if (success) { 
-        setIsShiftConfirmOpen(false); 
-        setIsShiftModalOpen(false); 
-        setDenominations({}); 
-        setShiftNote(''); 
-        loadData(); 
-        showToast("Register Closed Successfully", "SUCCESS"); 
-    } else {
-        setShiftError("System failed to close shift record.");
+    
+    // Optimistic Prompt Closure - Do this immediately to prevent double submission
+    const shiftId = shift.id;
+    setIsShiftConfirmOpen(false);
+    setIsShiftModalOpen(false);
+    setIsSaving(true);
+    
+    try {
+        const success = await db.closeShift(currentStoreId, shiftId, totalCount, shiftNote, denominations);
+        if (success) { 
+            setDenominations({}); 
+            setShiftNote(''); 
+            setShift(null); // Immediate clear
+            loadData(); 
+            showToast("Register Closed Successfully", "SUCCESS"); 
+        } else {
+            showToast("System failed to close shift record.", "ERROR");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Error processing shift closure.", "ERROR");
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -615,10 +728,16 @@ export default function POS() {
                     <button onClick={() => setActiveTab('MENU')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'MENU' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Menu</button>
                     <button onClick={() => setActiveTab('ORDERS')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'ORDERS' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Active</button>
                     <button onClick={() => setActiveTab('HELD')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'HELD' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Held</button>
-                    <button onClick={() => setActiveTab('HISTORY')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>History</button>
+                    <button onClick={() => { loadData(); setActiveTab('HISTORY'); }} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>History</button>
                 </div>
             </div>
             <div className="flex items-center gap-3">
+                {shift && activeOrders.length > 0 && (
+                    <div className="hidden sm:flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <Activity size={14}/>
+                        <span className="text-[10px] font-black uppercase tracking-tight">{activeOrders.length} Active Orders</span>
+                    </div>
+                )}
                 {shift && heldOrders.length > 0 && (
                     <div className="hidden sm:flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 px-3 py-1.5 rounded-lg border border-yellow-200 dark:border-yellow-800 animate-pulse">
                         <PauseCircle size={14}/>
@@ -720,7 +839,7 @@ export default function POS() {
                                 <div className="flex gap-1">
                                     <button onClick={() => resumeOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="Edit Order"><Edit size={14}/></button>
                                     <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-1.5 bg-yellow-50 text-yellow-600 rounded hover:bg-yellow-100" title="Hold Order"><PauseCircle size={14}/></button>
-                                    <button onClick={(e) => handleQuickSettleActive(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100" title="Settle & Archive"><DollarSign size={14}/></button>
+                                    <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100" title="Settle & Archive"><DollarSign size={14}/></button>
                                 </div>
                                 <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
                             </div>
@@ -730,15 +849,32 @@ export default function POS() {
             ) : activeTab === 'HELD' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     {heldOrders.map(order => (
-                        <div key={order.id} onClick={() => handleActivateOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm cursor-pointer hover:shadow-md transition-all flex flex-col group">
-                            <h3 className="font-bold dark:text-white text-lg mb-1 group-hover:text-blue-500 transition-colors">#{order.orderNumber}</h3>
-                            <div className="text-xs text-gray-500 mb-4">ON HOLD • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                        <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm transition-all flex flex-col group">
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-bold dark:text-white text-lg">#{order.orderNumber}</h3>
+                                <span className="text-[8px] font-black uppercase bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">On Hold</span>
+                            </div>
+                            <div className="text-xs text-gray-500 mb-4">HELD • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                            <div className="space-y-1 mb-4 overflow-hidden">
+                                {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] truncate opacity-70"> • {it.quantity}x {it.productName}</div>)}
+                                {order.items.length > 3 && <div className="text-[10px] text-gray-400 italic">+{order.items.length - 3} items</div>}
+                            </div>
                             <div className="mt-auto pt-2 border-t dark:border-gray-700 flex justify-between items-center">
-                                <span className="text-[10px] font-black uppercase text-yellow-600 flex items-center gap-1"><Play size={10}/> Click to Activate</span>
+                                <div className="flex gap-1">
+                                    <button onClick={() => handleActivateOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="Move to Active"><Play size={14}/></button>
+                                    <button onClick={() => resumeOrder(order)} className="p-1.5 bg-gray-50 text-gray-600 rounded hover:bg-gray-100" title="Resume to Cart"><Edit size={14}/></button>
+                                    <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100" title="Quick Pay"><DollarSign size={14}/></button>
+                                </div>
                                 <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
                             </div>
                         </div>
                     ))}
+                    {heldOrders.length === 0 && (
+                        <div className="col-span-full py-20 text-center text-gray-400 italic border-2 border-dashed rounded-3xl opacity-50">
+                            <PauseCircle size={48} className="mx-auto mb-2" />
+                            <p>No orders currently on hold.</p>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm overflow-x-auto">
@@ -748,7 +884,7 @@ export default function POS() {
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
                             {historyOrders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                                <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                     <td className="p-4 dark:text-gray-300">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                     <td className="p-4 font-mono font-bold text-blue-600">#{order.orderNumber}</td>
                                     <td className="p-4 dark:text-gray-400 truncate max-w-[120px]">{order.customerName || `Table ${order.tableNumber || '-'}`}</td>
@@ -877,9 +1013,10 @@ export default function POS() {
                 {totals.tax > 0 && <div className="flex justify-between"><span>Tax (${store?.taxRate}%)</span><span>{store?.currency}{totals.tax.toFixed(2)}</span></div>}
                 <div className="flex justify-between font-black text-lg dark:text-white pt-1 border-t border-gray-100 dark:border-gray-700 mt-1"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
             </div>
-            <div className="flex flex-col gap-1.5">
-                <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="w-full py-2 bg-orange-100 text-orange-700 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-orange-200 disabled:opacity-50 transition-all active:scale-95"><ChefHat size={14}/> Kitchen</button>
-                <button onClick={handleCheckout} disabled={cart.length === 0} className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black text-xs flex items-center justify-center gap-1.5 hover:bg-blue-700 disabled:opacity-50 shadow-lg active:scale-95"><DollarSign size={14}/> Checkout</button>
+            <div className="grid grid-cols-3 gap-1.5">
+                <button onClick={handleHoldCart} disabled={cart.length === 0 || isSaving} className="py-2 bg-yellow-50 text-yellow-700 rounded-lg font-bold text-[10px] flex flex-col items-center justify-center border border-yellow-200 hover:bg-yellow-100 disabled:opacity-50 transition-all active:scale-95"><PauseCircle size={14} className="mb-0.5"/> Hold</button>
+                <button onClick={handleSendToKitchen} disabled={cart.length === 0 || isSaving} className="py-2 bg-orange-100 text-orange-700 rounded-lg font-bold text-[10px] flex flex-col items-center justify-center border border-orange-200 hover:bg-orange-200 disabled:opacity-50 transition-all active:scale-95"><ChefHat size={14} className="mb-0.5"/> Kitchen</button>
+                <button onClick={handleCheckout} disabled={cart.length === 0 || isSaving} className="py-2 bg-blue-600 text-white rounded-lg font-black text-[10px] flex flex-col items-center justify-center hover:bg-blue-700 disabled:opacity-50 shadow-lg active:scale-95"><DollarSign size={14} className="mb-0.5"/> Settle</button>
             </div>
         </div>
       </div>
@@ -927,7 +1064,14 @@ export default function POS() {
                         </div>
                       </div>
                   )}
-                  <button onClick={finalizePayment} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-lg mt-6 shadow-xl active:scale-[0.98] transition-all">Confirm Payment</button>
+                  <button 
+                    onClick={finalizePayment} 
+                    disabled={isSaving}
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-lg mt-6 shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSaving && <Loader2 className="animate-spin" size={20} />}
+                    Confirm Payment
+                  </button>
               </div>
           </div>
       )}
@@ -966,18 +1110,34 @@ export default function POS() {
                         </div>
                       )}
                   </div>
-                  <div className="flex gap-3 pt-6 border-t border-gray-100 dark:border-gray-700 mt-4"><button onClick={() => { setIsShiftModalOpen(false); setDenominations({}); setShiftError(''); }} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">Cancel</button><button onClick={shift ? initiateCloseShift : handleOpenShift} className={`flex-1 py-3 rounded-xl text-white font-bold shadow-lg transition-all active:scale-95 ${shift ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>{shift ? 'Finalize' : 'Open'}</button></div>
+                  <div className="flex gap-3 pt-6 border-t border-gray-100 dark:border-gray-700 mt-4">
+                    <button onClick={() => { setIsShiftModalOpen(false); setDenominations({}); setShiftError(''); }} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">Cancel</button>
+                    <button onClick={shift ? initiateCloseShift : handleOpenShift} disabled={isSaving} className={`flex-1 py-3 rounded-xl text-white font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${shift ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                      {isSaving && <Loader2 className="animate-spin" size={18} />}
+                      {shift ? 'Finalize' : 'Open'}
+                    </button>
+                  </div>
               </div>
           </div>
       )}
 
       {isShiftConfirmOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[150] p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
               <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-sm p-8 text-center animate-in zoom-in-95 duration-200">
                   <div className="w-20 h-20 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 mx-auto mb-6"><AlertCircle size={40} /></div>
                   <h3 className="text-2xl font-bold dark:text-white mb-2">Finalize Shift?</h3>
                   <p className="text-gray-500 dark:text-gray-400 mb-8">Register Total: {store?.currency}{calculateDenomTotal().toFixed(2)}.</p>
-                  <div className="flex flex-col gap-3"><button onClick={executeCloseShift} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold shadow-xl active:scale-[0.98]">Confirm Close</button><button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-500 font-bold hover:bg-white dark:hover:bg-gray-700 rounded-2xl transition-all">Go Back</button></div>
+                  <div className="flex flex-col gap-3">
+                    <button 
+                        onClick={executeCloseShift} 
+                        disabled={isSaving}
+                        className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {isSaving && <Loader2 className="animate-spin" size={18} />}
+                      Confirm Close
+                    </button>
+                    <button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-500 font-bold hover:bg-white dark:hover:bg-gray-700 rounded-2xl transition-all">Go Back</button>
+                  </div>
               </div>
           </div>
       )}
@@ -1131,7 +1291,14 @@ export default function POS() {
 
                       <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
                           <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white dark:hover:bg-gray-700 rounded-xl">Cancel</button>
-                          <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all active:scale-95">Save Customer</button>
+                          <button 
+                            type="submit" 
+                            disabled={isSaving}
+                            className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            {isSaving && <Loader2 className="animate-spin" size={18} />}
+                            Save Customer
+                          </button>
                       </div>
                   </form>
               </div>

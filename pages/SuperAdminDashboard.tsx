@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { Store, UserRole, Order, OrderStatus, ActiveSession } from '../types';
-import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
@@ -16,6 +15,7 @@ export default function SuperAdminDashboard() {
   const [allOrders, setAllOrders] = useState<{storeId: string, order: Order}[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [storeToDelete, setStoreToDelete] = useState<Store | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -71,6 +71,8 @@ export default function SuperAdminDashboard() {
 
   const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+
     const fullAddress = [
         editingStore.buildingName,
         editingStore.streetName,
@@ -82,14 +84,19 @@ export default function SuperAdminDashboard() {
     const storeData = { ...editingStore, address: fullAddress };
 
     if (storeData.name) {
-      if (storeData.id) {
-        await db.updateStore(storeData as Store);
-      } else {
-        await db.addStore({ ...storeData, isActive: true } as Store);
+      setIsSaving(true);
+      try {
+          if (storeData.id) {
+            await db.updateStore(storeData as Store);
+          } else {
+            await db.addStore({ ...storeData, isActive: true } as Store);
+          }
+          setIsModalOpen(false);
+          resetForm();
+          await loadData();
+      } finally {
+          setIsSaving(false);
       }
-      setIsModalOpen(false);
-      resetForm();
-      await loadData();
     }
   };
 
@@ -97,14 +104,19 @@ export default function SuperAdminDashboard() {
       e.preventDefault();
       setDeleteError('');
 
-      if (!user || !storeToDelete) return;
+      if (!user || !storeToDelete || isSaving) return;
 
       if (confirmPassword === user.password) {
-          await db.deleteStore(storeToDelete.id);
-          setIsDeleteModalOpen(false);
-          setStoreToDelete(null);
-          setConfirmPassword('');
-          await loadData();
+          setIsSaving(true);
+          try {
+              await db.deleteStore(storeToDelete.id);
+              setIsDeleteModalOpen(false);
+              setStoreToDelete(null);
+              setConfirmPassword('');
+              await loadData();
+          } finally {
+              setIsSaving(false);
+          }
       } else {
           setDeleteError('Incorrect password. Access denied.');
       }
@@ -471,9 +483,11 @@ export default function SuperAdminDashboard() {
                       <div className="flex flex-col gap-3">
                           <button 
                               type="submit"
-                              className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 transition-all active:scale-[0.98]"
+                              disabled={isSaving}
+                              className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                           >
-                              Permanently Delete Store
+                            {isSaving && <Loader2 className="animate-spin" size={20} />}
+                            Permanently Delete Store
                           </button>
                           <button 
                               type="button"
@@ -676,7 +690,14 @@ export default function SuperAdminDashboard() {
 
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-700">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">Cancel</button>
-                <button type="submit" className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">Save Store</button>
+                <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    {isSaving && <Loader2 className="animate-spin" size={16} />}
+                    Save Store
+                </button>
               </div>
             </form>
           </div>

@@ -1,11 +1,15 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
 import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings } from '../types';
-import { Calendar, Receipt, ChefHat, Filter, ArrowRight, DollarSign, Info, Printer, RotateCcw, Undo2, Trash2, X, Search, Wallet, FileText, CheckCircle, AlertTriangle, CreditCard, Lock, Unlock, PauseCircle, Download, FileImage } from 'lucide-react';
+import { 
+  Calendar, Receipt, ChefHat, Filter, ArrowRight, DollarSign, Info, Printer, 
+  RotateCcw, Undo2, Trash2, X, Search, Wallet, FileText, CheckCircle, 
+  AlertTriangle, CreditCard, Lock, Unlock, PauseCircle, Download, FileImage,
+  Layers, CreditCard as PaymentIcon, Hash, User as UserIcon
+} from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
 export default function StoreHistory() {
@@ -56,7 +60,8 @@ export default function StoreHistory() {
       const usersData = await db.getUsers();
       setUsers(usersData);
       const stores = await db.getStores();
-      setStore(stores.find(s => s.id === activeStoreId) || null);
+      const s = stores.find(s => s.id === activeStoreId) || null;
+      setStore(s);
     }
   };
 
@@ -93,10 +98,15 @@ export default function StoreHistory() {
             yesterday.setDate(yesterday.getDate() - 1);
             yesterday.setHours(0,0,0,0);
             start = yesterday.getTime();
-            const endYesterday = new Date();
-            endYesterday.setDate(endYesterday.getDate() - 1);
+            const endYesterday = new Date(yesterday);
             endYesterday.setHours(23,59,59,999);
             end = endYesterday.getTime();
+            break;
+        case 'LAST_7_DAYS':
+            const last7 = new Date();
+            last7.setDate(last7.getDate() - 7);
+            last7.setHours(0,0,0,0);
+            start = last7.getTime();
             break;
         case 'LAST_30_DAYS':
             const last30 = new Date();
@@ -109,12 +119,6 @@ export default function StoreHistory() {
             last90.setDate(last90.getDate() - 90);
             last90.setHours(0,0,0,0);
             start = last90.getTime();
-            break;
-        case 'LAST_YEAR':
-            const lastYear = new Date();
-            lastYear.setFullYear(lastYear.getFullYear() - 1);
-            lastYear.setHours(0,0,0,0);
-            start = lastYear.getTime();
             break;
         case 'CUSTOM':
             if (customStart) {
@@ -139,7 +143,7 @@ export default function StoreHistory() {
     let result = orders;
     const { start, end } = getTimeRange();
     result = result.filter(o => {
-        const t = new Date(o.createdAt).getTime();
+        const t = o.createdAt;
         return t >= start && t <= end;
     });
     if (searchTerm) {
@@ -383,14 +387,43 @@ export default function StoreHistory() {
             <div style="display:flex; justify-content:space-between;"><span>Expected:</span><span>${currency}${shift.expectedCash?.toFixed(2) || '0.00'}</span></div>
             <div style="display:flex; justify-content:space-between;"><span>Actual:</span><span>${currency}${shift.actualCash?.toFixed(2) || '0.00'}</span></div>
             <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px solid #000; margin-top: 5px; padding-top: 5px;"><span>Variance:</span><span>${currency}${shift.difference?.toFixed(2) || '0.00'}</span></div>
+            
             <div style="font-weight:bold; border-bottom:1px solid #000; margin:10px 0; font-size: 11px; text-transform: uppercase;">PENDING ORDERS</div>
-            <div style="display:flex; justify-content:space-between;"><span>Held at Close:</span><span>${shift.heldOrdersCount || 0}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Held at Close:</span><span>${stats.heldOrdersCount || 0}</span></div>
           </body>
         </html>
       `;
   };
 
   const getShiftReportData = (shift: RegisterShift) => {
+      // Prioritize stored data if available
+      if (shift.status === 'CLOSED' && shift.heldOrdersCount !== undefined) {
+          const shiftOrders = orders.filter(o => o.shiftId === shift.id);
+          let totalSales = 0;
+          let refunds = 0;
+          const pb = { CASH: 0, CARD: 0, TRANSFER: 0 };
+          
+          shiftOrders.forEach(o => {
+              o.transactions?.forEach(t => {
+                  if (t.type === 'PAYMENT') {
+                      totalSales += t.amount;
+                      if (t.method === 'CASH') pb.CASH += t.amount;
+                      else if (t.method === 'CARD') pb.CARD += t.amount;
+                      else if (t.method === 'TRANSFER') pb.TRANSFER += t.amount;
+                  } else if (t.type === 'REVERSAL') { refunds += t.amount; }
+              });
+          });
+          
+          return { 
+              totalSales, 
+              refunds, 
+              netSales: totalSales - refunds, 
+              paymentBreakdown: pb, 
+              heldOrdersCount: shift.heldOrdersCount, 
+              heldOrdersTotal: 0 
+          };
+      }
+
       const shiftOrders = orders.filter(o => o.shiftId === shift.id);
       const paymentBreakdown = { CASH: 0, CARD: 0, TRANSFER: 0 };
       let totalSales = 0;
@@ -406,12 +439,19 @@ export default function StoreHistory() {
           });
       });
       const heldOrders = shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD);
-      return { totalSales, refunds, netSales: totalSales - refunds, paymentBreakdown, heldOrdersCount: heldOrders.length, heldOrdersTotal: heldOrders.reduce((sum, o) => sum + o.total, 0) };
+      return { 
+          totalSales, 
+          refunds, 
+          netSales: totalSales - refunds, 
+          paymentBreakdown, 
+          heldOrdersCount: heldOrders.length, 
+          heldOrdersTotal: heldOrders.reduce((sum, o) => sum + o.total, 0) 
+      };
   };
 
   const handleFinalPrint = () => {
     let html = '';
-    if (previewOrder) { html = generateReceiptHtml(previewOrder, previewPaperSize, users, true); } 
+    if (previewOrder) { html = generateReceiptHtml(previewOrder as Order, previewPaperSize, users, true); } 
     else if (previewShift) { html = generateShiftReportHtml(previewShift, previewPaperSize, true); }
     if (html) {
         const printWindow = window.open('', '_blank', 'width=600,height=800');
@@ -424,7 +464,7 @@ export default function StoreHistory() {
       if (!exportRef.current || !store) return;
       const fileName = previewOrder ? `order-${previewOrder.orderNumber}.jpg` : `shift-${previewShift?.shiftNumber}.jpg`;
       try {
-          const rawHtml = previewOrder ? generateReceiptHtml(previewOrder, previewPaperSize, users, false) : generateShiftReportHtml(previewShift!, previewPaperSize, false);
+          const rawHtml = previewOrder ? generateReceiptHtml(previewOrder as Order, previewPaperSize, users, false) : generateShiftReportHtml(previewShift!, previewPaperSize, false);
           
           let width = '320px';
           if (previewPaperSize === 'a4' || previewPaperSize === 'letter') width = '800px';
@@ -462,7 +502,7 @@ export default function StoreHistory() {
   };
 
   const previewHtml = useMemo(() => {
-    if (previewOrder) return generateReceiptHtml(previewOrder, previewPaperSize, users, false);
+    if (previewOrder) return generateReceiptHtml(previewOrder as Order, previewPaperSize, users, false);
     if (previewShift) return generateShiftReportHtml(previewShift, previewPaperSize, false);
     return '';
   }, [previewOrder, previewShift, previewPaperSize, store, users]);
@@ -493,8 +533,36 @@ export default function StoreHistory() {
   return (
     <div className="space-y-6 h-full flex flex-col">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
-      <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">History & Logs</h1>
+      
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">History & Logs</h1>
+            <p className="text-gray-500 text-sm">Review store transactions and register sessions.</p>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <select 
+                value={dateRange} 
+                onChange={(e) => setDateRange(e.target.value)} 
+                className="pl-3 pr-8 py-2 border-0 bg-transparent text-sm font-bold text-gray-700 dark:text-gray-200 outline-none focus:ring-0"
+            >
+                <option value="TODAY">Today</option>
+                <option value="YESTERDAY">Yesterday</option>
+                <option value="LAST_7_DAYS">Last 7 Days</option>
+                <option value="LAST_30_DAYS">Last 30 Days</option>
+                <option value="LAST_90_DAYS">Last 90 Days</option>
+                <option value="ALL">All Time</option>
+                <option value="CUSTOM">Custom Range</option>
+            </select>
+            
+            {dateRange === 'CUSTOM' && (
+                <div className="flex items-center gap-2 ml-2 px-2 border-l border-gray-200 dark:border-gray-700">
+                    <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="text-xs border-0 bg-transparent dark:text-white outline-none"/>
+                    <span className="text-gray-400">to</span>
+                    <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="text-xs border-0 bg-transparent dark:text-white outline-none"/>
+                </div>
+            )}
+          </div>
       </div>
       
       <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
@@ -504,35 +572,89 @@ export default function StoreHistory() {
 
       <div className="flex-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
         {activeTab === 'SALES' && (
-            <div className="flex-1 overflow-y-auto">
-                <table className="w-full text-left min-w-[900px]">
-                    <thead className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-[10px] font-black uppercase tracking-wider sticky top-0 border-b border-gray-100 dark:border-gray-700">
-                        <tr><th className="p-4">Time</th><th className="p-4">Order #</th><th className="p-4">Customer</th><th className="p-4">Total</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {filteredOrders.length === 0 ? (
-                            <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">No sales records found for this period.</td></tr>
-                        ) : (
-                            filteredOrders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                    <td className="p-4 text-sm dark:text-gray-300">{new Date(order.createdAt).toLocaleString()}</td>
-                                    <td className="p-4 font-mono font-bold text-sm text-blue-600">#{order.orderNumber}</td>
-                                    <td className="p-4 text-sm dark:text-white">{order.customerName || `Table ${order.tableNumber || '-'}`}</td>
-                                    <td className="p-4 font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</td>
-                                    <td className="p-4"><span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-[10px] font-black uppercase">{order.status}</span></td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex justify-end gap-1">
-                                            <button onClick={() => setViewOrder(order)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded transition-all" title="View"><Info size={18}/></button>
-                                            <button onClick={() => openPrintModal(order)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded transition-all" title="Print"><Printer size={18}/></button>
-                                            <button onClick={() => handleDelete(order.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded transition-all" title="Delete"><Trash2 size={18}/></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 items-center">
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Order # or Customer..." 
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:text-white"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <Layers size={14} className="text-gray-400" />
+                            <select 
+                                value={filterOrderType} 
+                                onChange={e => setFilterOrderType(e.target.value)}
+                                className="border-0 bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:ring-0 outline-none"
+                            >
+                                <option value="ALL">All Types</option>
+                                <option value={OrderType.DINE_IN}>Dine-In</option>
+                                <option value={OrderType.TAKEAWAY}>Takeaway</option>
+                                <option value={OrderType.DELIVERY}>Delivery</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <PaymentIcon size={14} className="text-gray-400" />
+                            <select 
+                                value={filterPaymentMethod} 
+                                onChange={e => setFilterPaymentMethod(e.target.value)}
+                                className="border-0 bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:ring-0 outline-none"
+                            >
+                                <option value="ALL">All Payments</option>
+                                <option value="CASH">Cash</option>
+                                <option value="CARD">Card</option>
+                                <option value="TRANSFER">Transfer</option>
+                            </select>
+                        </div>
+                        
+                        <div className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter ml-2">
+                            {filteredOrders.length} Results
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                        <thead className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-[10px] font-black uppercase tracking-wider sticky top-0 border-b border-gray-100 dark:border-gray-700 z-10">
+                            <tr><th className="p-4">Time</th><th className="p-4">Order #</th><th className="p-4">Customer</th><th className="p-4">Type</th><th className="p-4">Total</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                            {filteredOrders.length === 0 ? (
+                                <tr><td colSpan={7} className="p-10 text-center text-gray-400 italic">No sales records found for this criteria.</td></tr>
+                            ) : (
+                                filteredOrders.map(order => (
+                                    <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                        <td className="p-4 text-sm dark:text-gray-300">{new Date(order.createdAt).toLocaleString()}</td>
+                                        <td className="p-4 font-mono font-bold text-sm text-blue-600">#{order.orderNumber}</td>
+                                        <td className="p-4 text-sm dark:text-white truncate max-w-[150px]">{order.customerName || `Table ${order.tableNumber || '-'}`}</td>
+                                        <td className="p-4 text-[10px] font-black text-gray-500 uppercase">{order.orderType}</td>
+                                        <td className="p-4 font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${order.status === OrderStatus.COMPLETED ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <button onClick={() => setViewOrder(order)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded transition-all" title="View"><Info size={18}/></button>
+                                                <button onClick={() => openPrintModal(order)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded transition-all" title="Print"><Printer size={18}/></button>
+                                                <button onClick={() => handleDelete(order.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-white dark:hover:bg-gray-700 rounded transition-all" title="Delete"><Trash2 size={18}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </>
         )}
 
         {activeTab === 'REGISTER' && (
@@ -558,7 +680,7 @@ export default function StoreHistory() {
                                         </span>
                                     </td>
                                     <td className="p-4 text-right">
-                                        {shift.status === 'CLOSED' && <button onClick={() => openShiftPrintModal(shift)} className="p-2 text-blue-600 hover:bg-white rounded transition-all" title="Print Report"><Printer size={18}/></button>}
+                                        {shift.status === 'CLOSED' && <button onClick={() => openShiftPrintModal(shift)} className="p-2 text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded transition-all" title="Print Report"><Printer size={18}/></button>}
                                     </td>
                                 </tr>
                             ))
@@ -574,7 +696,7 @@ export default function StoreHistory() {
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                   <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-900/30">
                     <h3 className="font-bold dark:text-white flex items-center gap-2"><Printer size={18} className="text-blue-600" /> Document Preview</h3>
-                    <button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={24}/></button>
+                    <button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={24}/></button>
                   </div>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-900 p-8 flex justify-center overflow-auto">
                       <div className="bg-white shadow-lg h-fit rounded" style={{width: getIframeWidth()}}>
@@ -589,6 +711,57 @@ export default function StoreHistory() {
                       <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-gray-300 font-bold hover:bg-gray-50">Close</button>
                       <button onClick={handleSaveAsJpg} className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg font-bold hover:bg-blue-50 flex items-center gap-2"><FileImage size={18}/> Save as Image</button>
                       <button onClick={handleFinalPrint} className="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700">Print Now</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {viewOrder && (
+          <div className="fixed inset-0 bg-black/60 z-[250] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                      <h3 className="font-bold dark:text-white flex items-center gap-2"><Receipt size={18} className="text-blue-600" /> Order Details: #{viewOrder.orderNumber}</h3>
+                      <button onClick={() => setViewOrder(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button>
+                  </div>
+                  <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Customer</p>
+                              <p className="text-sm font-bold dark:text-white">{viewOrder.customerName || 'Walk-in'}</p>
+                          </div>
+                          <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Order Type</p>
+                              <p className="text-sm font-bold dark:text-white">{viewOrder.orderType}</p>
+                          </div>
+                      </div>
+
+                      <div className="space-y-2">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 border-b dark:border-gray-700 pb-1">Items Sold</p>
+                          {viewOrder.items.map((it, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-sm">
+                                  <div className="flex gap-2">
+                                      <span className="font-bold text-blue-600">{it.quantity}x</span>
+                                      <span className="dark:text-gray-300">{it.productName}</span>
+                                  </div>
+                                  <span className="font-mono dark:text-white">{store?.currency}{(it.price * it.quantity).toFixed(2)}</span>
+                              </div>
+                          ))}
+                      </div>
+
+                      <div className="border-t dark:border-gray-700 pt-4 space-y-2">
+                          <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span>{store?.currency}{viewOrder.subtotal.toFixed(2)}</span></div>
+                          <div className="flex justify-between text-sm text-gray-500"><span>Tax</span><span>{store?.currency}{viewOrder.tax.toFixed(2)}</span></div>
+                          <div className="flex justify-between font-black text-lg pt-2 border-t dark:border-gray-700 dark:text-white"><span>Total Paid</span><span>{store?.currency}{viewOrder.total.toFixed(2)}</span></div>
+                      </div>
+                      
+                      {viewOrder.note && (
+                          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-900/40 rounded-xl text-xs text-yellow-800 dark:text-yellow-200">
+                              <strong>Note:</strong> {viewOrder.note}
+                          </div>
+                      )}
+                  </div>
+                  <div className="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-end gap-2">
+                      <button onClick={() => setViewOrder(null)} className="px-6 py-2 bg-gray-800 text-white rounded-xl font-bold">Done</button>
                   </div>
               </div>
           </div>

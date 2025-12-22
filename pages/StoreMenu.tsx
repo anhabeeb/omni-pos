@@ -4,15 +4,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/db';
 import { Product, Store, Category } from '../types';
-import { ArrowLeft, Plus, Edit2, Trash2, Search, List, Tag, Filter, Download, Upload, FileSpreadsheet, Image as ImageIcon, X, AlertCircle } from 'lucide-react';
+// Fixed: Added Percent to lucide-react imports
+import { ArrowLeft, Plus, Edit2, Trash2, Search, List, Tag, Filter, Download, Upload, FileSpreadsheet, Image as ImageIcon, X, AlertCircle, Loader2, Info, Percent } from 'lucide-react';
 import { utils, writeFile, read } from 'xlsx';
 
-/**
- * StoreMenu Component
- * Manages the product catalog and categories for a specific store.
- * Includes features for adding, editing, deleting products and categories,
- * as well as importing/exporting product data via Excel.
- */
 export default function StoreMenu() {
   const { storeId } = useParams<{ storeId: string }>();
   const navigate = useNavigate();
@@ -26,6 +21,7 @@ export default function StoreMenu() {
   
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [editingProduct, setEditingProduct] = useState<Partial<Product>>({
     name: '', price: 0, cost: 0, categoryId: '', isAvailable: true, imageUrl: ''
@@ -57,19 +53,24 @@ export default function StoreMenu() {
 
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || !editingProduct.name) return;
+    if (!storeId || !editingProduct.name || isSaving) return;
     if (!editingProduct.categoryId) {
         alert("Please select a category");
         return;
     }
 
-    if (editingProduct.id) {
-      await db.updateProduct(storeId, editingProduct as Product);
-    } else {
-      await db.addProduct(storeId, editingProduct as Product);
+    setIsSaving(true);
+    try {
+        if (editingProduct.id) {
+          await db.updateProduct(storeId, editingProduct as Product);
+        } else {
+          await db.addProduct(storeId, editingProduct as Product);
+        }
+        setIsProductModalOpen(false);
+        resetProductForm();
+    } finally {
+        setIsSaving(false);
     }
-    setIsProductModalOpen(false);
-    resetProductForm();
   };
 
   const handleAddCategory = async (e: React.FormEvent) => {
@@ -193,7 +194,6 @@ export default function StoreMenu() {
       reader.readAsBinaryString(file);
   };
 
-  // Fixed filtering logic that was previously truncated
   const filteredProducts = products.filter(p => {
     const term = searchTerm.toLowerCase();
     const catName = getCategoryName(p.categoryId).toLowerCase();
@@ -202,6 +202,11 @@ export default function StoreMenu() {
     const matchesStatus = selectedStatusFilter === 'ALL' || (selectedStatusFilter === 'AVAILABLE' ? p.isAvailable : !p.isAvailable);
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const calculateInclTax = (price: number) => {
+    const taxRate = store?.taxRate || 0;
+    return price * (1 + taxRate / 100);
+  };
 
   if (!store) return <div className="p-12 text-center text-gray-500">Loading store configuration...</div>;
 
@@ -276,8 +281,9 @@ export default function StoreMenu() {
               <tr>
                 <th className="p-4">Item</th>
                 <th className="p-4">Category</th>
-                <th className="p-4">Price</th>
-                <th className="p-4">Cost</th>
+                <th className="p-4 text-right">Price (Excl.)</th>
+                <th className="p-4 text-right">Price (Incl.)</th>
+                <th className="p-4 text-right">Cost</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
@@ -301,8 +307,9 @@ export default function StoreMenu() {
                       {getCategoryName(p.categoryId)}
                     </span>
                   </td>
-                  <td className="p-4 font-black text-gray-900 dark:text-white">{store.currency}{p.price.toFixed(2)}</td>
-                  <td className="p-4 text-gray-500 text-sm">{store.currency}{(p.cost || 0).toFixed(2)}</td>
+                  <td className="p-4 text-right font-bold text-gray-500 dark:text-gray-400">{store.currency}{p.price.toFixed(2)}</td>
+                  <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400">{store.currency}{calculateInclTax(p.price).toFixed(2)}</td>
+                  <td className="p-4 text-right text-gray-500 text-sm">{store.currency}{(p.cost || 0).toFixed(2)}</td>
                   <td className="p-4">
                     <button 
                       onClick={() => db.updateProduct(storeId || '', { ...p, isAvailable: !p.isAvailable })}
@@ -318,7 +325,7 @@ export default function StoreMenu() {
                 </tr>
               ))}
               {filteredProducts.length === 0 && (
-                <tr><td colSpan={6} className="p-12 text-center text-gray-400 italic">No products found matching your search.</td></tr>
+                <tr><td colSpan={7} className="p-12 text-center text-gray-400 italic">No products found matching your search.</td></tr>
               )}
             </tbody>
           </table>
@@ -363,23 +370,69 @@ export default function StoreMenu() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-tight mb-1">Selling Price *</label>
-                  <input required type="number" step="0.01" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500" value={editingProduct.price || ''} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} />
+
+              <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
+                <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Pricing & Tax</label>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-[10px] font-black uppercase">
+                        <Percent size={12}/> Tax Rate: {store.taxRate}%
+                    </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-tight mb-1">Cost Price</label>
-                  <input type="number" step="0.01" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500" value={editingProduct.cost || ''} onChange={e => setEditingProduct({...editingProduct, cost: parseFloat(e.target.value) || 0})} />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="block text-[10px] font-black text-gray-500 uppercase ml-1">Base Price (Excl. Tax) *</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-gray-400 text-sm font-bold">{store.currency}</span>
+                            <input 
+                                required 
+                                type="number" 
+                                step="0.01" 
+                                className="w-full pl-8 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500" 
+                                value={editingProduct.price || ''} 
+                                onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} 
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="block text-[10px] font-black text-blue-600 uppercase ml-1">Selling Price (Incl. Tax)</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-blue-400 text-sm font-bold">{store.currency}</span>
+                            <div className="w-full pl-8 pr-4 py-2 border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl text-blue-700 dark:text-blue-300 font-black text-lg">
+                                {calculateInclTax(editingProduct.price || 0).toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-[10px] text-blue-600 dark:text-blue-400 font-bold border border-blue-100 dark:border-blue-800">
+                    <Info size={12} />
+                    Tax Amount: {store.currency}{((editingProduct.price || 0) * (store.taxRate || 0) / 100).toFixed(2)}
                 </div>
               </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-gray-500 uppercase ml-1">Cost Price (For Margin calculation)</label>
+                <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-gray-400 text-sm font-bold">{store.currency}</span>
+                    <input type="number" step="0.01" className="w-full pl-8 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500" value={editingProduct.cost || ''} onChange={e => setEditingProduct({...editingProduct, cost: parseFloat(e.target.value) || 0})} />
+                </div>
+              </div>
+
               <div className="flex items-center gap-3 pt-2">
                 <input type="checkbox" id="avail" className="w-5 h-5 text-blue-600 rounded" checked={editingProduct.isAvailable} onChange={e => setEditingProduct({...editingProduct, isAvailable: e.target.checked})} />
                 <label htmlFor="avail" className="text-sm font-bold text-gray-700 dark:text-gray-300">Item is available for sale</label>
               </div>
-              <div className="flex justify-end gap-3 pt-6">
-                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl">Cancel</button>
-                <button type="submit" className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700">Save Product</button>
+              <div className="flex justify-end gap-3 pt-6 border-t dark:border-gray-700">
+                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+                <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 flex items-center gap-2 active:scale-95 transition-all"
+                >
+                    {isSaving && <Loader2 className="animate-spin" size={16} />}
+                    Save Product
+                </button>
               </div>
             </form>
           </div>

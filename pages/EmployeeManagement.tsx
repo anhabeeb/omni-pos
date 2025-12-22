@@ -14,7 +14,8 @@ import {
   HeartPulse, 
   X,
   AlertCircle,
-  Hash
+  Hash,
+  Loader2
 } from 'lucide-react';
 
 export default function EmployeeManagement() {
@@ -22,6 +23,7 @@ export default function EmployeeManagement() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<Employee> | null>(null);
 
   // Form State
@@ -73,17 +75,14 @@ export default function EmployeeManagement() {
   };
 
   const handleDelete = async (emp: Employee) => {
-    // 1. Verify Role Permission
     const canDelete = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
     if (!canDelete) {
       alert("Permission Denied: Only Super Admins and Admins can delete employee records.");
       return;
     }
 
-    // 2. Check for Linked System User (Must delete User first)
     try {
       const users = await db.getUsers();
-      // Linked if User.username matches Employee.empId
       const linkedUser = users.find(u => u.username === emp.empId);
 
       if (linkedUser) {
@@ -91,10 +90,9 @@ export default function EmployeeManagement() {
         return;
       }
 
-      // 3. Confirm and Delete
       if (confirm(`Are you sure you want to delete the record for "${emp.fullName}"? This action is permanent and cannot be undone.`)) {
         await db.deleteEmployee(emp.id);
-        await loadData(); // Force refresh local state
+        await loadData(); 
         alert("Employee record deleted successfully.");
       }
     } catch (err) {
@@ -106,18 +104,24 @@ export default function EmployeeManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (isSaving) return;
 
     if (!formData.fullName || !formData.idNumber || !formData.phoneNumber) {
         setError("Please fill in all required primary fields.");
         return;
     }
 
-    if (editingEmployee) {
-      await db.updateEmployee({ ...editingEmployee, ...formData } as Employee);
-    } else {
-      await db.addEmployee(formData);
+    setIsSaving(true);
+    try {
+        if (editingEmployee) {
+          await db.updateEmployee({ ...editingEmployee, ...formData } as Employee);
+        } else {
+          await db.addEmployee(formData);
+        }
+        setIsModalOpen(false);
+    } finally {
+        setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   const filteredEmployees = employees.filter(emp => {
@@ -342,7 +346,7 @@ export default function EmployeeManagement() {
                     <input 
                       required
                       placeholder="e.g. A000000"
-                      className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                      className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
                       value={formData.idNumber}
                       onChange={e => setFormData({...formData, idNumber: e.target.value})}
                     />
@@ -409,8 +413,10 @@ export default function EmployeeManagement() {
               </button>
               <button 
                 onClick={handleSubmit}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-[0.98]"
+                disabled={isSaving}
+                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
               >
+                {isSaving && <Loader2 className="animate-spin" size={16} />}
                 {editingEmployee ? 'Update Record' : 'Save Employee'}
               </button>
             </div>

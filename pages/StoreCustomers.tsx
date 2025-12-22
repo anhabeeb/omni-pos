@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/db';
 import { Customer, Store } from '../types';
-import { ArrowLeft, Plus, Edit2, Trash2, Search, User as UserIcon, Building2, MapPin } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Search, User as UserIcon, Building2, MapPin, Loader2 } from 'lucide-react';
 
 export default function StoreCustomers() {
   const { storeId } = useParams<{ storeId: string }>();
@@ -12,6 +11,7 @@ export default function StoreCustomers() {
   const [store, setStore] = useState<Store | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer>>({
@@ -36,7 +36,6 @@ export default function StoreCustomers() {
     }
   }, [storeId]);
 
-  // Fixed: Made loadData async and awaited DB calls
   const loadData = async () => {
     if (!storeId) return;
     const stores = await db.getStores();
@@ -44,11 +43,10 @@ export default function StoreCustomers() {
     setCustomers(await db.getCustomers(storeId));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || !editingCustomer.name) return;
+    if (!storeId || !editingCustomer.name || isSaving) return;
 
-    // Clean up irrelevant fields based on type before saving
     const finalCustomer = { ...editingCustomer };
     if (finalCustomer.type === 'INDIVIDUAL') {
         finalCustomer.companyName = undefined;
@@ -62,13 +60,18 @@ export default function StoreCustomers() {
         finalCustomer.streetName = undefined;
     }
 
-    if (finalCustomer.id) {
-      db.updateCustomer(storeId, finalCustomer as Customer);
-    } else {
-      db.addCustomer(storeId, finalCustomer as Customer);
+    setIsSaving(true);
+    try {
+        if (finalCustomer.id) {
+          await db.updateCustomer(storeId, finalCustomer as Customer);
+        } else {
+          await db.addCustomer(storeId, finalCustomer as Customer);
+        }
+        setIsModalOpen(false);
+        resetForm();
+    } finally {
+        setIsSaving(false);
     }
-    setIsModalOpen(false);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -106,7 +109,6 @@ export default function StoreCustomers() {
     const companyMatch = c.companyName?.toLowerCase().includes(term);
     const tinMatch = c.tin?.includes(term);
     
-    // Construct address string for searching
     const addressFields = [
         c.houseName, 
         c.streetName, 
@@ -374,7 +376,14 @@ export default function StoreCustomers() {
 
               <div className="flex justify-end gap-2 mt-6 border-t border-gray-100 dark:border-gray-700 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+                <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-blue-600 text-white rounded font-bold shadow-md hover:bg-blue-700 flex items-center gap-2"
+                >
+                    {isSaving && <Loader2 className="animate-spin" size={16} />}
+                    Save
+                </button>
               </div>
             </form>
           </div>

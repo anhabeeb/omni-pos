@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
 import { Order, OrderStatus, KitchenStatus, Transaction } from '../types';
-import { Clock, CheckCircle, Bell, Loader, Check, XCircle, AlertTriangle, ChefHat } from 'lucide-react';
+import { Clock, CheckCircle, Bell, Loader, Check, XCircle, AlertTriangle, ChefHat, Loader2 } from 'lucide-react';
 
 export default function KOT() {
   const { user, currentStoreId, hasPermission } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [processingOrderIds, setProcessingOrderIds] = useState<Set<string>>(new Set());
   
   // Cancellation State
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
@@ -36,22 +37,33 @@ export default function KOT() {
     };
   }, [currentStoreId]);
 
-  const updateKitchenStatus = (order: Order, newKitchenStatus: KitchenStatus) => {
+  const updateKitchenStatus = async (order: Order, newKitchenStatus: KitchenStatus) => {
     if (!hasPermission('PROCESS_KOT')) {
         alert("Permission denied. You cannot update order status.");
         return;
     }
+    if (processingOrderIds.has(order.id)) return;
+
     if (currentStoreId) {
-      const updates: Partial<Order> = { kitchenStatus: newKitchenStatus };
-      if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED) {
-          if (newKitchenStatus === 'PREPARING') updates.status = OrderStatus.PREPARING;
-          if (newKitchenStatus === 'READY') updates.status = OrderStatus.READY;
+      setProcessingOrderIds(prev => new Set(prev).add(order.id));
+      try {
+          const updates: Partial<Order> = { kitchenStatus: newKitchenStatus };
+          if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED) {
+              if (newKitchenStatus === 'PREPARING') updates.status = OrderStatus.PREPARING;
+              if (newKitchenStatus === 'READY') updates.status = OrderStatus.READY;
+          }
+          await db.updateOrder(currentStoreId, { ...order, ...updates });
+      } finally {
+          setProcessingOrderIds(prev => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+          });
       }
-      db.updateOrder(currentStoreId, { ...order, ...updates });
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
       if (!hasPermission('PROCESS_KOT')) {
           alert("Permission denied. You cannot cancel orders.");
           return;
@@ -61,24 +73,36 @@ export default function KOT() {
               alert("Please provide a reason.");
               return;
           }
-          const transaction: Transaction = {
-              id: uuid(),
-              type: 'CANCELLATION',
-              amount: cancelOrder.total,
-              timestamp: Date.now(),
-              performedBy: user.id,
-              note: `Kitchen Rejection: ${cancelReason}`
-          };
-          const updatedOrder: Order = {
-              ...cancelOrder,
-              status: OrderStatus.CANCELLED,
-              kitchenStatus: 'SERVED',
-              transactions: [...(cancelOrder.transactions || []), transaction],
-              cancellationReason: cancelReason
-          };
-          db.updateOrder(currentStoreId, updatedOrder);
-          setCancelOrder(null);
-          setCancelReason('');
+          
+          const orderId = cancelOrder.id;
+          setProcessingOrderIds(prev => new Set(prev).add(orderId));
+          setCancelOrder(null); // Optimistic close modal
+          
+          try {
+              const transaction: Transaction = {
+                  id: uuid(),
+                  type: 'CANCELLATION',
+                  amount: cancelOrder.total,
+                  timestamp: Date.now(),
+                  performedBy: user.id,
+                  note: `Kitchen Rejection: ${cancelReason}`
+              };
+              const updatedOrder: Order = {
+                  ...cancelOrder,
+                  status: OrderStatus.CANCELLED,
+                  kitchenStatus: 'SERVED',
+                  transactions: [...(cancelOrder.transactions || []), transaction],
+                  cancellationReason: cancelReason
+              };
+              await db.updateOrder(currentStoreId, updatedOrder);
+              setCancelReason('');
+          } finally {
+              setProcessingOrderIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(orderId);
+                  return next;
+              });
+          }
       }
   };
 
@@ -115,13 +139,13 @@ export default function KOT() {
         )}
 
         {orders.map(order => {
-          // Explicit narrowing to ensure TypeScript is satisfied
           const kitchenStatusVal = order.kitchenStatus;
           const currentStatus: KitchenStatus = (kitchenStatusVal && kitchenStatusVal !== undefined) ? kitchenStatusVal : 'PENDING';
           const cardStyle = getStatusColor(currentStatus, order.status);
+          const isProcessing = processingOrderIds.has(order.id);
 
           return (
-            <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${cardStyle}`}>
+            <div key={order.id} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 flex flex-col relative ${cardStyle} ${isProcessing ? 'opacity-70 grayscale-[0.5]' : ''}`}>
               <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                   <div>
                       <h3 className="font-bold text-lg text-gray-800">#{order.orderNumber}</h3>
@@ -155,9 +179,10 @@ export default function KOT() {
                           <div className="text-red-600 font-bold mb-2">CANCELLED</div>
                           <button 
                               onClick={() => updateKitchenStatus(order, 'SERVED')}
-                              disabled={!canProcess}
-                              className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
+                              disabled={!canProcess || isProcessing}
+                              className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                           >
+                              {isProcessing && <Loader2 className="animate-spin" size={14} />}
                               Dismiss
                           </button>
                       </div>
@@ -167,35 +192,38 @@ export default function KOT() {
                               {currentStatus === 'PENDING' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'PREPARING')}
-                                      disabled={!canProcess}
+                                      disabled={!canProcess || isProcessing}
                                       className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
                                   >
-                                      <Loader size={16} /> Start
+                                      {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Loader size={16} />}
+                                      Start
                                   </button>
                               )}
                               {currentStatus === 'PREPARING' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'READY')}
-                                      disabled={!canProcess}
+                                      disabled={!canProcess || isProcessing}
                                       className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
                                   >
-                                      <CheckCircle size={16} /> Ready
+                                      {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+                                      Ready
                                   </button>
                               )}
                               {currentStatus === 'READY' && (
                                   <button 
                                       onClick={() => updateKitchenStatus(order, 'SERVED')}
-                                      disabled={!canProcess}
+                                      disabled={!canProcess || isProcessing}
                                       className="flex-1 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
                                   >
-                                      <Check size={16} /> Serve
+                                      {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                                      Serve
                                   </button>
                               )}
                           </div>
                           {(currentStatus === 'PENDING' || currentStatus === 'PREPARING') && (
                               <button 
                                   onClick={() => setCancelOrder(order)}
-                                  disabled={!canProcess}
+                                  disabled={!canProcess || isProcessing}
                                   className="w-full py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
                               >
                                   Reject / Cancel
