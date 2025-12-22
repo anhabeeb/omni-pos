@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
-import { db } from './services/db';
+import { db, SyncStatus } from './services/db';
 import { 
   LayoutDashboard, 
   Store as StoreIcon, 
@@ -29,7 +30,10 @@ import {
   CheckCircle,
   Hash,
   Loader2,
-  Lock
+  Lock,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -59,6 +63,58 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>(null!);
 
 export const useAuth = () => useContext(AuthContext);
+
+const SyncIndicator = () => {
+    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number }>(db.getSyncStatus());
+
+    useEffect(() => {
+        const handleSyncUpdate = (e: any) => {
+            setStatus(e.detail);
+        };
+        window.addEventListener('db_sync_update', handleSyncUpdate);
+        return () => window.removeEventListener('db_sync_update', handleSyncUpdate);
+    }, []);
+
+    const getStatusConfig = () => {
+        switch(status.status) {
+            case 'CONNECTED': return { 
+                icon: Cloud, 
+                text: 'Cloud Synced', 
+                color: 'text-green-500', 
+                bg: 'bg-green-50 dark:bg-green-900/10' 
+            };
+            case 'SYNCING': return { 
+                icon: RefreshCw, 
+                text: `Syncing (${status.pendingCount})`, 
+                color: 'text-blue-500', 
+                bg: 'bg-blue-50 dark:bg-blue-900/10',
+                spin: true 
+            };
+            case 'OFFLINE': return { 
+                icon: CloudOff, 
+                text: status.pendingCount > 0 ? `${status.pendingCount} Unsynced` : 'Offline Mode', 
+                color: 'text-orange-500', 
+                bg: 'bg-orange-50 dark:bg-orange-900/10' 
+            };
+            case 'ERROR': return { 
+                icon: AlertCircle, 
+                text: 'Sync Error', 
+                color: 'text-red-500', 
+                bg: 'bg-red-50 dark:bg-red-900/10' 
+            };
+        }
+    };
+
+    const config = getStatusConfig();
+    const Icon = config.icon;
+
+    return (
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all ${config.bg}`}>
+            <Icon size={14} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
+            <span className={`text-[10px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
+        </div>
+    );
+};
 
 const ProfileModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => void, user: User }) => {
     const [employee, setEmployee] = useState<Employee | null>(null);
@@ -373,157 +429,138 @@ const Sidebar = ({
                     ))}
                 </div>
             </div>
-            <div className="border-t dark:border-gray-700 p-4"><button onClick={onLogout} className="flex items-center w-full p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-red-600"><LogOut size={20}/><span className="ml-3 text-sm font-medium">Logout</span></button></div>
+            <div className="border-t dark:border-gray-700 p-4 space-y-3">
+                <SyncIndicator />
+                <button onClick={onLogout} className="flex items-center w-full p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-red-600">
+                    <LogOut size={20}/><span className="ml-3 text-sm font-medium">Logout</span>
+                </button>
+            </div>
         </div>
     </>
   );
 };
 
-const PrivateRoute = ({ children }: { children?: React.ReactNode }) => {
-  const { user } = useAuth();
-  return user ? <>{children}</> : <Navigate to="/login" />;
-};
+/* Added missing App component and default export */
+const App = () => {
+    const [user, setUser] = useState<User | null>(() => {
+        const saved = localStorage.getItem('user');
+        return saved ? JSON.parse(saved) : null;
+    });
+    const [currentStoreId, setCurrentStoreId] = useState<string | null>(localStorage.getItem('currentStoreId'));
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
 
-const AppLayout = ({ children, onProfileClick }: { children?: React.ReactNode, onProfileClick: () => void }) => {
-  const { user, currentStoreId, logout, hasPermission } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const location = useLocation();
-  const [currentStore, setCurrentStore] = useState<Store | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-        if (currentStoreId) {
-            const stores = await db.getStores();
-            setCurrentStore(stores.find(s => s.id === currentStoreId) || null);
-        }
-    };
-    load();
-  }, [currentStoreId]);
-
-  if (!user) return null;
-
-  return (
-    <div className="flex bg-slate-50 dark:bg-gray-900 min-h-screen">
-      <Sidebar user={user} currentStoreId={currentStoreId} onLogout={logout} hasPermission={hasPermission} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} onProfileClick={onProfileClick} />
-      <main className="flex-1 flex flex-col h-screen w-full md:ml-64">
-        <div className="md:hidden bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-            <div className="flex items-center gap-3">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 dark:text-white"><Menu size={24} /></button>
-                <h1 className="text-lg font-bold dark:text-white">{currentStore ? currentStore.name : 'OmniPOS'}</h1>
-            </div>
-            <button onClick={onProfileClick} className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</button>
-        </div>
-        <div className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname === '/pos' ? '' : 'p-4 md:p-8'}`}>{children}</div>
-      </main>
-    </div>
-  );
-};
-
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  
-  useEffect(() => {
-    const init = async () => {
-        try {
-            await db.init();
-            
-            const storedUser = localStorage.getItem('currentUser');
-            const storedStoreId = localStorage.getItem('currentStoreId');
-            if (storedUser) setUser(JSON.parse(storedUser));
-            if (storedStoreId) setCurrentStoreId(storedStoreId);
-            
+    useEffect(() => {
+        const loadPerms = async () => {
             const perms = await db.getRolePermissions();
             setRolePermissions(perms);
-        } catch (err) {
-            console.error("Critical: System failed to initialize.", err);
-        } finally {
-            setTimeout(() => setIsReady(true), 500);
+        };
+        loadPerms();
+        window.addEventListener('db_change_global_permissions', loadPerms);
+        return () => window.removeEventListener('db_change_global_permissions', loadPerms);
+    }, []);
+
+    useEffect(() => {
+        if (user) {
+            db.updateHeartbeat(user.id, currentStoreId);
+            const interval = setInterval(() => db.updateHeartbeat(user.id, currentStoreId), 60000);
+            return () => clearInterval(interval);
+        }
+    }, [user, currentStoreId]);
+
+    const login = (u: User, storeId?: string) => {
+        setUser(u);
+        localStorage.setItem('user', JSON.stringify(u));
+        if (storeId) {
+            setCurrentStoreId(storeId);
+            localStorage.setItem('currentStoreId', storeId);
         }
     };
-    init();
-  }, []);
 
-  useEffect(() => {
-    if (user) {
-        db.updateHeartbeat(user.id, currentStoreId);
-        const interval = setInterval(() => db.updateHeartbeat(user.id, currentStoreId), 60000); 
-        return () => clearInterval(interval);
-    }
-  }, [user, currentStoreId]);
+    const logout = () => {
+        if (user) db.removeSession(user.id);
+        setUser(null);
+        setCurrentStoreId(null);
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentStoreId');
+    };
 
-  const login = (u: User, storeId?: string) => {
-    setUser(u);
-    localStorage.setItem('currentUser', JSON.stringify(u));
-    if (storeId) {
+    const switchStore = (storeId: string) => {
         setCurrentStoreId(storeId);
         localStorage.setItem('currentStoreId', storeId);
-    } else {
-        setCurrentStoreId(null);
-        localStorage.removeItem('currentStoreId');
-    }
-    db.updateHeartbeat(u.id, storeId || null);
-  };
+    };
 
-  const switchStore = (storeId: string) => {
-      setCurrentStoreId(storeId);
-      localStorage.setItem('currentStoreId', storeId);
-      if (user) db.updateHeartbeat(user.id, storeId);
-  };
+    const hasPermission = (permission: Permission): boolean => {
+        if (!user) return false;
+        if (user.role === UserRole.SUPER_ADMIN) return true;
+        const config = rolePermissions.find(p => p.role === user.role);
+        return config ? config.permissions.includes(permission) : false;
+    };
 
-  const logout = async () => {
-    if (user) await db.removeSession(user.id);
-    setUser(null);
-    setCurrentStoreId(null);
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('currentStoreId');
-  };
+    return (
+        <AuthContext.Provider value={{ 
+            user, 
+            currentStoreId, 
+            login, 
+            logout, 
+            switchStore, 
+            hasPermission,
+            openProfile: () => setIsProfileOpen(true)
+        }}>
+            <HashRouter>
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                    {!user ? (
+                        <Routes>
+                            <Route path="/login" element={<Login />} />
+                            <Route path="*" element={<Navigate to="/login" />} />
+                        </Routes>
+                    ) : (
+                        <div className="flex">
+                            <Sidebar 
+                                user={user} 
+                                currentStoreId={currentStoreId} 
+                                onLogout={logout} 
+                                hasPermission={hasPermission}
+                                isOpen={isSidebarOpen}
+                                setIsOpen={setIsSidebarOpen}
+                                onProfileClick={() => setIsProfileOpen(true)}
+                            />
+                            <main className="flex-1 min-h-screen md:ml-64 transition-all duration-300">
+                                <header className="h-16 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30">
+                                    <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                                        <Menu icon={MenuIcon} size={24} className="dark:text-white" />
+                                    </button>
+                                    <div className="flex-1"></div>
+                                    <div className="flex items-center gap-4">
+                                        <SyncIndicator />
+                                    </div>
+                                </header>
+                                <div className="p-4 md:p-8">
+                                    <Routes>
+                                        <Route path="/dashboard" element={<SuperAdminDashboard />} />
+                                        <Route path="/employees" element={<EmployeeManagement />} />
+                                        <Route path="/global-users" element={<GlobalUsers />} />
+                                        <Route path="/pos" element={<POS />} />
+                                        <Route path="/kot" element={<KOT />} />
+                                        <Route path="/reports" element={<StoreReports />} />
+                                        <Route path="/store/:storeId/menu" element={<StoreMenu />} />
+                                        <Route path="/store/:storeId/customers" element={<StoreCustomers />} />
+                                        <Route path="/store/:storeId/staff" element={<StaffManagement />} />
+                                        <Route path="/store/:storeId/history" element={<StoreHistory />} />
+                                        <Route path="/store/:storeId/quotations" element={<Quotations />} />
+                                        <Route path="/store/:storeId/print-designer" element={<PrintDesigner />} />
+                                        <Route path="*" element={<Navigate to={user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN ? "/dashboard" : "/pos"} />} />
+                                    </Routes>
+                                </div>
+                            </main>
+                            {user && <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} />}
+                        </div>
+                    )}
+                </div>
+            </HashRouter>
+        </AuthContext.Provider>
+    );
+};
 
-  const hasPermission = (permission: Permission) => {
-      if (!user) return false;
-      const roleConfig = rolePermissions.find(rp => rp.role === user.role);
-      return roleConfig ? roleConfig.permissions.includes(permission) : false;
-  };
-
-  if (!isReady) {
-      return (
-          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-              <div className="relative">
-                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                      <Layout className="text-blue-600" size={24} />
-                  </div>
-              </div>
-              <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-6">Secure System Link Active</p>
-              <p className="text-gray-400 text-[10px] mt-1 italic animate-pulse">Initializing local environment...</p>
-          </div>
-      );
-  }
-
-  return (
-    <AuthContext.Provider value={{ user, currentStoreId, login, logout, switchStore, hasPermission, openProfile: () => setIsProfileModalOpen(true) }}>
-        <HashRouter>
-            {user && <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} />}
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/dashboard" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><SuperAdminDashboard /></AppLayout></PrivateRoute>} />
-                <Route path="/global-users" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><GlobalUsers /></AppLayout></PrivateRoute>} />
-                <Route path="/employees" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><EmployeeManagement /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/staff" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><StaffManagement /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/menu" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><StoreMenu /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/customers" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><StoreCustomers /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/print-designer" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><PrintDesigner /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/history" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><StoreHistory /></AppLayout></PrivateRoute>} />
-                <Route path="/store/:storeId/quotations" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><Quotations /></AppLayout></PrivateRoute>} />
-                <Route path="/pos" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><POS /></AppLayout></PrivateRoute>} />
-                <Route path="/kot" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><KOT /></AppLayout></PrivateRoute>} />
-                <Route path="/reports" element={<PrivateRoute><AppLayout onProfileClick={() => setIsProfileModalOpen(true)}><StoreReports /></AppLayout></PrivateRoute>} />
-                <Route path="*" element={<Navigate to="/login" />} />
-            </Routes>
-        </HashRouter>
-    </AuthContext.Provider>
-  );
-}
+export default App;

@@ -36,8 +36,25 @@ interface SyncTask {
     attempts: number;
 }
 
+// Sync UI State
+export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR';
+let currentSyncStatus: SyncStatus = 'CONNECTED';
+
 const getSyncQueue = (): SyncTask[] => getItem<SyncTask[]>('sync_queue', []);
-const saveSyncQueue = (queue: SyncTask[]) => setItem('sync_queue', queue);
+const saveSyncQueue = (queue: SyncTask[]) => {
+    setItem('sync_queue', queue);
+    broadcastSyncUpdate();
+};
+
+const broadcastSyncUpdate = () => {
+    const queue = getSyncQueue();
+    window.dispatchEvent(new CustomEvent('db_sync_update', { 
+        detail: { 
+            status: currentSyncStatus, 
+            pendingCount: queue.length 
+        } 
+    }));
+};
 
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
     const queue = getSyncQueue();
@@ -57,9 +74,16 @@ let isProcessingSync = false;
 const processSyncQueue = async () => {
     if (isProcessingSync) return;
     const queue = getSyncQueue();
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+        currentSyncStatus = 'CONNECTED';
+        broadcastSyncUpdate();
+        return;
+    }
 
     isProcessingSync = true;
+    currentSyncStatus = 'SYNCING';
+    broadcastSyncUpdate();
+
     const task = queue[0];
     
     try {
@@ -73,18 +97,14 @@ const processSyncQueue = async () => {
             const currentQueue = getSyncQueue();
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
             console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table} (#${task.data.id || 'N/A'})`);
+            currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
         } else if (response.status === 409) {
             console.warn(`[SYNC CONFLICT] Duplicate ID in ${task.table}. Adjusting ID to prevent data loss...`);
-            
             const oldId = task.data.id;
             const newId = uuid();
             const adjustedData = { ...task.data, id: newId };
-            
-            // Critical: Update local copy so it matches the new central identity
             await updateLocalRecordId(task.table, oldId, newId, adjustedData);
-
             const currentQueue = getSyncQueue();
-            // Update current task data and reset attempts to try the new ID immediately
             const updatedQueue = currentQueue.map(t => 
                 t.id === task.id ? { ...t, data: adjustedData, attempts: 0 } : t
             );
@@ -94,20 +114,21 @@ const processSyncQueue = async () => {
         }
     } catch (err) {
         console.warn(`[SYNC RETRYING] ${task.table} sync will retry later.`, err);
+        currentSyncStatus = 'OFFLINE';
         const currentQueue = getSyncQueue();
         const updatedTask = { ...task, attempts: task.attempts + 1 };
         
         if (updatedTask.attempts < 15) {
-            // Move failed task to end of queue
             saveSyncQueue([...currentQueue.filter(t => t.id !== task.id), updatedTask]);
         } else {
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.error(`[SYNC ABORTED] Task dropped after 15 failed attempts to prevent queue blocking`, task);
+            console.error(`[SYNC ABORTED] Task dropped after 15 failed attempts`, task);
         }
     } finally {
         isProcessingSync = false;
+        broadcastSyncUpdate();
         if (getSyncQueue().length > 0) {
-            setTimeout(processSyncQueue, 3000);
+            setTimeout(processSyncQueue, currentSyncStatus === 'OFFLINE' ? 10000 : 3000);
         }
     }
 };
@@ -219,6 +240,8 @@ export const db = {
         setInterval(processSyncQueue, 30000);
         processSyncQueue();
     },
+
+    getSyncStatus: () => ({ status: currentSyncStatus, pendingCount: getSyncQueue().length }),
 
     getStores: async () => getItem<Store[]>('global_stores', []),
     addStore: async (store: Store) => {
@@ -338,7 +361,7 @@ export const db = {
         setItem(`store_${storeId}_customers`, customers.map(c => c.id === customer.id ? customer : c));
         addToSyncQueue('UPDATE', 'customers', customer);
     },
-    deleteCustomer: async (storeId: string, id: string) => {
+    deleteCustomer: async (id: string, storeId: string) => {
         const customers = await db.getCustomers(storeId);
         setItem(`store_${storeId}_customers`, customers.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'customers', { id });
