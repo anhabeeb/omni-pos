@@ -34,7 +34,8 @@ import {
   RefreshCw,
   Zap,
   Package,
-  Wrench
+  Wrench,
+  Globe
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -68,7 +69,7 @@ export const useAuth = () => useContext(AuthContext);
 
 const SyncIndicator = () => {
     const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null }>(db.getSyncStatus());
-    const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string} | null>(null);
+    const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
 
     useEffect(() => {
@@ -143,18 +144,26 @@ const SyncIndicator = () => {
                 <div className="space-y-3">
                     {status.error && (
                         <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
-                            <p className="text-[10px] font-black text-red-500 uppercase mb-1">Last Error:</p>
+                            <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
                             <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
                         </div>
                     )}
 
                     {diagResult && (
-                        <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : 'bg-orange-50 border-orange-100 dark:bg-orange-900/10'}`}>
-                            <p className={`text-[10px] font-black uppercase mb-1 ${diagResult.success ? 'text-green-600' : 'text-orange-600'}`}>
-                                {diagResult.success ? 'Write Access OK' : 'Write Access Denied'}
-                            </p>
+                        <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : (diagResult.is404 ? 'bg-orange-50 border-orange-100 dark:bg-orange-900/10' : 'bg-red-50 border-red-100 dark:bg-red-900/10')}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                                {diagResult.success ? <CheckCircle size={12} className="text-green-600"/> : (diagResult.is404 ? <Globe size={12} className="text-orange-600"/> : <AlertCircle size={12} className="text-red-600"/>)}
+                                <p className={`text-[10px] font-black uppercase ${diagResult.success ? 'text-green-600' : (diagResult.is404 ? 'text-orange-600' : 'text-red-600')}`}>
+                                    {diagResult.success ? 'Database Online' : (diagResult.is404 ? 'Backend Not Deployed' : 'Write Access Denied')}
+                                </p>
+                            </div>
                             <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
-                            {diagResult.hint && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2 font-bold italic">{diagResult.hint}</p>}
+                            {diagResult.hint && (
+                                <div className="mt-2 pt-2 border-t border-black/5">
+                                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold italic uppercase mb-1">Setup Steps:</p>
+                                    <p className="text-[10px] text-blue-500/80 dark:text-blue-300 font-medium">{diagResult.hint}</p>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -171,7 +180,7 @@ const SyncIndicator = () => {
                             className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
                         >
                             {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Wrench size={10}/>}
-                            Run Write Test
+                            Verify Sync
                         </button>
                     </div>
                 </div>
@@ -180,9 +189,9 @@ const SyncIndicator = () => {
     );
 };
 
+// ... Rest of the file remains the same ...
 /**
  * LayoutWrapper provides the sidebar and top navigation for authenticated users.
- * It manages the store selector and role-based menu visibility.
  */
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
@@ -225,7 +234,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Sidebar Navigation */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300`}>
         <div className="p-6 flex items-center justify-between">
           {isSidebarOpen && <h1 className="text-xl font-black text-blue-600 tracking-tighter">OmniPOS</h1>}
@@ -277,7 +285,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20">
           <div className="flex items-center gap-4">
@@ -316,13 +323,11 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Root App Component
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
 
-  // Persistent Session Recovery
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     const savedStoreId = localStorage.getItem('currentStoreId');
@@ -340,7 +345,6 @@ export default function App() {
     return () => window.removeEventListener('db_change_global_permissions', loadPermissions);
   }, []);
 
-  // Heartbeat for Active Sessions Tracking
   useEffect(() => {
       if (user) {
           db.updateHeartbeat(user.id, currentStoreId);
@@ -378,14 +382,13 @@ export default function App() {
       return config ? config.permissions.includes(permission) : false;
   };
 
-  const openProfile = () => { /* Profile management logic */ };
+  const openProfile = () => {};
 
   return (
     <AuthContext.Provider value={{ user, currentStoreId, login, logout, switchStore, hasPermission, openProfile }}>
       <HashRouter>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          
           <Route path="/" element={user ? (
               <LayoutWrapper>
                   {user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER ? (
@@ -396,23 +399,19 @@ export default function App() {
               </LayoutWrapper>
             ) : <Navigate to="/login" />} 
           />
-
           <Route path="/dashboard" element={user ? <LayoutWrapper><SuperAdminDashboard /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/users" element={user ? <LayoutWrapper><GlobalUsers /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/employees" element={user ? <LayoutWrapper><EmployeeManagement /></LayoutWrapper> : <Navigate to="/login" />} />
-          
           <Route path="/pos" element={user ? <LayoutWrapper><POS /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/kot" element={user ? <LayoutWrapper><KOT /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/history" element={user ? <LayoutWrapper><StoreHistory /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/quotations" element={user ? <LayoutWrapper><Quotations /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/reports" element={user ? <LayoutWrapper><StoreReports /></LayoutWrapper> : <Navigate to="/login" />} />
-          
           <Route path="/store/:storeId/staff" element={user ? <LayoutWrapper><StaffManagement /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/store/:storeId/menu" element={user ? <LayoutWrapper><StoreMenu /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/store/:storeId/inventory" element={user ? <LayoutWrapper><StoreInventory /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/store/:storeId/customers" element={user ? <LayoutWrapper><StoreCustomers /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/print-designer/:storeId" element={user ? <LayoutWrapper><PrintDesigner /></LayoutWrapper> : <Navigate to="/login" />} />
-
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </HashRouter>

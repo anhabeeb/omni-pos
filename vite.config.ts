@@ -7,6 +7,14 @@ export default defineConfig({
     outDir: 'dist',
   },
   server: {
-    port: 3000
+    port: 3000,
+    // Proxy /api requests to Wrangler Pages Dev (default port 8788)
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8788',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 });

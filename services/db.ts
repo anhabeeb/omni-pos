@@ -107,12 +107,16 @@ const processSyncQueue = async () => {
                 body: JSON.stringify(task)
             });
 
+            if (response.status === 404) {
+                throw new Error("Backend API not found (404). Ensure functions are deployed.");
+            }
+
             const text = await response.text();
             let result;
             try {
                 result = JSON.parse(text);
             } catch (e) {
-                throw new Error(`Invalid server response (HTTP ${response.status}). Body snippet: ${text.substring(0, 100)}`);
+                throw new Error(`Invalid JSON (HTTP ${response.status}): ${text.substring(0, 50)}...`);
             }
 
             if (!response.ok || result.success === false) {
@@ -149,12 +153,16 @@ export const db = {
                 body: JSON.stringify({ action: 'PING' })
             });
 
+            if (response.status === 404) {
+                throw new Error("Backend route /api/sync not found.");
+            }
+
             const text = await response.text();
             let result;
             try {
                 result = JSON.parse(text);
             } catch (e) {
-                throw new Error(`API endpoint mismatch. Server returned HTTP ${response.status}. Ensure /functions/api/sync.ts is deployed.`);
+                throw new Error(`Server returned non-JSON response (HTTP ${response.status})`);
             }
 
             if (result.success) {
@@ -167,20 +175,30 @@ export const db = {
             throw new Error(result.error || "Ping failed");
         } catch (e: any) {
             isDatabaseReachable = false;
-            lastSyncError = `Sync Failed: ${e.message}`;
+            lastSyncError = e.message;
             currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
             broadcastSyncUpdate();
             return false;
         }
     },
 
-    verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string}> => {
+    verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string, is404?: boolean}> => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'WRITE_TEST' })
             });
+
+            if (response.status === 404) {
+                return { 
+                    success: false, 
+                    message: "API endpoint /api/sync was not found (404).", 
+                    hint: "If running locally, use 'npm run dev:functions'. If deployed, check Functions tab in Cloudflare.",
+                    is404: true
+                };
+            }
+
             const result = await response.json();
             if (result.success) return { success: true, message: result.message };
             return { success: false, message: result.error, hint: result.hint };
