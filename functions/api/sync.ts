@@ -18,12 +18,22 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     let query = '';
     let params: any[] = [];
 
+    // Helper to prepare values for SQL: stringify objects/arrays for JSON columns
+    const sqlifyValues = (obj: any) => {
+      return Object.values(obj).map(val => {
+        if (val !== null && typeof val === 'object') {
+          return JSON.stringify(val);
+        }
+        return val;
+      });
+    };
+
     switch (action) {
       case 'INSERT': {
         const keys = Object.keys(data).join(', ');
         const placeholders = Object.keys(data).map(() => '?').join(', ');
         query = `INSERT INTO ${table} (${keys}) VALUES (${placeholders})`;
-        params = Object.values(data);
+        params = sqlifyValues(data);
         break;
       }
 
@@ -33,7 +43,10 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
           .map(k => `${k} = ?`)
           .join(', ');
         query = `UPDATE ${table} SET ${sets} WHERE id = ?`;
-        params = [...Object.entries(data).filter(([k]) => k !== 'id').map(([, v]) => v), data.id];
+        
+        const filteredData = { ...data };
+        delete filteredData.id;
+        params = [...sqlifyValues(filteredData), data.id];
         break;
       }
 
@@ -54,21 +67,25 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     });
 
   } catch (err: any) {
-    // Handle SQLITE UNIQUE CONSTRAINT error (Duplicate ID)
-    const isDuplicate = err.message?.toLowerCase().includes('unique constraint') || 
-                       err.message?.toLowerCase().includes('already exists');
+    // Robust detection of unique constraint violations (Duplicate IDs)
+    const errorMsg = err.message?.toLowerCase() || '';
+    const isDuplicate = errorMsg.includes('unique constraint') || 
+                       errorMsg.includes('already exists') ||
+                       errorMsg.includes('code 1555'); // SQLite Extended Result Code for constraint
 
     if (isDuplicate) {
       return new Response(JSON.stringify({ 
-        error: 'Conflict: ID already exists',
-        code: 'DUPLICATE_ID'
+        error: 'Conflict: ID already exists in central database',
+        code: 'DUPLICATE_ID',
+        table,
+        id: data.id
       }), { 
-        status: 409, // Conflict status
+        status: 409, 
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    console.error(`D1 Error on ${table} [${action}]:`, err.message);
+    console.error(`D1 Sync Error [${table} - ${action}]:`, err.message);
     return new Response(JSON.stringify({ error: err.message }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }

@@ -50,7 +50,6 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
         attempts: 0
     };
     saveSyncQueue([...queue, task]);
-    // Trigger processing immediately
     processSyncQueue();
 };
 
@@ -71,73 +70,102 @@ const processSyncQueue = async () => {
         });
 
         if (response.ok) {
-            // Success: Remove from queue
             const currentQueue = getSyncQueue();
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table}`);
+            console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table} (#${task.data.id || 'N/A'})`);
         } else if (response.status === 409) {
-            // Conflict: Duplicate ID detected in central DB
-            console.warn(`[SYNC CONFLICT] Duplicate ID in ${task.table}. Adjusting ID...`);
+            console.warn(`[SYNC CONFLICT] Duplicate ID in ${task.table}. Adjusting ID to prevent data loss...`);
             
-            // 1. Adjust the ID of the data
             const oldId = task.data.id;
             const newId = uuid();
             const adjustedData = { ...task.data, id: newId };
             
-            // 2. Update the local database record to match the new ID so future updates work
+            // Critical: Update local copy so it matches the new central identity
             await updateLocalRecordId(task.table, oldId, newId, adjustedData);
 
-            // 3. Update the task in the queue and retry
             const currentQueue = getSyncQueue();
+            // Update current task data and reset attempts to try the new ID immediately
             const updatedQueue = currentQueue.map(t => 
                 t.id === task.id ? { ...t, data: adjustedData, attempts: 0 } : t
             );
             saveSyncQueue(updatedQueue);
         } else {
-            throw new Error(`Server returned ${response.status}`);
+            throw new Error(`Server returned HTTP ${response.status}`);
         }
     } catch (err) {
-        console.warn(`[SYNC DELAYED] ${task.table} sync will retry.`, err);
-        // Move to end of queue to try others or just wait
+        console.warn(`[SYNC RETRYING] ${task.table} sync will retry later.`, err);
         const currentQueue = getSyncQueue();
         const updatedTask = { ...task, attempts: task.attempts + 1 };
-        // If too many attempts, maybe skip for now (log it)
-        if (updatedTask.attempts < 10) {
+        
+        if (updatedTask.attempts < 15) {
+            // Move failed task to end of queue
             saveSyncQueue([...currentQueue.filter(t => t.id !== task.id), updatedTask]);
         } else {
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.error(`[SYNC FAILED PERMANENTLY] Task dropped after 10 attempts`, task);
+            console.error(`[SYNC ABORTED] Task dropped after 15 failed attempts to prevent queue blocking`, task);
         }
     } finally {
         isProcessingSync = false;
-        // Schedule next check
         if (getSyncQueue().length > 0) {
-            setTimeout(processSyncQueue, 5000);
+            setTimeout(processSyncQueue, 3000);
         }
     }
 };
 
 const updateLocalRecordId = async (table: string, oldId: string, newId: string, fullData: any) => {
-    // This helper updates the record in local storage if its ID was changed due to sync conflict
-    if (table === 'stores') {
-        const items = getItem<Store[]>('global_stores', []);
-        setItem('global_stores', items.map(i => i.id === oldId ? fullData : i));
-    } else if (table === 'orders') {
-        // Orders are stored by store prefix: omnipos_store_{storeId}_orders
-        const storeId = fullData.storeId;
-        const items = getItem<Order[]>(`store_${storeId}_orders`, []);
-        setItem(`store_${storeId}_orders`, items.map(i => i.id === oldId ? fullData : i));
-    } else if (table === 'products') {
-        const storeId = fullData.storeId;
-        const items = getItem<Product[]>(`store_${storeId}_products`, []);
-        setItem(`store_${storeId}_products`, items.map(i => i.id === oldId ? fullData : i));
-    } else if (table === 'customers') {
-        const storeId = fullData.storeId;
-        const items = getItem<Customer[]>(`store_${storeId}_customers`, []);
-        setItem(`store_${storeId}_customers`, items.map(i => i.id === oldId ? fullData : i));
-    } else if (table === 'employees') {
-        const items = getItem<Employee[]>('global_employees', []);
-        setItem('global_employees', items.map(i => i.id === oldId ? fullData : i));
+    const storeId = fullData.storeId;
+
+    switch (table) {
+        case 'stores': {
+            const items = getItem<Store[]>('global_stores', []);
+            setItem('global_stores', items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'users': {
+            const items = getItem<User[]>('global_users', []);
+            setItem('global_users', items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'employees': {
+            const items = getItem<Employee[]>('global_employees', []);
+            setItem('global_employees', items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'products': {
+            const items = getItem<Product[]>(`store_${storeId}_products`, []);
+            setItem(`store_${storeId}_products`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'categories': {
+            const items = getItem<Category[]>(`store_${storeId}_categories`, []);
+            setItem(`store_${storeId}_categories`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'customers': {
+            const items = getItem<Customer[]>(`store_${storeId}_customers`, []);
+            setItem(`store_${storeId}_customers`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'orders': {
+            const items = getItem<Order[]>(`store_${storeId}_orders`, []);
+            setItem(`store_${storeId}_orders`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'quotations': {
+            const items = getItem<Quotation[]>(`store_${storeId}_quotations`, []);
+            setItem(`store_${storeId}_quotations`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'shifts': {
+            const items = getItem<RegisterShift[]>(`store_${storeId}_shifts`, []);
+            setItem(`store_${storeId}_shifts`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
+        case 'inventory': {
+            const items = getItem<InventoryItem[]>(`store_${storeId}_inventory`, []);
+            setItem(`store_${storeId}_inventory`, items.map(i => i.id === oldId ? fullData : i));
+            break;
+        }
     }
 };
 
@@ -162,9 +190,7 @@ export const db = {
         }
 
         let users = getItem<User[]>('global_users', []);
-        let adminExists = users.some(u => u.username === 'sys.admin');
-        
-        if (!adminExists) {
+        if (!users.some(u => u.username === 'sys.admin')) {
             const newAdmin: User = {
                 id: uuid(),
                 name: 'System Admin',
@@ -190,10 +216,8 @@ export const db = {
         }
 
         localStorage.setItem(DB_PREFIX + 'system_initialized', 'true');
-        
-        // Start background sync process
-        setInterval(processSyncQueue, 30000); // Periodic check every 30s
-        processSyncQueue(); // Immediate check on startup
+        setInterval(processSyncQueue, 30000);
+        processSyncQueue();
     },
 
     getStores: async () => getItem<Store[]>('global_stores', []),
