@@ -39,6 +39,7 @@ interface SyncTask {
 // Sync UI State
 export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR';
 let currentSyncStatus: SyncStatus = 'CONNECTED';
+let lastSyncError: string | null = null;
 
 const getSyncQueue = (): SyncTask[] => getItem<SyncTask[]>('sync_queue', []);
 const saveSyncQueue = (queue: SyncTask[]) => {
@@ -51,7 +52,8 @@ const broadcastSyncUpdate = () => {
     window.dispatchEvent(new CustomEvent('db_sync_update', { 
         detail: { 
             status: currentSyncStatus, 
-            pendingCount: queue.length 
+            pendingCount: queue.length,
+            error: lastSyncError
         } 
     }));
 };
@@ -76,6 +78,7 @@ const processSyncQueue = async () => {
     const queue = getSyncQueue();
     if (queue.length === 0) {
         currentSyncStatus = 'CONNECTED';
+        lastSyncError = null;
         broadcastSyncUpdate();
         return;
     }
@@ -93,52 +96,48 @@ const processSyncQueue = async () => {
             body: JSON.stringify({ action: task.action, table: task.table, data: task.data })
         });
 
-        // Strict Validation: Parse the body to ensure it's not an SPA HTML fallback
         let result: any = {};
         try {
             const text = await response.text();
             result = JSON.parse(text);
         } catch (e) {
-            console.error("[SYNC ERROR] Response was not valid JSON. Likely SPA fallback.", e);
-            throw new Error("Invalid server response format");
+            console.error("[SYNC ERROR] Response was not valid JSON.", e);
+            throw new Error("Invalid server response format (Not JSON)");
         }
 
         if (response.ok && result.success === true) {
             const currentQueue = getSyncQueue();
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table} (#${task.data.id || 'N/A'})`);
+            console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table}`);
             currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
+            lastSyncError = null;
         } else if (response.status === 409 || result.code === 'DUPLICATE_ID') {
-            console.warn(`[SYNC CONFLICT] Duplicate ID in ${task.table}. Adjusting ID to prevent data loss...`);
-            const oldId = task.data.id;
-            const newId = uuid();
-            const adjustedData = { ...task.data, id: newId };
-            await updateLocalRecordId(task.table, oldId, newId, adjustedData);
+            console.warn(`[SYNC CONFLICT] Duplicate record in ${task.table}.`);
             const currentQueue = getSyncQueue();
-            const updatedQueue = currentQueue.map(t => 
-                t.id === task.id ? { ...t, data: adjustedData, attempts: 0 } : t
-            );
-            saveSyncQueue(updatedQueue);
+            saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
         } else {
             throw new Error(result.error || `Server returned HTTP ${response.status}`);
         }
     } catch (err: any) {
-        console.warn(`%c[SYNC RETRYING]`, 'color: #f59e0b', `${task.table} sync will retry later. Error: ${err.message}`);
-        currentSyncStatus = 'OFFLINE';
+        console.warn(`%c[SYNC FAILED]`, 'color: #ef4444', `${task.table} sync error: ${err.message}`);
+        currentSyncStatus = 'ERROR';
+        lastSyncError = err.message;
+        
         const currentQueue = getSyncQueue();
         const updatedTask = { ...task, attempts: task.attempts + 1 };
         
-        if (updatedTask.attempts < 15) {
+        if (updatedTask.attempts < 10) {
+            // Move to back of queue to try others if this one is blocked by a schema issue
             saveSyncQueue([...currentQueue.filter(t => t.id !== task.id), updatedTask]);
         } else {
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.error(`[SYNC ABORTED] Task dropped after 15 failed attempts`, task);
+            console.error(`[SYNC ABORTED] Dropped task for ${task.table} after 10 failures.`);
         }
     } finally {
         isProcessingSync = false;
         broadcastSyncUpdate();
         if (getSyncQueue().length > 0) {
-            setTimeout(processSyncQueue, currentSyncStatus === 'OFFLINE' ? 10000 : 3000);
+            setTimeout(processSyncQueue, currentSyncStatus === 'ERROR' ? 10000 : 2000);
         }
     }
 };
@@ -197,6 +196,11 @@ const updateLocalRecordId = async (table: string, oldId: string, newId: string, 
             setItem(`store_${storeId}_inventory`, items.map(i => i.id === oldId ? fullData : i));
             break;
         }
+        case 'permissions': {
+            const items = getItem<RolePermissionConfig[]>('global_permissions', []);
+            setItem('global_permissions', items.map(i => i.role === fullData.role ? fullData : i));
+            break;
+        }
     }
 };
 
@@ -251,7 +255,11 @@ export const db = {
         processSyncQueue();
     },
 
-    getSyncStatus: () => ({ status: currentSyncStatus, pendingCount: getSyncQueue().length }),
+    getSyncStatus: () => ({ 
+        status: currentSyncStatus, 
+        pendingCount: getSyncQueue().length,
+        error: lastSyncError
+    }),
 
     getStores: async () => getItem<Store[]>('global_stores', []),
     addStore: async (store: Store) => {

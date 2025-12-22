@@ -63,7 +63,7 @@ const AuthContext = createContext<AuthContextType>(null!);
 export const useAuth = () => useContext(AuthContext);
 
 const SyncIndicator = () => {
-    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number }>(db.getSyncStatus());
+    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null }>(db.getSyncStatus());
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -107,9 +107,19 @@ const SyncIndicator = () => {
     const Icon = config.icon;
 
     return (
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all ${config.bg}`}>
+        <div 
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all group relative cursor-help ${config.bg}`}
+          title={status.error || 'System Status'}
+        >
             <Icon size={14} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
             <span className={`text-[10px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
+            
+            {status.error && (
+                <div className="absolute top-full left-0 mt-2 p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-64 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
+                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Server Response:</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 font-medium leading-relaxed">{status.error}</p>
+                </div>
+            )}
         </div>
     );
 };
