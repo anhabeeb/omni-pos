@@ -107,10 +107,13 @@ const processSyncQueue = async () => {
                 body: JSON.stringify(task)
             });
 
-            const result = await response.json().catch(() => ({ 
-                success: false, 
-                error: `HTTP ${response.status} (No JSON)` 
-            }));
+            const text = await response.text();
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                throw new Error(`Invalid server response (HTTP ${response.status}). Body snippet: ${text.substring(0, 100)}`);
+            }
 
             if (!response.ok || result.success === false) {
                 throw new Error(result.error || `Server Error ${response.status}`);
@@ -146,10 +149,17 @@ export const db = {
                 body: JSON.stringify({ action: 'PING' })
             });
 
-            const result = await response.json().catch(() => ({ success: false }));
+            const text = await response.text();
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                throw new Error(`API endpoint mismatch. Server returned HTTP ${response.status}. Ensure /functions/api/sync.ts is deployed.`);
+            }
 
             if (result.success) {
                 isDatabaseReachable = true;
+                lastSyncError = null;
                 currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
                 broadcastSyncUpdate();
                 return true;
@@ -157,16 +167,13 @@ export const db = {
             throw new Error(result.error || "Ping failed");
         } catch (e: any) {
             isDatabaseReachable = false;
-            lastSyncError = `Connection Failed: ${e.message}`;
+            lastSyncError = `Sync Failed: ${e.message}`;
             currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
             broadcastSyncUpdate();
             return false;
         }
     },
 
-    /**
-     * Diagnostic tool to verify that the D1 database is writable.
-     */
     verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string}> => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
@@ -175,9 +182,7 @@ export const db = {
                 body: JSON.stringify({ action: 'WRITE_TEST' })
             });
             const result = await response.json();
-            if (result.success) {
-                return { success: true, message: result.message };
-            }
+            if (result.success) return { success: true, message: result.message };
             return { success: false, message: result.error, hint: result.hint };
         } catch (e: any) {
             return { success: false, message: e.message };
@@ -358,7 +363,7 @@ export const db = {
         setItem(`store_${storeId}_customers`, custs.map(cust => cust.id === c.id ? c : cust));
         addToSyncQueue('UPDATE', 'customers', c);
     },
-    deleteCustomer: async (storeId: string, id: string) => {
+    deleteCustomer: async (id: string, storeId: string) => {
         const custs = await db.getCustomers(storeId);
         setItem(`store_${storeId}_customers`, custs.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'customers', { id });
