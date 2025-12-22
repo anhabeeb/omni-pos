@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
@@ -20,7 +19,6 @@ import {
   FileText,
   Circle,
   CalendarCheck,
-  Menu,
   X,
   Layout,
   IdCard,
@@ -440,7 +438,6 @@ const Sidebar = ({
   );
 };
 
-/* Added missing App component and default export */
 const App = () => {
     const [user, setUser] = useState<User | null>(() => {
         const saved = localStorage.getItem('user');
@@ -529,7 +526,7 @@ const App = () => {
                             <main className="flex-1 min-h-screen md:ml-64 transition-all duration-300">
                                 <header className="h-16 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30">
                                     <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-                                        <Menu icon={MenuIcon} size={24} className="dark:text-white" />
+                                        <MenuIcon size={24} className="dark:text-white" />
                                     </button>
                                     <div className="flex-1"></div>
                                     <div className="flex items-center gap-4">
