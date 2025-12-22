@@ -8,10 +8,8 @@ const CLOUDFLARE_CONFIG = {
 
 const DB_PREFIX = 'omnipos_';
 
-// Unique ID generator
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
-// Helper for localStorage retrieval
 const getItem = <T>(key: string, defaultValue: T): T => {
     try {
         const data = localStorage.getItem(DB_PREFIX + key);
@@ -23,7 +21,6 @@ const getItem = <T>(key: string, defaultValue: T): T => {
     }
 };
 
-// Helper for localStorage persistence and event dispatching
 const setItem = <T>(key: string, value: T): void => {
     localStorage.setItem(DB_PREFIX + key, JSON.stringify(value));
     window.dispatchEvent(new CustomEvent('db_change_' + key));
@@ -32,17 +29,17 @@ const setItem = <T>(key: string, value: T): void => {
 
 interface SyncTask {
     id: string;
-    action: 'INSERT' | 'UPDATE' | 'DELETE';
-    table: string;
-    data: any;
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING';
+    table?: string;
+    data?: any;
     timestamp: number;
     attempts: number;
 }
 
-// Sync UI State
-export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR';
+export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING';
 let currentSyncStatus: SyncStatus = 'CONNECTED';
 let lastSyncError: string | null = null;
+let isDatabaseReachable = false;
 
 const getSyncQueue = (): SyncTask[] => getItem<SyncTask[]>('sync_queue', []);
 const saveSyncQueue = (queue: SyncTask[]) => {
@@ -77,13 +74,32 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
 
 let isProcessingSync = false;
 /**
- * Processes the synchronization queue by sending tasks to the Cloudflare D1 endpoint.
+ * Processes the synchronization queue.
+ * First verifies connection with a PING if not already established.
  */
 const processSyncQueue = async () => {
     if (isProcessingSync) return;
     isProcessingSync = true;
     
+    // 1. Verify connection if we haven't confirmed it recently
+    if (!isDatabaseReachable) {
+        currentSyncStatus = 'TESTING';
+        broadcastSyncUpdate();
+        const ok = await db.testConnection();
+        if (!ok) {
+            isProcessingSync = false;
+            return; 
+        }
+    }
+
     let queue = getSyncQueue();
+    if (queue.length === 0) {
+        currentSyncStatus = 'CONNECTED';
+        broadcastSyncUpdate();
+        isProcessingSync = false;
+        return;
+    }
+
     while (queue.length > 0) {
         const task = queue[0];
         try {
@@ -96,37 +112,71 @@ const processSyncQueue = async () => {
                 body: JSON.stringify(task)
             });
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || `HTTP ${response.status}`);
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok || result.success === false) {
+                throw new Error(result.error || `Server Error ${response.status}`);
             }
 
             queue = queue.slice(1);
             saveSyncQueue(queue);
             lastSyncError = null;
-            currentSyncStatus = 'CONNECTED';
+            currentSyncStatus = queue.length > 0 ? 'SYNCING' : 'CONNECTED';
         } catch (e: any) {
-            console.error('Sync failed:', e);
+            console.error('Sync process interrupted:', e);
             lastSyncError = e.message;
             currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
+            isDatabaseReachable = false; // Reset connection state on failure
             broadcastSyncUpdate();
             break;
         }
     }
     isProcessingSync = false;
-    broadcastSyncUpdate();
 };
 
-// Retry sync when coming back online
-window.addEventListener('online', processSyncQueue);
+window.addEventListener('online', () => {
+    isDatabaseReachable = false;
+    processSyncQueue();
+});
 
-/**
- * Main database service for OmniPOS.
- * Handles local storage persistence with Cloudflare D1 synchronization.
- */
 export const db = {
+    /**
+     * Attempts a handshake with the central database.
+     * @returns boolean indicating if the handshake succeeded.
+     */
+    testConnection: async (): Promise<boolean> => {
+        try {
+            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'PING' })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || `API returned ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success && result.message === 'pong') {
+                isDatabaseReachable = true;
+                lastSyncError = null;
+                currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
+                broadcastSyncUpdate();
+                return true;
+            }
+            throw new Error("Invalid handshake response from server.");
+        } catch (e: any) {
+            console.warn("Central DB Connection Test Failed:", e.message);
+            isDatabaseReachable = false;
+            lastSyncError = `Connection Failed: ${e.message}`;
+            currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
+            broadcastSyncUpdate();
+            return false;
+        }
+    },
+
     init: async () => {
-        // Initialize default System Administrator if no users exist
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
             const admin: User = {
@@ -141,7 +191,6 @@ export const db = {
             setItem('global_users', [admin]);
         }
         
-        // Initialize default role permissions
         const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
             const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
@@ -153,6 +202,9 @@ export const db = {
             setItem('global_permissions', defaultPerms);
         }
 
+        // Initial connection attempt
+        await db.testConnection();
+        // Start processing any existing queue
         processSyncQueue();
     },
 
@@ -182,7 +234,7 @@ export const db = {
         addToSyncQueue('DELETE', 'users', { id });
     },
 
-    // Session Management (Local volatile state for heartbeat)
+    // Session Management
     getActiveSessions: async () => getItem<ActiveSession[]>('global_sessions', []),
     updateHeartbeat: async (userId: string, storeId: string | null) => {
         const users = await db.getUsers();
@@ -207,7 +259,6 @@ export const db = {
             sessions.push(session);
         }
         
-        // Remove sessions inactive for more than 5 minutes
         sessions = sessions.filter(s => now - s.lastActive < 300000);
         setItem('global_sessions', sessions);
     },
@@ -221,14 +272,8 @@ export const db = {
     getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
     updateRolePermissions: async (config: RolePermissionConfig) => {
         const configs = await db.getRolePermissions();
-        const exists = configs.find(c => c.role === config.role);
-        if (exists) {
-            setItem('global_permissions', configs.map(c => c.role === config.role ? config : c));
-            addToSyncQueue('UPDATE', 'permissions', config);
-        } else {
-            setItem('global_permissions', [...configs, config]);
-            addToSyncQueue('INSERT', 'permissions', config);
-        }
+        setItem('global_permissions', configs.map(c => c.role === config.role ? config : c));
+        addToSyncQueue('UPDATE', 'permissions', config);
     },
 
     // Global Employee Registry
@@ -324,7 +369,7 @@ export const db = {
         setItem(`store_${storeId}_customers`, custs.map(cust => cust.id === c.id ? c : cust));
         addToSyncQueue('UPDATE', 'customers', c);
     },
-    deleteCustomer: async (storeId: string, id: string) => {
+    deleteCustomer: async (id: string, storeId: string) => {
         const custs = await db.getCustomers(storeId);
         setItem(`store_${storeId}_customers`, custs.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'customers', { id });
