@@ -112,12 +112,18 @@ const processSyncQueue = async () => {
                 body: JSON.stringify(task)
             });
 
-            const result = await response.json().catch(() => ({}));
+            // Try to parse JSON response safely
+            const result = await response.json().catch(() => ({ 
+                success: false, 
+                error: `Server returned non-JSON response (HTTP ${response.status})` 
+            }));
 
             if (!response.ok || result.success === false) {
-                throw new Error(result.error || `Server Error ${response.status}`);
+                const errorMsg = result.error || `Server Error ${response.status}`;
+                throw new Error(errorMsg);
             }
 
+            // Task successful - remove from queue
             queue = queue.slice(1);
             saveSyncQueue(queue);
             lastSyncError = null;
@@ -126,9 +132,9 @@ const processSyncQueue = async () => {
             console.error('Sync process interrupted:', e);
             lastSyncError = e.message;
             currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
-            isDatabaseReachable = false; // Reset connection state on failure
+            isDatabaseReachable = false; 
             broadcastSyncUpdate();
-            break;
+            break; // Stop processing the queue on error
         }
     }
     isProcessingSync = false;
@@ -152,12 +158,8 @@ export const db = {
                 body: JSON.stringify({ action: 'PING' })
             });
 
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({}));
-                throw new Error(err.error || `API returned ${response.status}`);
-            }
+            const result = await response.json().catch(() => ({ success: false, error: 'Malformed API Response' }));
 
-            const result = await response.json();
             if (result.success && result.message === 'pong') {
                 isDatabaseReachable = true;
                 lastSyncError = null;
@@ -165,11 +167,11 @@ export const db = {
                 broadcastSyncUpdate();
                 return true;
             }
-            throw new Error("Invalid handshake response from server.");
+            throw new Error(result.error || `API returned ${response.status}`);
         } catch (e: any) {
             console.warn("Central DB Connection Test Failed:", e.message);
             isDatabaseReachable = false;
-            lastSyncError = `Connection Failed: ${e.message}`;
+            lastSyncError = `Sync Failed: ${e.message}`;
             currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
             broadcastSyncUpdate();
             return false;
