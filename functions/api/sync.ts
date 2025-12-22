@@ -4,6 +4,13 @@ interface Env {
 
 export const onRequestPost = async (context: { env: Env; request: Request }): Promise<Response> => {
   const { DB } = context.env;
+
+  if (!DB) {
+    return new Response(JSON.stringify({ 
+      error: 'D1 Database binding "DB" is missing in Cloudflare environment.',
+      code: 'MISSING_BINDING'
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
   
   let payload: any;
   try {
@@ -28,11 +35,12 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       });
     };
 
+    // Use backticks for table names to avoid reserved keyword conflicts (e.g. `order`, `groups`)
     switch (action) {
       case 'INSERT': {
-        const keys = Object.keys(data).join(', ');
+        const keys = Object.keys(data).map(k => `\`${k}\``).join(', ');
         const placeholders = Object.keys(data).map(() => '?').join(', ');
-        query = `INSERT INTO ${table} (${keys}) VALUES (${placeholders})`;
+        query = `INSERT INTO \`${table}\` (${keys}) VALUES (${placeholders})`;
         params = sqlifyValues(data);
         break;
       }
@@ -40,9 +48,9 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       case 'UPDATE': {
         const sets = Object.keys(data)
           .filter(k => k !== 'id')
-          .map(k => `${k} = ?`)
+          .map(k => `\`${k}\` = ?`)
           .join(', ');
-        query = `UPDATE ${table} SET ${sets} WHERE id = ?`;
+        query = `UPDATE \`${table}\` SET ${sets} WHERE \`id\` = ?`;
         
         const filteredData = { ...data };
         delete filteredData.id;
@@ -51,7 +59,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       }
 
       case 'DELETE': {
-        query = `DELETE FROM ${table} WHERE id = ?`;
+        query = `DELETE FROM \`${table}\` WHERE \`id\` = ?`;
         params = [data.id];
         break;
       }
@@ -86,7 +94,10 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     }
 
     console.error(`D1 Sync Error [${table} - ${action}]:`, err.message);
-    return new Response(JSON.stringify({ error: err.message }), { 
+    return new Response(JSON.stringify({ 
+        error: err.message,
+        details: `Table: ${table}, Action: ${action}`
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });

@@ -93,12 +93,22 @@ const processSyncQueue = async () => {
             body: JSON.stringify({ action: task.action, table: task.table, data: task.data })
         });
 
-        if (response.ok) {
+        // Strict Validation: Parse the body to ensure it's not an SPA HTML fallback
+        let result: any = {};
+        try {
+            const text = await response.text();
+            result = JSON.parse(text);
+        } catch (e) {
+            console.error("[SYNC ERROR] Response was not valid JSON. Likely SPA fallback.", e);
+            throw new Error("Invalid server response format");
+        }
+
+        if (response.ok && result.success === true) {
             const currentQueue = getSyncQueue();
             saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
             console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table} (#${task.data.id || 'N/A'})`);
             currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
-        } else if (response.status === 409) {
+        } else if (response.status === 409 || result.code === 'DUPLICATE_ID') {
             console.warn(`[SYNC CONFLICT] Duplicate ID in ${task.table}. Adjusting ID to prevent data loss...`);
             const oldId = task.data.id;
             const newId = uuid();
@@ -110,10 +120,10 @@ const processSyncQueue = async () => {
             );
             saveSyncQueue(updatedQueue);
         } else {
-            throw new Error(`Server returned HTTP ${response.status}`);
+            throw new Error(result.error || `Server returned HTTP ${response.status}`);
         }
-    } catch (err) {
-        console.warn(`[SYNC RETRYING] ${task.table} sync will retry later.`, err);
+    } catch (err: any) {
+        console.warn(`%c[SYNC RETRYING]`, 'color: #f59e0b', `${task.table} sync will retry later. Error: ${err.message}`);
         currentSyncStatus = 'OFFLINE';
         const currentQueue = getSyncQueue();
         const updatedTask = { ...task, attempts: task.attempts + 1 };
