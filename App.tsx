@@ -33,7 +33,8 @@ import {
   CloudOff,
   RefreshCw,
   Zap,
-  Package
+  Package,
+  Wrench
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -67,6 +68,8 @@ export const useAuth = () => useContext(AuthContext);
 
 const SyncIndicator = () => {
     const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null }>(db.getSyncStatus());
+    const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string} | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -75,6 +78,17 @@ const SyncIndicator = () => {
         window.addEventListener('db_sync_update', handleSyncUpdate);
         return () => window.removeEventListener('db_sync_update', handleSyncUpdate);
     }, []);
+
+    const runDiagnostic = async () => {
+        setIsTesting(true);
+        setDiagResult(null);
+        try {
+            const res = await db.verifyWriteAccess();
+            setDiagResult(res);
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     const getStatusConfig = () => {
         switch(status.status) {
@@ -119,23 +133,49 @@ const SyncIndicator = () => {
     return (
         <div 
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all group relative cursor-help ${config.bg}`}
-          title={status.error || 'System Status'}
         >
             <Icon size={14} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
             <span className={`text-[10px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
             
-            {status.error && (
-                <div className="absolute top-full right-0 mt-2 p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-72 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
-                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Diagnostic Info:</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-300 font-medium leading-relaxed">{status.error}</p>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
-                        className="mt-2 text-[10px] font-black text-blue-600 uppercase hover:underline"
-                    >
-                        Retry Handshake
-                    </button>
+            <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
+                <p className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Diagnostic Tools</p>
+                
+                <div className="space-y-3">
+                    {status.error && (
+                        <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
+                            <p className="text-[10px] font-black text-red-500 uppercase mb-1">Last Error:</p>
+                            <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
+                        </div>
+                    )}
+
+                    {diagResult && (
+                        <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : 'bg-orange-50 border-orange-100 dark:bg-orange-900/10'}`}>
+                            <p className={`text-[10px] font-black uppercase mb-1 ${diagResult.success ? 'text-green-600' : 'text-orange-600'}`}>
+                                {diagResult.success ? 'Write Access OK' : 'Write Access Denied'}
+                            </p>
+                            <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
+                            {diagResult.hint && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2 font-bold italic">{diagResult.hint}</p>}
+                        </div>
+                    )}
+
+                    <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
+                            className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors"
+                        >
+                            Retry Ping
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
+                            disabled={isTesting}
+                            className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                        >
+                            {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Wrench size={10}/>}
+                            Run Write Test
+                        </button>
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

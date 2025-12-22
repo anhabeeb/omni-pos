@@ -1,6 +1,6 @@
 /**
  * CLOUDFLARE D1 DATABASE SCHEMA
- * Run these commands in your Cloudflare D1 console to initialize the database:
+ * Ensure these are executed in your D1 console before syncing:
  * 
  * CREATE TABLE `stores` (id TEXT PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, isActive INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT);
  * CREATE TABLE `users` (id TEXT PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT);
@@ -22,11 +22,10 @@ interface Env {
 export const onRequestPost = async (context: { env: Env; request: Request }): Promise<Response> => {
   const { DB } = context.env;
 
-  // 1. Check if the binding exists
   if (!DB || typeof DB.prepare !== 'function') {
     return new Response(JSON.stringify({ 
       success: false,
-      error: 'D1 Database binding "DB" is missing in Cloudflare environment.',
+      error: 'D1 Database binding "DB" is missing.',
       code: 'MISSING_BINDING'
     }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
@@ -35,32 +34,55 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
   try {
     payload = await context.request.json();
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, error: 'Invalid JSON payload' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: 'Invalid JSON' }), { status: 400 });
   }
 
   const { action, table, data } = payload;
 
-  // 2. Handshake / Health Check
+  // 1. Connection Ping
   if (action === 'PING') {
     try {
       await DB.prepare('SELECT 1').run();
+      return new Response(JSON.stringify({ success: true, message: 'pong' }));
+    } catch (e: any) {
+      return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500 });
+    }
+  }
+
+  // 2. NEW: Write Test Capability
+  if (action === 'WRITE_TEST') {
+    try {
+      const testId = `test_${Date.now()}`;
+      // Attempt to write to 'stores' table
+      await DB.prepare("INSERT INTO `stores` (id, name, isActive) VALUES (?, ?, ?)")
+        .bind(testId, "Diagnostic Test Store", 0)
+        .run();
+      
+      // Immediately cleanup
+      await DB.prepare("DELETE FROM `stores` WHERE id = ?").bind(testId).run();
+
       return new Response(JSON.stringify({ 
         success: true, 
-        message: 'pong', 
-        timestamp: Date.now(),
-        status: 'DATABASE_CONNECTED'
-      }), { headers: { 'Content-Type': 'application/json' } });
+        message: 'Write permission verified successfully. Database is writable.' 
+      }));
     } catch (e: any) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: `Database query failed: ${e.message}`,
-        code: 'DB_QUERY_ERROR'
-      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        let hint = "Unknown error";
+        if (e.message.includes("no such table")) {
+            hint = "The table 'stores' does not exist. You must run the CREATE TABLE commands in the D1 console first.";
+        } else if (e.message.includes("read-only")) {
+            hint = "The database is in read-only mode or the API key/token lacks write permissions.";
+        }
+        
+        return new Response(JSON.stringify({ 
+            success: false, 
+            error: e.message,
+            hint: hint
+        }), { status: 500 });
     }
   }
 
   if (!table || !data) {
-     return new Response(JSON.stringify({ success: false, error: 'Missing table or data' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+     return new Response(JSON.stringify({ success: false, error: 'Missing parameters' }), { status: 400 });
   }
 
   try {
@@ -85,43 +107,24 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         params = sqlifyValues(data);
         break;
       }
-
       case 'DELETE': {
         const pk = (table === 'permissions' || table === 'global_permissions') ? 'role' : 'id';
-        const pkValue = data[pk];
-        if (!pkValue) throw new Error(`Missing primary key (${pk}) for DELETE`);
         query = `DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`;
-        params = [pkValue];
+        params = [data[pk]];
         break;
       }
-
       default:
-        return new Response(JSON.stringify({ success: false, error: 'Invalid action' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400 });
     }
 
-    // CRITICAL FIX: Use .bind(...params).run() for Cloudflare D1
     const result = await DB.prepare(query).bind(...params).run();
-    
-    if (!result.success) {
-        throw new Error(result.error || 'D1 execution failed without specific error message.');
-    }
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      meta: result.meta
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify({ success: true, meta: result.meta }));
 
   } catch (err: any) {
-    console.error(`D1 Sync Error [${table} - ${action}]:`, err.message);
     return new Response(JSON.stringify({ 
         success: false,
         error: err.message,
-        details: `SQL Operation failed. Ensure the table "${table}" exists and matches the object schema.`
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+        details: `Table: ${table}, Action: ${action}. Hint: If 'no such column' error, your D1 table schema might be outdated.`
+    }), { status: 500 });
   }
 };
