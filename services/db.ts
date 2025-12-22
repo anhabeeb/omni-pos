@@ -36,10 +36,11 @@ interface SyncTask {
     attempts: number;
 }
 
-export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING';
+export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING' | 'DISABLED';
 let currentSyncStatus: SyncStatus = 'CONNECTED';
 let lastSyncError: string | null = null;
 let isDatabaseReachable = false;
+let isBackendMissing = false;
 
 const getSyncQueue = (): SyncTask[] => getItem<SyncTask[]>('sync_queue', []);
 const saveSyncQueue = (queue: SyncTask[]) => {
@@ -49,11 +50,13 @@ const saveSyncQueue = (queue: SyncTask[]) => {
 
 const broadcastSyncUpdate = () => {
     const queue = getSyncQueue();
+    const isEnabled = getItem<boolean>('sync_enabled', true);
     window.dispatchEvent(new CustomEvent('db_sync_update', { 
         detail: { 
-            status: currentSyncStatus, 
+            status: isEnabled ? currentSyncStatus : 'DISABLED', 
             pendingCount: queue.length,
-            error: lastSyncError
+            error: lastSyncError,
+            isBackendMissing
         } 
     }));
 };
@@ -69,12 +72,17 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
         attempts: 0
     };
     saveSyncQueue([...queue, task]);
-    processSyncQueue();
+    
+    if (getItem<boolean>('sync_enabled', true)) {
+        processSyncQueue();
+    }
 };
 
 let isProcessingSync = false;
 const processSyncQueue = async () => {
     if (isProcessingSync) return;
+    if (!getItem<boolean>('sync_enabled', true)) return;
+    
     isProcessingSync = true;
     
     if (!isDatabaseReachable) {
@@ -108,7 +116,8 @@ const processSyncQueue = async () => {
             });
 
             if (response.status === 404) {
-                throw new Error("Backend API not found (404). Ensure functions are deployed.");
+                isBackendMissing = true;
+                throw new Error("Backend API route (/api/sync) is missing. Sync disabled.");
             }
 
             const text = await response.text();
@@ -116,7 +125,7 @@ const processSyncQueue = async () => {
             try {
                 result = JSON.parse(text);
             } catch (e) {
-                throw new Error(`Invalid JSON (HTTP ${response.status}): ${text.substring(0, 50)}...`);
+                throw new Error(`Invalid JSON from server (HTTP ${response.status})`);
             }
 
             if (!response.ok || result.success === false) {
@@ -126,6 +135,7 @@ const processSyncQueue = async () => {
             queue = queue.slice(1);
             saveSyncQueue(queue);
             lastSyncError = null;
+            isBackendMissing = false;
             currentSyncStatus = queue.length > 0 ? 'SYNCING' : 'CONNECTED';
         } catch (e: any) {
             console.error('Sync process interrupted:', e);
@@ -141,11 +151,14 @@ const processSyncQueue = async () => {
 
 window.addEventListener('online', () => {
     isDatabaseReachable = false;
+    isBackendMissing = false;
     processSyncQueue();
 });
 
 export const db = {
     testConnection: async (): Promise<boolean> => {
+        if (!getItem<boolean>('sync_enabled', true)) return false;
+
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
@@ -154,7 +167,8 @@ export const db = {
             });
 
             if (response.status === 404) {
-                throw new Error("Backend route /api/sync not found.");
+                isBackendMissing = true;
+                throw new Error("Sync endpoint not found (404).");
             }
 
             const text = await response.text();
@@ -162,11 +176,12 @@ export const db = {
             try {
                 result = JSON.parse(text);
             } catch (e) {
-                throw new Error(`Server returned non-JSON response (HTTP ${response.status})`);
+                throw new Error(`Server returned non-JSON (HTTP ${response.status})`);
             }
 
             if (result.success) {
                 isDatabaseReachable = true;
+                isBackendMissing = false;
                 lastSyncError = null;
                 currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
                 broadcastSyncUpdate();
@@ -182,6 +197,20 @@ export const db = {
         }
     },
 
+    setSyncEnabled: (enabled: boolean) => {
+        setItem('sync_enabled', enabled);
+        if (enabled) {
+            isBackendMissing = false;
+            db.testConnection().then(ok => {
+                if (ok) processSyncQueue();
+            });
+        } else {
+            broadcastSyncUpdate();
+        }
+    },
+
+    isSyncEnabled: () => getItem<boolean>('sync_enabled', true),
+
     verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string, is404?: boolean}> => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
@@ -193,8 +222,8 @@ export const db = {
             if (response.status === 404) {
                 return { 
                     success: false, 
-                    message: "API endpoint /api/sync was not found (404).", 
-                    hint: "If running locally, use 'npm run dev:functions'. If deployed, check Functions tab in Cloudflare.",
+                    message: "API route /api/sync returned 404.", 
+                    hint: "Ensure 'functions/api/sync.ts' exists and the server is running with Cloudflare support (e.g. wrangler pages dev).",
                     is404: true
                 };
             }
@@ -233,17 +262,20 @@ export const db = {
             setItem('global_permissions', defaultPerms);
         }
 
-        await db.testConnection();
-        processSyncQueue();
+        if (getItem<boolean>('sync_enabled', true)) {
+            await db.testConnection();
+            processSyncQueue();
+        }
     },
 
     getSyncStatus: () => ({
-        status: currentSyncStatus,
+        status: getItem<boolean>('sync_enabled', true) ? currentSyncStatus : 'DISABLED',
         pendingCount: getSyncQueue().length,
-        error: lastSyncError
+        error: lastSyncError,
+        isBackendMissing
     }),
 
-    // --- User Management ---
+    // --- Standard DB Methods ---
     getUsers: async () => getItem<User[]>('global_users', []),
     addUser: async (u: User) => {
         const users = await db.getUsers();
@@ -262,14 +294,11 @@ export const db = {
         setItem('global_users', users.filter(u => u.id !== id));
         addToSyncQueue('DELETE', 'users', { id });
     },
-
-    // --- Session Management ---
     getActiveSessions: async () => getItem<ActiveSession[]>('global_sessions', []),
     updateHeartbeat: async (userId: string, storeId: string | null) => {
         const users = await db.getUsers();
         const user = users.find(u => u.id === userId);
         if (!user) return;
-        
         let sessions = await db.getActiveSessions();
         const now = Date.now();
         const existingIdx = sessions.findIndex(s => s.userId === userId);
@@ -283,16 +312,12 @@ export const db = {
         sessions = sessions.filter(s => s.userId !== userId);
         setItem('global_sessions', sessions);
     },
-
-    // --- Access Control ---
     getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
     updateRolePermissions: async (config: RolePermissionConfig) => {
         const configs = await db.getRolePermissions();
         setItem('global_permissions', configs.map(c => c.role === config.role ? config : c));
         addToSyncQueue('UPDATE', 'permissions', config);
     },
-
-    // --- Employee Registry ---
     getEmployees: async () => getItem<Employee[]>('global_employees', []),
     addEmployee: async (data: Partial<Employee>) => {
         const emps = await db.getEmployees();
@@ -311,8 +336,6 @@ export const db = {
         setItem('global_employees', emps.filter(e => e.id !== id));
         addToSyncQueue('DELETE', 'employees', { id });
     },
-
-    // --- Store Configuration ---
     getStores: async () => getItem<Store[]>('global_stores', []),
     addStore: async (s: Store) => {
         const stores = await db.getStores();
@@ -331,8 +354,6 @@ export const db = {
         setItem('global_stores', stores.filter(s => s.id !== id));
         addToSyncQueue('DELETE', 'stores', { id });
     },
-
-    // --- Products ---
     getProducts: async (storeId: string) => getItem<Product[]>(`store_${storeId}_products`, []),
     addProduct: async (storeId: string, p: Product) => {
         const prods = await db.getProducts(storeId);
@@ -351,8 +372,6 @@ export const db = {
         setItem(`store_${storeId}_products`, prods.filter(p => p.id !== id));
         addToSyncQueue('DELETE', 'products', { id });
     },
-
-    // --- Categories ---
     getCategories: async (storeId: string) => getItem<Category[]>(`store_${storeId}_categories`, []),
     addCategory: async (storeId: string, c: Category) => {
         const cats = await db.getCategories(storeId);
@@ -366,8 +385,6 @@ export const db = {
         setItem(`store_${storeId}_categories`, cats.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'categories', { id });
     },
-
-    // --- Customers ---
     getCustomers: async (storeId: string) => getItem<Customer[]>(`store_${storeId}_customers`, []),
     addCustomer: async (storeId: string, c: Customer) => {
         const custs = await db.getCustomers(storeId);
@@ -386,8 +403,6 @@ export const db = {
         setItem(`store_${storeId}_customers`, custs.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'customers', { id });
     },
-
-    // --- Inventory ---
     getInventory: async (storeId: string) => getItem<InventoryItem[]>(`store_${storeId}_inventory`, []),
     addInventoryItem: async (storeId: string, i: InventoryItem) => {
         const items = await db.getInventory(storeId);
@@ -406,8 +421,6 @@ export const db = {
         setItem(`store_${storeId}_inventory`, items.filter(i => i.id !== id));
         addToSyncQueue('DELETE', 'inventory', { id });
     },
-
-    // --- Orders ---
     getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
     addOrder: async (storeId: string, o: Order) => {
         const orders = await db.getOrders(storeId);
@@ -441,8 +454,6 @@ export const db = {
         const todayOrders = orders.filter(o => new Date(o.createdAt).toISOString().split('T')[0] === today);
         return (todayOrders.length + 1).toString().padStart(4, '0');
     },
-
-    // --- Quotations ---
     getQuotations: async (storeId: string) => getItem<Quotation[]>(`store_${storeId}_quotations`, []),
     addQuotation: async (storeId: string, q: Partial<Quotation>) => {
         const quotes = await db.getQuotations(storeId);
@@ -454,8 +465,6 @@ export const db = {
         addToSyncQueue('INSERT', 'quotations', newQuote);
         return newQuote;
     },
-
-    // --- Register Shifts ---
     getRegisterShifts: async (storeId: string) => getItem<RegisterShift[]>(`store_${storeId}_shifts`, []),
     getActiveShift: async (storeId: string) => {
         const shifts = await db.getRegisterShifts(storeId);

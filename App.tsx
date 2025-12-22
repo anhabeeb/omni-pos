@@ -35,7 +35,9 @@ import {
   Zap,
   Package,
   Wrench,
-  Globe
+  Globe,
+  Settings2,
+  Database
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -68,7 +70,7 @@ const AuthContext = createContext<AuthContextType>(null!);
 export const useAuth = () => useContext(AuthContext);
 
 const SyncIndicator = () => {
-    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null }>(db.getSyncStatus());
+    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean }>(db.getSyncStatus());
     const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
 
@@ -91,7 +93,19 @@ const SyncIndicator = () => {
         }
     };
 
+    const toggleSync = () => {
+        const current = db.isSyncEnabled();
+        db.setSyncEnabled(!current);
+    };
+
     const getStatusConfig = () => {
+        if (status.status === 'DISABLED') return {
+            icon: Database,
+            text: 'Local Mode',
+            color: 'text-gray-400',
+            bg: 'bg-gray-100 dark:bg-gray-800'
+        };
+
         switch(status.status) {
             case 'CONNECTED': return { 
                 icon: Cloud, 
@@ -121,9 +135,15 @@ const SyncIndicator = () => {
             };
             case 'ERROR': return { 
                 icon: AlertCircle, 
-                text: 'Sync Error', 
+                text: status.isBackendMissing ? 'Backend Missing' : 'Sync Error', 
                 color: 'text-red-500', 
                 bg: 'bg-red-50 dark:bg-red-900/10' 
+            };
+            default: return { 
+                icon: Cloud, 
+                text: 'Initializing...', 
+                color: 'text-gray-500', 
+                bg: 'bg-gray-50' 
             };
         }
     };
@@ -139,60 +159,75 @@ const SyncIndicator = () => {
             <span className={`text-[10px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
             
             <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
-                <p className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Diagnostic Tools</p>
+                <div className="flex justify-between items-center mb-3">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Database Sync</p>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); toggleSync(); }}
+                        className={`text-[10px] font-black px-2 py-1 rounded transition-colors ${db.isSyncEnabled() ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                    >
+                        {db.isSyncEnabled() ? 'DISABLE SYNC' : 'ENABLE SYNC'}
+                    </button>
+                </div>
                 
                 <div className="space-y-3">
-                    {status.error && (
-                        <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
-                            <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
-                            <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
+                    {!db.isSyncEnabled() ? (
+                        <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                                System is currently in <span className="font-bold">Local-First Mode</span>. All data is saved to your browser's persistent storage. Cloud synchronization is paused.
+                            </p>
                         </div>
-                    )}
-
-                    {diagResult && (
-                        <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : (diagResult.is404 ? 'bg-orange-50 border-orange-100 dark:bg-orange-900/10' : 'bg-red-50 border-red-100 dark:bg-red-900/10')}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                {diagResult.success ? <CheckCircle size={12} className="text-green-600"/> : (diagResult.is404 ? <Globe size={12} className="text-orange-600"/> : <AlertCircle size={12} className="text-red-600"/>)}
-                                <p className={`text-[10px] font-black uppercase ${diagResult.success ? 'text-green-600' : (diagResult.is404 ? 'text-orange-600' : 'text-red-600')}`}>
-                                    {diagResult.success ? 'Database Online' : (diagResult.is404 ? 'Backend Not Deployed' : 'Write Access Denied')}
-                                </p>
-                            </div>
-                            <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
-                            {diagResult.hint && (
-                                <div className="mt-2 pt-2 border-t border-black/5">
-                                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold italic uppercase mb-1">Setup Steps:</p>
-                                    <p className="text-[10px] text-blue-500/80 dark:text-blue-300 font-medium">{diagResult.hint}</p>
+                    ) : (
+                        <>
+                            {status.error && (
+                                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
+                                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
+                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
                                 </div>
                             )}
-                        </div>
-                    )}
 
-                    <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
-                            className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors"
-                        >
-                            Retry Ping
-                        </button>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
-                            disabled={isTesting}
-                            className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                        >
-                            {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Wrench size={10}/>}
-                            Verify Sync
-                        </button>
-                    </div>
+                            {diagResult && (
+                                <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : (diagResult.is404 ? 'bg-orange-50 border-orange-100 dark:bg-orange-900/10' : 'bg-red-50 border-red-100 dark:bg-red-900/10')}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        {diagResult.success ? <CheckCircle size={12} className="text-green-600"/> : (diagResult.is404 ? <Globe size={12} className="text-orange-600"/> : <AlertCircle size={12} className="text-red-600"/>)}
+                                        <p className={`text-[10px] font-black uppercase ${diagResult.success ? 'text-green-600' : (diagResult.is404 ? 'text-orange-600' : 'text-red-600')}`}>
+                                            {diagResult.success ? 'Database Online' : (diagResult.is404 ? 'Backend Not Detected' : 'Write Access Denied')}
+                                        </p>
+                                    </div>
+                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
+                                    {diagResult.hint && (
+                                        <div className="mt-2 pt-2 border-t border-black/5">
+                                            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold italic uppercase mb-1">Setup Steps:</p>
+                                            <p className="text-[10px] text-blue-500/80 dark:text-blue-300 font-medium">{diagResult.hint}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
+                                    className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors"
+                                >
+                                    Retry Ping
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
+                                    disabled={isTesting}
+                                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                                >
+                                    {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>}
+                                    Run Diagnostic
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
 
-// ... Rest of the file remains the same ...
-/**
- * LayoutWrapper provides the sidebar and top navigation for authenticated users.
- */
+// LayoutWrapper providing sidebar and top navigation
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
   const location = useLocation();
