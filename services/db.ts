@@ -8,8 +8,10 @@ const CLOUDFLARE_CONFIG = {
 
 const DB_PREFIX = 'omnipos_';
 
+// Unique ID generator
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
+// Helper for localStorage retrieval
 const getItem = <T>(key: string, defaultValue: T): T => {
     try {
         const data = localStorage.getItem(DB_PREFIX + key);
@@ -21,6 +23,7 @@ const getItem = <T>(key: string, defaultValue: T): T => {
     }
 };
 
+// Helper for localStorage persistence and event dispatching
 const setItem = <T>(key: string, value: T): void => {
     localStorage.setItem(DB_PREFIX + key, JSON.stringify(value));
     window.dispatchEvent(new CustomEvent('db_change_' + key));
@@ -73,225 +76,105 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
 };
 
 let isProcessingSync = false;
+/**
+ * Processes the synchronization queue by sending tasks to the Cloudflare D1 endpoint.
+ */
 const processSyncQueue = async () => {
     if (isProcessingSync) return;
-    const queue = getSyncQueue();
-    if (queue.length === 0) {
-        currentSyncStatus = 'CONNECTED';
-        lastSyncError = null;
-        broadcastSyncUpdate();
-        return;
-    }
-
     isProcessingSync = true;
-    currentSyncStatus = 'SYNCING';
-    broadcastSyncUpdate();
-
-    const task = queue[0];
     
-    try {
-        const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: task.action, table: task.table, data: task.data })
-        });
-
-        let result: any = {};
+    let queue = getSyncQueue();
+    while (queue.length > 0) {
+        const task = queue[0];
         try {
-            const text = await response.text();
-            result = JSON.parse(text);
-        } catch (e) {
-            console.error("[SYNC ERROR] Response was not valid JSON.", e);
-            throw new Error("Invalid server response format (Not JSON)");
-        }
+            currentSyncStatus = 'SYNCING';
+            broadcastSyncUpdate();
 
-        if (response.ok && result.success === true) {
-            const currentQueue = getSyncQueue();
-            saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.debug(`%c[SYNC SUCCESS]`, 'color: #10b981; font-weight: bold', `${task.action} -> ${task.table}`);
-            currentSyncStatus = getSyncQueue().length > 0 ? 'SYNCING' : 'CONNECTED';
+            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(task)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+
+            queue = queue.slice(1);
+            saveSyncQueue(queue);
             lastSyncError = null;
-        } else if (response.status === 409 || result.code === 'DUPLICATE_ID') {
-            console.warn(`[SYNC CONFLICT] Duplicate record in ${task.table}.`);
-            const currentQueue = getSyncQueue();
-            saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-        } else {
-            throw new Error(result.error || `Server returned HTTP ${response.status}`);
-        }
-    } catch (err: any) {
-        console.warn(`%c[SYNC FAILED]`, 'color: #ef4444', `${task.table} sync error: ${err.message}`);
-        currentSyncStatus = 'ERROR';
-        lastSyncError = err.message;
-        
-        const currentQueue = getSyncQueue();
-        const updatedTask = { ...task, attempts: task.attempts + 1 };
-        
-        if (updatedTask.attempts < 10) {
-            // Move to back of queue to try others if this one is blocked by a schema issue
-            saveSyncQueue([...currentQueue.filter(t => t.id !== task.id), updatedTask]);
-        } else {
-            saveSyncQueue(currentQueue.filter(t => t.id !== task.id));
-            console.error(`[SYNC ABORTED] Dropped task for ${task.table} after 10 failures.`);
-        }
-    } finally {
-        isProcessingSync = false;
-        broadcastSyncUpdate();
-        if (getSyncQueue().length > 0) {
-            setTimeout(processSyncQueue, currentSyncStatus === 'ERROR' ? 10000 : 2000);
-        }
-    }
-};
-
-const updateLocalRecordId = async (table: string, oldId: string, newId: string, fullData: any) => {
-    const storeId = fullData.storeId;
-
-    switch (table) {
-        case 'stores': {
-            const items = getItem<Store[]>('global_stores', []);
-            setItem('global_stores', items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'users': {
-            const items = getItem<User[]>('global_users', []);
-            setItem('global_users', items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'employees': {
-            const items = getItem<Employee[]>('global_employees', []);
-            setItem('global_employees', items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'products': {
-            const items = getItem<Product[]>(`store_${storeId}_products`, []);
-            setItem(`store_${storeId}_products`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'categories': {
-            const items = getItem<Category[]>(`store_${storeId}_categories`, []);
-            setItem(`store_${storeId}_categories`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'customers': {
-            const items = getItem<Customer[]>(`store_${storeId}_customers`, []);
-            setItem(`store_${storeId}_customers`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'orders': {
-            const items = getItem<Order[]>(`store_${storeId}_orders`, []);
-            setItem(`store_${storeId}_orders`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'quotations': {
-            const items = getItem<Quotation[]>(`store_${storeId}_quotations`, []);
-            setItem(`store_${storeId}_quotations`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'shifts': {
-            const items = getItem<RegisterShift[]>(`store_${storeId}_shifts`, []);
-            setItem(`store_${storeId}_shifts`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'inventory': {
-            const items = getItem<InventoryItem[]>(`store_${storeId}_inventory`, []);
-            setItem(`store_${storeId}_inventory`, items.map(i => i.id === oldId ? fullData : i));
-            break;
-        }
-        case 'permissions': {
-            const items = getItem<RolePermissionConfig[]>('global_permissions', []);
-            setItem('global_permissions', items.map(i => i.role === fullData.role ? fullData : i));
+            currentSyncStatus = 'CONNECTED';
+        } catch (e: any) {
+            console.error('Sync failed:', e);
+            lastSyncError = e.message;
+            currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
+            broadcastSyncUpdate();
             break;
         }
     }
+    isProcessingSync = false;
+    broadcastSyncUpdate();
 };
 
+// Retry sync when coming back online
+window.addEventListener('online', processSyncQueue);
+
+/**
+ * Main database service for OmniPOS.
+ * Handles local storage persistence with Cloudflare D1 synchronization.
+ */
 export const db = {
     init: async () => {
-        let stores = getItem<Store[]>('global_stores', []);
-        if (stores.length === 0) {
-            const defaultStore: Store = {
+        // Initialize default System Administrator if no users exist
+        const users = getItem<User[]>('global_users', []);
+        if (users.length === 0) {
+            const admin: User = {
                 id: uuid(),
-                name: 'Main Bistro',
-                currency: '$',
-                address: '123 Gourmet Way',
-                phone: '555-0100',
-                isActive: true,
-                taxRate: 10,
-                serviceChargeRate: 5,
-                numberOfTables: 20
-            };
-            stores = [defaultStore];
-            setItem('global_stores', stores);
-            addToSyncQueue('INSERT', 'stores', defaultStore);
-        }
-
-        let users = getItem<User[]>('global_users', []);
-        if (!users.some(u => u.username === 'sys.admin')) {
-            const newAdmin: User = {
-                id: uuid(),
+                userNumber: 1,
                 name: 'System Admin',
                 username: 'sys.admin',
                 password: '123',
                 role: UserRole.SUPER_ADMIN,
                 storeIds: []
             };
-            users.push(newAdmin);
-            setItem('global_users', users);
-            addToSyncQueue('INSERT', 'users', newAdmin);
+            setItem('global_users', [admin]);
         }
-
-        let perms = getItem<RolePermissionConfig[]>('global_permissions', []);
+        
+        // Initialize default role permissions
+        const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
-            const defaultPerms = [
-                { role: UserRole.SUPER_ADMIN, permissions: ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_EDIT_ORDER', 'POS_DELETE_ORDER', 'POS_REFUND', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER', 'VIEW_REPORTS', 'MANAGE_CUSTOMERS', 'MANAGE_SETTINGS', 'MANAGE_PRINT_DESIGNER', 'MANAGE_STAFF', 'VIEW_KOT', 'PROCESS_KOT', 'MANAGE_INVENTORY', 'VIEW_LIVE_ACTIVITY'] },
-                { role: UserRole.CASHIER, permissions: ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER', 'VIEW_KOT', 'MANAGE_CUSTOMERS'] },
-                { role: UserRole.CHEF, permissions: ['VIEW_KOT', 'PROCESS_KOT'] }
-            ];
+            const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
+                role,
+                permissions: role === UserRole.SUPER_ADMIN ? [] : []
+            }));
+            const cashier = defaultPerms.find(p => p.role === UserRole.CASHIER);
+            if (cashier) cashier.permissions = ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER'];
             setItem('global_permissions', defaultPerms);
-            defaultPerms.forEach(p => addToSyncQueue('UPDATE', 'permissions', p));
         }
 
-        localStorage.setItem(DB_PREFIX + 'system_initialized', 'true');
-        setInterval(processSyncQueue, 30000);
         processSyncQueue();
     },
 
-    getSyncStatus: () => ({ 
-        status: currentSyncStatus, 
+    getSyncStatus: () => ({
+        status: currentSyncStatus,
         pendingCount: getSyncQueue().length,
         error: lastSyncError
     }),
 
-    getStores: async () => getItem<Store[]>('global_stores', []),
-    addStore: async (store: Store) => {
-        const stores = await db.getStores();
-        const newStore = { ...store, id: store.id || uuid() };
-        setItem('global_stores', [...stores, newStore]);
-        addToSyncQueue('INSERT', 'stores', newStore);
-        return newStore;
-    },
-    updateStore: async (store: Store) => {
-        const stores = await db.getStores();
-        setItem('global_stores', stores.map(s => s.id === store.id ? store : s));
-        addToSyncQueue('UPDATE', 'stores', store);
-    },
-    deleteStore: async (id: string) => {
-        const stores = await db.getStores();
-        setItem('global_stores', stores.filter(s => s.id !== id));
-        addToSyncQueue('DELETE', 'stores', { id });
-    },
-
+    // User Management
     getUsers: async () => getItem<User[]>('global_users', []),
-    addUser: async (user: User) => {
+    addUser: async (u: User) => {
         const users = await db.getUsers();
-        const newUser = { ...user, id: user.id || uuid(), userNumber: users.length + 1 };
+        const newUser = { ...u, id: u.id || uuid(), userNumber: users.length + 1 };
         setItem('global_users', [...users, newUser]);
         addToSyncQueue('INSERT', 'users', newUser);
         return newUser;
     },
-    updateUser: async (user: User) => {
+    updateUser: async (u: User) => {
         const users = await db.getUsers();
-        setItem('global_users', users.map(u => u.id === user.id ? user : u));
-        addToSyncQueue('UPDATE', 'users', user);
+        setItem('global_users', users.map(user => user.id === u.id ? u : user));
+        addToSyncQueue('UPDATE', 'users', u);
     },
     deleteUser: async (id: string) => {
         const users = await db.getUsers();
@@ -299,10 +182,65 @@ export const db = {
         addToSyncQueue('DELETE', 'users', { id });
     },
 
+    // Session Management (Local volatile state for heartbeat)
+    getActiveSessions: async () => getItem<ActiveSession[]>('global_sessions', []),
+    updateHeartbeat: async (userId: string, storeId: string | null) => {
+        const users = await db.getUsers();
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+        
+        let sessions = await db.getActiveSessions();
+        const now = Date.now();
+        const existingIdx = sessions.findIndex(s => s.userId === userId);
+        
+        const session: ActiveSession = {
+            userId,
+            userName: user.name,
+            role: user.role,
+            storeId,
+            lastActive: now
+        };
+
+        if (existingIdx >= 0) {
+            sessions[existingIdx] = session;
+        } else {
+            sessions.push(session);
+        }
+        
+        // Remove sessions inactive for more than 5 minutes
+        sessions = sessions.filter(s => now - s.lastActive < 300000);
+        setItem('global_sessions', sessions);
+    },
+    removeSession: async (userId: string) => {
+        let sessions = await db.getActiveSessions();
+        sessions = sessions.filter(s => s.userId !== userId);
+        setItem('global_sessions', sessions);
+    },
+
+    // Global Access Control
+    getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
+    updateRolePermissions: async (config: RolePermissionConfig) => {
+        const configs = await db.getRolePermissions();
+        const exists = configs.find(c => c.role === config.role);
+        if (exists) {
+            setItem('global_permissions', configs.map(c => c.role === config.role ? config : c));
+            addToSyncQueue('UPDATE', 'permissions', config);
+        } else {
+            setItem('global_permissions', [...configs, config]);
+            addToSyncQueue('INSERT', 'permissions', config);
+        }
+    },
+
+    // Global Employee Registry
     getEmployees: async () => getItem<Employee[]>('global_employees', []),
-    addEmployee: async (emp: Partial<Employee>) => {
+    addEmployee: async (data: Partial<Employee>) => {
         const emps = await db.getEmployees();
-        const newEmp = { ...emp, id: uuid(), empId: (emps.length + 1).toString().padStart(3, '0'), createdAt: Date.now() } as Employee;
+        const newEmp: Employee = {
+            ...data,
+            id: uuid(),
+            empId: `EMP${1000 + emps.length + 1}`,
+            createdAt: Date.now()
+        } as Employee;
         setItem('global_employees', [...emps, newEmp]);
         addToSyncQueue('INSERT', 'employees', newEmp);
         return newEmp;
@@ -318,127 +256,163 @@ export const db = {
         addToSyncQueue('DELETE', 'employees', { id });
     },
 
-    getProducts: async (storeId: string) => getItem<Product[]>(`store_${storeId}_products`, []),
-    addProduct: async (storeId: string, product: Product) => {
-        const products = await db.getProducts(storeId);
-        const categories = await db.getCategories(storeId);
-        const category = categories.find(c => c.id === product.categoryId);
-        const categoryOrder = category?.orderId || 1;
-        const categoryProducts = products.filter(p => p.categoryId === product.categoryId);
-        
-        let newId: string;
-        if (categoryProducts.length === 0) {
-            newId = (categoryOrder * 1000 + 1).toString();
-        } else {
-            const numericIds = categoryProducts.map(p => parseInt(p.id)).filter(id => !isNaN(id));
-            const base = categoryOrder * 1000;
-            const maxId = numericIds.length > 0 ? Math.max(...numericIds) : base;
-            newId = (maxId + 1).toString();
-        }
-
-        const newProduct = { ...product, id: newId, storeId };
-        setItem(`store_${storeId}_products`, [...products, newProduct]);
-        addToSyncQueue('INSERT', 'products', newProduct);
-        return newProduct;
+    // Store Configuration
+    getStores: async () => getItem<Store[]>('global_stores', []),
+    addStore: async (s: Store) => {
+        const stores = await db.getStores();
+        const newStore = { ...s, id: uuid() };
+        setItem('global_stores', [...stores, newStore]);
+        addToSyncQueue('INSERT', 'stores', newStore);
+        return newStore;
     },
-    updateProduct: async (storeId: string, product: Product) => {
-        const products = await db.getProducts(storeId);
-        setItem(`store_${storeId}_products`, products.map(p => p.id === product.id ? product : p));
-        addToSyncQueue('UPDATE', 'products', product);
+    updateStore: async (s: Store) => {
+        const stores = await db.getStores();
+        setItem('global_stores', stores.map(st => st.id === s.id ? s : st));
+        addToSyncQueue('UPDATE', 'stores', s);
+    },
+    deleteStore: async (id: string) => {
+        const stores = await db.getStores();
+        setItem('global_stores', stores.filter(s => s.id !== id));
+        addToSyncQueue('DELETE', 'stores', { id });
+    },
+
+    // Store Products & Categories
+    getProducts: async (storeId: string) => getItem<Product[]>(`store_${storeId}_products`, []),
+    addProduct: async (storeId: string, p: Product) => {
+        const prods = await db.getProducts(storeId);
+        const newProd = { ...p, id: uuid(), storeId };
+        setItem(`store_${storeId}_products`, [...prods, newProd]);
+        addToSyncQueue('INSERT', 'products', newProd);
+        return newProd;
+    },
+    updateProduct: async (storeId: string, p: Product) => {
+        const prods = await db.getProducts(storeId);
+        setItem(`store_${storeId}_products`, prods.map(prod => prod.id === p.id ? p : prod));
+        addToSyncQueue('UPDATE', 'products', p);
     },
     deleteProduct: async (storeId: string, id: string) => {
-        const products = await db.getProducts(storeId);
-        setItem(`store_${storeId}_products`, products.filter(p => p.id !== id));
+        const prods = await db.getProducts(storeId);
+        setItem(`store_${storeId}_products`, prods.filter(p => p.id !== id));
         addToSyncQueue('DELETE', 'products', { id });
     },
 
     getCategories: async (storeId: string) => getItem<Category[]>(`store_${storeId}_categories`, []),
-    addCategory: async (storeId: string, category: Category) => {
-        const categories = await db.getCategories(storeId);
-        const newCategory = { ...category, id: uuid(), orderId: categories.length + 1 };
-        setItem(`store_${storeId}_categories`, [...categories, newCategory]);
-        addToSyncQueue('INSERT', 'categories', newCategory);
-        return newCategory;
+    addCategory: async (storeId: string, c: Category) => {
+        const cats = await db.getCategories(storeId);
+        const newCat = { ...c, id: uuid(), storeId };
+        setItem(`store_${storeId}_categories`, [...cats, newCat]);
+        addToSyncQueue('INSERT', 'categories', newCat);
+        return newCat;
     },
     deleteCategory: async (storeId: string, id: string) => {
-        const categories = await db.getCategories(storeId);
-        setItem(`store_${storeId}_categories`, categories.filter(c => c.id !== id));
+        const cats = await db.getCategories(storeId);
+        setItem(`store_${storeId}_categories`, cats.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'categories', { id });
     },
 
+    // Store Customer Database
     getCustomers: async (storeId: string) => getItem<Customer[]>(`store_${storeId}_customers`, []),
-    addCustomer: async (storeId: string, customer: Customer) => {
-        const customers = await db.getCustomers(storeId);
-        const newCustomer = { ...customer, id: uuid(), storeId };
-        setItem(`store_${storeId}_customers`, [...customers, newCustomer]);
-        addToSyncQueue('INSERT', 'customers', newCustomer);
-        return newCustomer;
+    addCustomer: async (storeId: string, c: Customer) => {
+        const custs = await db.getCustomers(storeId);
+        const newCust = { ...c, id: uuid(), storeId };
+        setItem(`store_${storeId}_customers`, [...custs, newCust]);
+        addToSyncQueue('INSERT', 'customers', newCust);
+        return newCust;
     },
-    updateCustomer: async (storeId: string, customer: Customer) => {
-        const customers = await db.getCustomers(storeId);
-        setItem(`store_${storeId}_customers`, customers.map(c => c.id === customer.id ? customer : c));
-        addToSyncQueue('UPDATE', 'customers', customer);
+    updateCustomer: async (storeId: string, c: Customer) => {
+        const custs = await db.getCustomers(storeId);
+        setItem(`store_${storeId}_customers`, custs.map(cust => cust.id === c.id ? c : cust));
+        addToSyncQueue('UPDATE', 'customers', c);
     },
-    deleteCustomer: async (id: string, storeId: string) => {
-        const customers = await db.getCustomers(storeId);
-        setItem(`store_${storeId}_customers`, customers.filter(c => c.id !== id));
+    deleteCustomer: async (storeId: string, id: string) => {
+        const custs = await db.getCustomers(storeId);
+        setItem(`store_${storeId}_customers`, custs.filter(c => c.id !== id));
         addToSyncQueue('DELETE', 'customers', { id });
     },
 
-    getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
-    getNextOrderNumber: async (storeId: string) => {
-        const orders = await db.getOrders(storeId);
-        return (orders.length + 1).toString().padStart(4, '0');
+    // Store Inventory Control
+    getInventory: async (storeId: string) => getItem<InventoryItem[]>(`store_${storeId}_inventory`, []),
+    addInventoryItem: async (storeId: string, i: InventoryItem) => {
+        const items = await db.getInventory(storeId);
+        const newItem = { ...i, id: uuid(), storeId };
+        setItem(`store_${storeId}_inventory`, [...items, newItem]);
+        addToSyncQueue('INSERT', 'inventory', newItem);
+        return newItem;
     },
-    addOrder: async (storeId: string, order: Order) => {
+    updateInventoryItem: async (storeId: string, i: InventoryItem) => {
+        const items = await db.getInventory(storeId);
+        setItem(`store_${storeId}_inventory`, items.map(item => item.id === i.id ? i : item));
+        addToSyncQueue('UPDATE', 'inventory', i);
+    },
+    deleteInventoryItem: async (storeId: string, id: string) => {
+        const items = await db.getInventory(storeId);
+        setItem(`store_${storeId}_inventory`, items.filter(i => i.id !== id));
+        addToSyncQueue('DELETE', 'inventory', { id });
+    },
+
+    // Store Sales & Order Processing
+    getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
+    addOrder: async (storeId: string, o: Order) => {
         const orders = await db.getOrders(storeId);
         const nextNum = await db.getNextOrderNumber(storeId);
-        const newOrder = { ...order, id: order.id || uuid(), orderNumber: nextNum, createdAt: Date.now(), storeId };
+        const newOrder = { ...o, id: o.id || uuid(), orderNumber: o.orderNumber || nextNum, storeId };
         setItem(`store_${storeId}_orders`, [...orders, newOrder]);
         addToSyncQueue('INSERT', 'orders', newOrder);
         return newOrder;
     },
-    updateOrder: async (storeId: string, order: Order) => {
+    updateOrder: async (storeId: string, o: Order) => {
         const orders = await db.getOrders(storeId);
-        setItem(`store_${storeId}_orders`, orders.map(o => o.id === order.id ? order : o));
-        addToSyncQueue('UPDATE', 'orders', order);
+        setItem(`store_${storeId}_orders`, orders.map(order => order.id === o.id ? o : order));
+        addToSyncQueue('UPDATE', 'orders', o);
+    },
+    updateOrderStatus: async (storeId: string, orderId: string, status: OrderStatus) => {
+        const orders = await db.getOrders(storeId);
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+            const updated = { ...order, status };
+            await db.updateOrder(storeId, updated);
+        }
     },
     deleteOrder: async (storeId: string, id: string) => {
         const orders = await db.getOrders(storeId);
         setItem(`store_${storeId}_orders`, orders.filter(o => o.id !== id));
         addToSyncQueue('DELETE', 'orders', { id });
     },
-    updateOrderStatus: async (storeId: string, id: string, status: OrderStatus) => {
+    getNextOrderNumber: async (storeId: string) => {
         const orders = await db.getOrders(storeId);
-        const order = orders.find(o => o.id === id);
-        if (order) {
-            const updated = { ...order, status };
-            setItem(`store_${storeId}_orders`, orders.map(o => o.id === id ? updated : o));
-            addToSyncQueue('UPDATE', 'orders', updated);
-        }
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = orders.filter(o => new Date(o.createdAt).toISOString().split('T')[0] === today);
+        return (todayOrders.length + 1).toString().padStart(4, '0');
     },
 
+    // Store Quotation Management
     getQuotations: async (storeId: string) => getItem<Quotation[]>(`store_${storeId}_quotations`, []),
-    addQuotation: async (storeId: string, quote: Partial<Quotation>) => {
+    addQuotation: async (storeId: string, q: Partial<Quotation>) => {
         const quotes = await db.getQuotations(storeId);
+        const today = new Date().toISOString().split('T')[0];
+        const todayQuotes = quotes.filter(o => new Date(o.createdAt).toISOString().split('T')[0] === today);
+        const nextNum = (todayQuotes.length + 1).toString().padStart(4, '0');
+        
         const newQuote = { 
-            ...quote, 
+            ...q, 
             id: uuid(), 
-            storeId,
-            quotationNumber: (quotes.length + 1).toString().padStart(4, '0'),
+            quotationNumber: nextNum, 
+            storeId, 
             createdAt: Date.now() 
         } as Quotation;
+        
         setItem(`store_${storeId}_quotations`, [...quotes, newQuote]);
         addToSyncQueue('INSERT', 'quotations', newQuote);
         return newQuote;
     },
 
+    // Store Cash Register Shift Tracking
     getRegisterShifts: async (storeId: string) => getItem<RegisterShift[]>(`store_${storeId}_shifts`, []),
     getActiveShift: async (storeId: string) => {
         const shifts = await db.getRegisterShifts(storeId);
-        return shifts.find(s => s.status === 'OPEN');
+        return shifts.find(s => s.status === 'OPEN') || null;
     },
-    openShift: async (storeId: string, userId: string, startingCash: number, denominations: any) => {
+    openShift: async (storeId: string, userId: string, startingCash: number, denominations: Record<number, number>) => {
         const shifts = await db.getRegisterShifts(storeId);
         const newShift: RegisterShift = {
             id: uuid(),
@@ -453,18 +427,29 @@ export const db = {
         setItem(`store_${storeId}_shifts`, [...shifts, newShift]);
         addToSyncQueue('INSERT', 'shifts', newShift);
     },
-    closeShift: async (storeId: string, shiftId: string, actualCash: number, notes: string, denominations: any) => {
+    closeShift: async (storeId: string, shiftId: string, actualCash: number, notes: string, denominations: Record<number, number>) => {
         const shifts = await db.getRegisterShifts(storeId);
-        const shift = shifts.find(s => s.id === shiftId);
-        if (!shift) return false;
+        const shiftIdx = shifts.findIndex(s => s.id === shiftId);
+        if (shiftIdx < 0) return false;
+        const shift = shifts[shiftIdx];
 
-        const allOrders = await db.getOrders(storeId);
-        const shiftOrders = allOrders.filter(o => o.shiftId === shiftId);
-        const completedOrders = shiftOrders.filter(o => o.status === OrderStatus.COMPLETED);
-        const heldOrders = shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD);
+        const orders = await db.getOrders(storeId);
+        const shiftOrders = orders.filter(o => o.shiftId === shiftId);
         
-        const cashSales = completedOrders.filter(o => o.paymentMethod === 'CASH').reduce((sum, o) => sum + o.total, 0);
-        const expectedCash = shift.startingCash + cashSales;
+        let totalCashSales = 0;
+        let totalCashRefunds = 0;
+        shiftOrders.forEach(o => {
+            o.transactions?.forEach(t => {
+                if (t.method === 'CASH') {
+                    if (t.type === 'PAYMENT') totalCashSales += t.amount;
+                    if (t.type === 'REVERSAL') totalCashRefunds += t.amount;
+                }
+            });
+        });
+
+        const expectedCash = shift.startingCash + totalCashSales - totalCashRefunds;
+        const difference = actualCash - expectedCash;
+        const heldCount = shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD).length;
 
         const updatedShift: RegisterShift = {
             ...shift,
@@ -472,72 +457,17 @@ export const db = {
             closedAt: Date.now(),
             actualCash,
             expectedCash,
-            difference: actualCash - expectedCash,
+            difference,
             notes,
             closingDenominations: denominations,
-            heldOrdersCount: heldOrders.length,
-            totalCashSales: cashSales
+            totalCashSales,
+            totalCashRefunds,
+            heldOrdersCount: heldCount
         };
 
-        setItem(`store_${storeId}_shifts`, shifts.map(s => s.id === shiftId ? updatedShift : s));
+        shifts[shiftIdx] = updatedShift;
+        setItem(`store_${storeId}_shifts`, shifts);
         addToSyncQueue('UPDATE', 'shifts', updatedShift);
         return true;
-    },
-
-    getInventory: async (storeId: string) => getItem<InventoryItem[]>(`store_${storeId}_inventory`, []),
-    addInventoryItem: async (storeId: string, item: InventoryItem) => {
-        const items = await db.getInventory(storeId);
-        const newItem = { ...item, id: uuid(), storeId };
-        setItem(`store_${storeId}_inventory`, [...items, newItem]);
-        addToSyncQueue('INSERT', 'inventory', newItem);
-        return newItem;
-    },
-    updateInventoryItem: async (storeId: string, item: InventoryItem) => {
-        const items = await db.getInventory(storeId);
-        setItem(`store_${storeId}_inventory`, items.map(i => i.id === item.id ? item : i));
-        addToSyncQueue('UPDATE', 'inventory', item);
-    },
-    deleteInventoryItem: async (storeId: string, id: string) => {
-        const items = await db.getInventory(storeId);
-        setItem(`store_${storeId}_inventory`, items.filter(i => i.id !== id));
-        addToSyncQueue('DELETE', 'inventory', { id });
-    },
-
-    getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
-    updateRolePermissions: async (config: RolePermissionConfig) => {
-        const current = await db.getRolePermissions();
-        setItem('global_permissions', current.map(c => c.role === config.role ? config : c));
-        addToSyncQueue('UPDATE', 'permissions', config);
-    },
-
-    updateHeartbeat: async (userId: string, storeId: string | null) => {
-        const sessions = getItem<ActiveSession[]>('global_sessions', []);
-        const users = await db.getUsers();
-        const user = users.find(u => u.id === userId);
-        if (!user) return;
-
-        const now = Date.now();
-        const sessionData: ActiveSession = {
-            userId,
-            userName: user.name,
-            role: user.role,
-            storeId,
-            lastActive: now
-        };
-
-        const existing = sessions.findIndex(s => s.userId === userId);
-        if (existing > -1) {
-            sessions[existing] = sessionData;
-        } else {
-            sessions.push(sessionData);
-        }
-
-        const activeSessions = sessions.filter(s => now - s.lastActive < 120000);
-        setItem('global_sessions', activeSessions);
-    },
-    removeSession: async (userId: string) => {
-        const sessions = getItem<ActiveSession[]>('global_sessions', []);
-        setItem('global_sessions', sessions.filter(s => s.userId !== userId));
-    },
-    getActiveSessions: async () => getItem<ActiveSession[]>('global_sessions', [])
+    }
 };
