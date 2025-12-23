@@ -8,3 +8,6 @@ database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
 
 [assets]
 directory = "./dist"
+
+[observability]
+enabled = false
