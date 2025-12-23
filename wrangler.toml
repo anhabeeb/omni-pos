@@ -1,5 +1,6 @@
 name = "omni-pos"
-compatibility_date = "2024-11-01"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-04-01"
 
 [[d1_databases]]
 binding = "DB"
@@ -7,7 +8,7 @@ database_name = "pos"
 database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
 
 [assets]
-directory = "./dist"
+directory = "./"
 
 [observability]
 enabled = false
