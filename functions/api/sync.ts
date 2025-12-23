@@ -3,8 +3,6 @@
  */
 
 interface Env {
-  // Fixed: Replaced D1Database with any to resolve "Cannot find name 'D1Database'" error
-  // This occurs because the Cloudflare Workers/Pages type definitions are not globally available in this specific environment.
   DB: any;
 }
 
@@ -17,6 +15,15 @@ const jsonResponse = (data: any, status = 200) => {
       'Access-Control-Allow-Origin': '*'
     }
   });
+};
+
+// GET handler for simple connectivity testing
+export const onRequestGet = async (context: { env: Env }): Promise<Response> => {
+  const DB = context.env.DB;
+  if (!DB) {
+      return jsonResponse({ success: false, error: 'Database binding "DB" not found in context.' }, 500);
+  }
+  return jsonResponse({ success: true, message: 'OmniPOS API is online and reachable via GET.' });
 };
 
 export const onRequestPost = async (context: { env: Env; request: Request }): Promise<Response> => {
