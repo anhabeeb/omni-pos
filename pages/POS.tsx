@@ -240,7 +240,14 @@ export default function POS() {
         if (found) { setSelectedCustomer(found); setCustomerSearch(found.name); }
         else setCustomerSearch(order.customerName);
     }
-    if (currentStoreId) await db.deleteOrder(currentStoreId, order.id);
+    if (currentStoreId) {
+        await db.deleteOrder(currentStoreId, order.id);
+        db.logActivity({
+            storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+            action: 'ORDER_CREATE',
+            description: `Order #${order.orderNumber} resumed from memory/hold`
+        });
+    }
     setActiveTab('MENU');
     showToast(`Order #${order.orderNumber} resumed in Menu`);
   };
@@ -249,6 +256,11 @@ export default function POS() {
     e.stopPropagation();
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.ON_HOLD);
+    db.logActivity({
+        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+        action: 'ORDER_UPDATE',
+        description: `Order #${order.orderNumber} placed on hold`
+    });
     showToast(`Order #${order.orderNumber} moved to Held`, "INFO");
   };
 
@@ -278,7 +290,12 @@ export default function POS() {
     showToast("Holding order...", "INFO");
 
     try {
-        await db.addOrder(currentStoreId, newOrder);
+        const added = await db.addOrder(currentStoreId, newOrder);
+        db.logActivity({
+            storeId: currentStoreId, userId: user.id, userName: user.name,
+            action: 'ORDER_CREATE',
+            description: `New order #${added.orderNumber} placed on hold`
+        });
         showToast("Order placed on hold.", "SUCCESS");
     } catch (e) {
         console.error(e);
@@ -293,6 +310,11 @@ export default function POS() {
     if (!shift) { showToast("Register is closed. Please open shift first.", "ERROR"); setIsShiftModalOpen(true); return; }
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.PENDING);
+    db.logActivity({
+        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+        action: 'ORDER_UPDATE',
+        description: `Order #${order.orderNumber} reactivated`
+    });
     setActiveTab('ORDERS');
     showToast(`Order #${order.orderNumber} moved to Active`, "SUCCESS");
   };
@@ -323,7 +345,12 @@ export default function POS() {
       showToast("Sending order to kitchen...", "INFO");
 
       try {
-          await db.addOrder(currentStoreId, newOrderData);
+          const added = await db.addOrder(currentStoreId, newOrderData);
+          db.logActivity({
+            storeId: currentStoreId, userId: user.id, userName: user.name,
+            action: 'ORDER_CREATE',
+            description: `New order #${added.orderNumber} sent to kitchen`
+          });
           showToast("Order created & sent to kitchen.", "SUCCESS");
       } catch (e) {
           console.error(e);
@@ -401,6 +428,11 @@ export default function POS() {
           if (orderToSettle) {
               finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod, transactions: [...(orderToSettle.transactions || []), transaction] };
               await db.updateOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_UPDATE',
+                description: `Active order #${finalOrder.orderNumber} settled via ${paymentMethod}`
+              });
           } else {
               finalOrder = { 
                 id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
@@ -417,6 +449,11 @@ export default function POS() {
                 createdBy: user.id, createdAt: Date.now() 
               } as Order;
               finalOrder = await db.addOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_CREATE',
+                description: `Quick-sale settled #${finalOrder.orderNumber} via ${paymentMethod}`
+              });
           }
           setOrderToSettle(null); 
           setPreviewOrder(finalOrder); 

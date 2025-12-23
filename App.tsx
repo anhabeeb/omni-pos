@@ -42,7 +42,8 @@ import {
   Lock,
   User as UserIcon,
   Save,
-  Key
+  Key,
+  ScrollText
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -59,6 +60,7 @@ import PrintDesigner from './pages/PrintDesigner';
 import StoreHistory from './pages/StoreHistory';
 import Quotations from './pages/Quotations';
 import EmployeeManagement from './pages/EmployeeManagement';
+import SystemLogs from './pages/SystemLogs';
 
 interface AuthContextType {
   user: User | null;
@@ -282,6 +284,7 @@ const SyncIndicator = () => {
                             <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
                                 <button onClick={(e) => { e.stopPropagation(); db.testConnection(); }} className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors">Ping</button>
                                 <button onClick={(e) => { e.stopPropagation(); runDiagnostic(); }} disabled={isTesting} className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1">
+                                    {/* Fix: changed size(10) to size={10} */}
                                     {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>} Diag
                                 </button>
                             </div>
@@ -483,6 +486,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   const globalMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT] },
+    { icon: ScrollText, label: 'System Logs', path: '/logs', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
     { icon: UserSquare, label: 'Employee Management', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
     { icon: ShieldCheck, label: 'User & Access Management', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
@@ -712,6 +716,7 @@ export default function App() {
             ) : <Navigate to="/login" />} 
           />
           <Route path="/dashboard" element={user ? <LayoutWrapper><SuperAdminDashboard /></LayoutWrapper> : <Navigate to="/login" />} />
+          <Route path="/logs" element={user ? <LayoutWrapper><SystemLogs /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/users" element={user ? <LayoutWrapper><GlobalUsers /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/employees" element={user ? <LayoutWrapper><EmployeeManagement /></LayoutWrapper> : <Navigate to="/login" />} />
           <Route path="/pos" element={user ? <LayoutWrapper><POS /></LayoutWrapper> : <Navigate to="/login" />} />

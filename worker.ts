@@ -98,7 +98,7 @@ export default {
           }
 
           if (action === 'FETCH_HYDRATION_DATA') {
-            const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory'];
+            const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
             const result: Record<string, any[]> = {};
             
             for (const t of tables) {
@@ -122,7 +122,7 @@ export default {
             if (!table) return jsonResponse({ success: false, error: 'Table required' }, 400);
             
             let query = `SELECT id FROM \`${table}\``;
-            if (storeId && table !== 'users' && table !== 'stores' && table !== 'employees' && table !== 'global_permissions') {
+            if (storeId && table !== 'users' && table !== 'stores' && table !== 'employees' && table !== 'global_permissions' && table !== 'system_activities') {
                 query += ` WHERE storeId = ?`;
             }
             
@@ -151,7 +151,8 @@ export default {
               "CREATE TABLE IF NOT EXISTS `shifts` (id TEXT PRIMARY KEY, shiftNumber INTEGER, storeId TEXT, openedBy TEXT, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy TEXT, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
               "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
               "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER, status TEXT)"
+              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER, status TEXT)",
+              "CREATE TABLE IF NOT EXISTS `system_activities` (id TEXT PRIMARY KEY, storeId TEXT, userId TEXT, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
             ];
             for (const q of schema) await DB.prepare(q).run();
             return jsonResponse({ success: true });

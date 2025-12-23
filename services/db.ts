@@ -1,5 +1,5 @@
 
-import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem } from '../types';
+import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem, SystemActivity, ActivityAction } from '../types';
 
 const CLOUDFLARE_CONFIG = {
     DB_NAME: 'pos',
@@ -355,6 +355,7 @@ export const db = {
             setItem('global_stores', data.stores || []);
             setItem('global_employees', data.employees || []);
             setItem('global_permissions', data.global_permissions || []);
+            setItem('global_activities', data.activities || []);
 
             // Hydrate Store-Specific Tables
             const storeIds = (data.stores || []).map((s: any) => s.id);
@@ -387,12 +388,14 @@ export const db = {
         const users = await db.getUsers();
         const emps = await db.getEmployees();
         const perms = await db.getRolePermissions();
+        const acts = await db.getSystemActivities();
 
         // Push Global Data
         users.forEach(u => tasks.push({ action: 'INSERT', table: 'users', data: u }));
         stores.forEach(s => tasks.push({ action: 'INSERT', table: 'stores', data: s }));
         emps.forEach(e => tasks.push({ action: 'INSERT', table: 'employees', data: e }));
         perms.forEach(p => tasks.push({ action: 'UPDATE', table: 'global_permissions', data: p }));
+        acts.forEach(a => tasks.push({ action: 'INSERT', table: 'system_activities', data: a }));
 
         // Push Store-Specific Data with Conflict Resolution
         for (const store of stores) {
@@ -699,6 +702,14 @@ export const db = {
         const newShift: RegisterShift = { id: uuid(), shiftNumber: shifts.length + 1, storeId, openedBy: userId, openedAt: Date.now(), startingCash, openingDenominations: denominations, status: 'OPEN' };
         setItem(`store_${storeId}_shifts`, [...shifts, newShift]);
         addToSyncQueue('INSERT', 'shifts', newShift);
+        
+        const users = await db.getUsers();
+        const user = users.find(u => u.id === userId);
+        db.logActivity({
+            storeId, userId, userName: user?.name || 'System',
+            action: 'SHIFT_OPEN',
+            description: `Register opened with ${startingCash}`
+        });
     },
     closeShift: async (storeId: string, shiftId: string, actualCash: number, notes: string, denominations: Record<number, number>) => {
         const shifts = await db.getRegisterShifts(storeId);
@@ -719,6 +730,28 @@ export const db = {
         const closedShift: RegisterShift = { ...shift, status: 'CLOSED', closedAt: Date.now(), actualCash, expectedCash, difference: actualCash - expectedCash, totalCashSales, totalCashRefunds, heldOrdersCount: shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD).length, notes, closingDenominations: denominations };
         setItem(`store_${storeId}_shifts`, shifts.map(s => s.id === shiftId ? closedShift : s));
         addToSyncQueue('UPDATE', 'shifts', closedShift);
+
+        const users = await db.getUsers();
+        const user = users.find(u => u.id === shift.openedBy);
+        db.logActivity({
+            storeId, userId: shift.openedBy, userName: user?.name || 'System',
+            action: 'SHIFT_CLOSE',
+            description: `Register closed. Variance: ${closedShift.difference}`
+        });
+
         return true;
+    },
+
+    getSystemActivities: async () => getItem<SystemActivity[]>('global_activities', []),
+    logActivity: async (activity: Omit<SystemActivity, 'id' | 'timestamp'>) => {
+        const acts = await db.getSystemActivities();
+        const newAct: SystemActivity = {
+            ...activity,
+            id: uuid(),
+            timestamp: Date.now()
+        };
+        const updated = [newAct, ...acts].slice(0, 5000); // Keep last 5k
+        setItem('global_activities', updated);
+        addToSyncQueue('INSERT', 'system_activities', newAct);
     }
 };

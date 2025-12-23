@@ -10,6 +10,27 @@ export enum UserRole {
   WAITER = 'WAITER'
 }
 
+export type ActivityAction = 
+  | 'LOGIN' | 'LOGOUT'
+  | 'STORE_CREATE' | 'STORE_UPDATE' | 'STORE_DELETE'
+  | 'USER_CREATE' | 'USER_UPDATE' | 'USER_DELETE'
+  | 'EMP_CREATE' | 'EMP_UPDATE' | 'EMP_DELETE'
+  | 'ORDER_CREATE' | 'ORDER_UPDATE' | 'ORDER_CANCEL' | 'ORDER_REFUND'
+  | 'SHIFT_OPEN' | 'SHIFT_CLOSE'
+  | 'MENU_UPDATE' | 'INV_UPDATE'
+  | 'PERMISSION_UPDATE';
+
+export interface SystemActivity {
+  id: string;
+  storeId: string | null; // null for global system actions
+  userId: string;
+  userName: string;
+  action: ActivityAction;
+  description: string;
+  timestamp: number;
+  metadata?: any;
+}
+
 export type Permission = 
   | 'POS_ACCESS'
   | 'POS_CREATE_ORDER'
@@ -28,7 +49,8 @@ export type Permission =
   | 'MANAGE_INVENTORY'
   | 'VIEW_HISTORY'
   | 'VIEW_QUOTATIONS'
-  | 'VIEW_LIVE_ACTIVITY'; 
+  | 'VIEW_LIVE_ACTIVITY'
+  | 'VIEW_LOGS'; 
 
 export interface RolePermissionConfig {
     role: UserRole;
