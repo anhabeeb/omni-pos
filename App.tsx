@@ -219,7 +219,7 @@ const SyncIndicator = () => {
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
                                         Your backend returned <span className="font-mono font-bold">"Hello world"</span>. This means you have a default Cloudflare worker intercepting the <span className="font-mono">/api</span> route. 
                                     </p>
-                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Check: Functions > Settings in Cloudflare Pages dashboard.</p>
+                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Check: Functions &gt; Settings in Cloudflare Pages dashboard.</p>
                                 </div>
                             )}
 
@@ -300,7 +300,6 @@ const SyncIndicator = () => {
     );
 };
 
-// ... Remaining LayoutWrapper and App code is unchanged ...
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
   const location = useLocation();
