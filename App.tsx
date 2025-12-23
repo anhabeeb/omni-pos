@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
 import { db, SyncStatus } from './services/db';
@@ -36,7 +36,8 @@ import {
   ShieldCheck,
   UploadCloud,
   ArrowUpRight,
-  CloudDownload
+  CloudDownload,
+  Settings
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -167,7 +168,7 @@ const SyncIndicator = () => {
     const getStatusConfig = () => {
         if (status.status === 'DISABLED') return {
             icon: Database,
-            text: 'Local Mode',
+            text: 'Local',
             color: 'text-gray-400',
             bg: 'bg-gray-100 dark:bg-gray-800'
         };
@@ -175,45 +176,45 @@ const SyncIndicator = () => {
         switch(status.status) {
             case 'CONNECTED': return { 
                 icon: Cloud, 
-                text: 'Cloud Synced', 
+                text: 'Synced', 
                 color: 'text-green-500', 
                 bg: 'bg-green-50 dark:bg-green-900/10' 
             };
             case 'SYNCING': return { 
                 icon: RefreshCw, 
-                text: `Syncing (${status.pendingCount})`, 
+                text: `Syncing`, 
                 color: 'text-blue-500', 
                 bg: 'bg-blue-50 dark:bg-blue-900/10',
                 spin: true 
             };
             case 'TESTING': return { 
                 icon: Zap, 
-                text: 'Handshaking...', 
+                text: 'Handshake', 
                 color: 'text-purple-500', 
                 bg: 'bg-purple-50 dark:bg-purple-900/10',
                 spin: true 
             };
             case 'MOCKED': return { 
                 icon: Unplug, 
-                text: 'Backend Error', 
+                text: 'Error', 
                 color: 'text-red-600', 
                 bg: 'bg-red-50 dark:bg-red-900/20' 
             };
             case 'OFFLINE': return { 
                 icon: CloudOff, 
-                text: status.pendingCount > 0 ? `${status.pendingCount} Unsynced` : 'Offline Mode', 
+                text: 'Offline', 
                 color: 'text-orange-500', 
                 bg: 'bg-orange-50 dark:bg-orange-900/10' 
             };
             case 'ERROR': return { 
                 icon: AlertCircle, 
-                text: status.isBackendMissing ? 'Backend Missing' : 'Sync Error', 
+                text: 'Sync Error', 
                 color: 'text-red-500', 
                 bg: 'bg-red-50 dark:bg-red-900/10' 
             };
             default: return { 
                 icon: Cloud, 
-                text: 'Initializing...', 
+                text: 'Init', 
                 color: 'text-gray-500', 
                 bg: 'bg-gray-50' 
             };
@@ -225,109 +226,58 @@ const SyncIndicator = () => {
 
     return (
         <div 
-          className={`flex items-center gap-2 px-3 py-1 rounded-lg border border-transparent transition-all group relative cursor-help ${config.bg}`}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-transparent transition-all group relative cursor-help ${config.bg}`}
         >
             <Icon size={12} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
-            <span className={`text-[9px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
+            <span className={`text-[10px] font-black uppercase tracking-tight ${config.color}`}>{config.text}</span>
             
-            <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
-                <div className="flex justify-between items-center mb-3">
+            <div className="absolute top-full right-0 mt-3 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-2xl z-[100] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Database Sync</p>
                     <button 
                         onClick={(e) => { e.stopPropagation(); toggleSync(); }}
                         className={`text-[10px] font-black px-2 py-1 rounded transition-colors ${db.isSyncEnabled() ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
                     >
-                        {db.isSyncEnabled() ? 'DISABLE SYNC' : 'ENABLE SYNC'}
+                        {db.isSyncEnabled() ? 'STOP' : 'START'}
                     </button>
                 </div>
                 
                 <div className="space-y-3">
                     {!db.isSyncEnabled() ? (
-                        <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                                System is in <span className="font-bold">Local-First Mode</span>. Changes only leave this device when Sync is active.
-                            </p>
+                        <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 text-center">
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Local-First Mode Active</p>
                         </div>
                     ) : (
                         <>
                             <div className="grid grid-cols-2 gap-2">
-                                <button 
-                                    onClick={handleBootstrap}
-                                    disabled={isBootstrapping || isPulling}
-                                    className="flex flex-col items-center justify-center gap-1 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70"
-                                >
+                                <button onClick={handleBootstrap} disabled={isBootstrapping || isPulling} className="flex flex-col items-center justify-center gap-1 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70">
                                     {isBootstrapping ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
                                     <span className="text-[9px] font-black uppercase">Push All</span>
                                 </button>
-                                <button 
-                                    onClick={handlePull}
-                                    disabled={isPulling || isBootstrapping}
-                                    className="flex flex-col items-center justify-center gap-1 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70"
-                                >
+                                <button onClick={handlePull} disabled={isPulling || isBootstrapping} className="flex flex-col items-center justify-center gap-1 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70">
                                     {isPulling ? <Loader2 size={16} className="animate-spin" /> : <CloudDownload size={16} />}
                                     <span className="text-[9px] font-black uppercase">Pull All</span>
                                 </button>
                             </div>
                             
-                            {syncMessage && (
-                                <p className="text-[9px] text-center text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest italic animate-pulse">{syncMessage}</p>
-                            )}
+                            {syncMessage && <p className="text-[9px] text-center text-blue-600 font-black uppercase italic animate-pulse">{syncMessage}</p>}
 
-                            {status.status === 'MOCKED' && (
-                                <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
-                                    <div className="flex items-center gap-2 mb-1 text-red-600">
-                                        <AlertCircle size={16}/>
-                                        <p className="text-[11px] font-black uppercase">Sync Connection Error</p>
-                                    </div>
-                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
-                                        Server did not return a valid auth signature. Check your worker headers.
-                                    </p>
-                                </div>
-                            )}
-
-                            {status.error && status.status !== 'MOCKED' && (
+                            {status.error && (
                                 <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
-                                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
+                                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status:</p>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
                                     {status.error.includes("no such table") && (
-                                        <button 
-                                            onClick={handleRepairSchema}
-                                            disabled={isRepairing}
-                                            className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors"
-                                        >
-                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
-                                            Initialize Cloud Tables
+                                        <button onClick={handleRepairSchema} disabled={isRepairing} className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors">
+                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>} Repair
                                         </button>
                                     )}
                                 </div>
                             )}
 
-                            {diagResult && (
-                                <div className={`p-2 rounded-lg border ${diagResult.success ? 'bg-green-50 border-green-100 dark:bg-green-900/10' : (diagResult.is404 ? 'bg-orange-50 border-orange-100 dark:bg-orange-900/10' : 'bg-red-50 border-red-100 dark:bg-red-900/10')}`}>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        {diagResult.success ? <CheckCircle size={12} className="text-green-600"/> : (diagResult.is404 ? <Globe size={12} className="text-orange-600"/> : <AlertCircle size={12} className="text-red-600"/>)}
-                                        <p className={`text-[10px] font-black uppercase ${diagResult.success ? 'text-green-600' : (diagResult.is404 ? 'text-orange-600' : 'text-red-600')}`}>
-                                            {diagResult.success ? 'Cloud Reachable' : (diagResult.is404 ? 'Backend Not Detected' : 'Access Error')}
-                                        </p>
-                                    </div>
-                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
-                                </div>
-                            )}
-
                             <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
-                                    className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors"
-                                >
-                                    Ping
-                                </button>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
-                                    disabled={isTesting}
-                                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1"
-                                >
-                                    {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>}
-                                    Diagnostic
+                                <button onClick={(e) => { e.stopPropagation(); db.testConnection(); }} className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors">Ping</button>
+                                <button onClick={(e) => { e.stopPropagation(); runDiagnostic(); }} disabled={isTesting} className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1">
+                                    {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>} Diag
                                 </button>
                             </div>
                         </>
@@ -343,6 +293,8 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [stores, setStores] = useState<Store[]>([]);
+  const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+  const storeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadStores = async () => {
@@ -354,151 +306,147 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
       }
     };
     loadStores();
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (storeMenuRef.current && !storeMenuRef.current.contains(event.target as Node)) {
+        setIsStoreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [user]);
 
   const globalMenuItems = [
-    { icon: LayoutDashboard, label: 'Global Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
-    { icon: UserSquare, label: 'Employee Registry', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { icon: ShieldCheck, label: 'User & Access', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
+    { icon: UserSquare, label: 'Staff', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: ShieldCheck, label: 'Access', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
 
   const getStoreActions = (storeId: string) => [
-    { icon: ShoppingCart, label: 'POS System', path: '/pos', permission: 'POS_ACCESS' },
-    { icon: ChefHat, label: 'Kitchen (KOT)', path: '/kot', permission: 'VIEW_KOT' },
-    { icon: History, label: 'History', path: '/history', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CASHIER] },
-    { icon: FileText, label: 'Quotations', path: '/quotations', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CASHIER] },
+    { icon: ShoppingCart, label: 'POS', path: '/pos', permission: 'POS_ACCESS' },
+    { icon: ChefHat, label: 'Kitchen', path: '/kot', permission: 'VIEW_KOT' },
+    { icon: History, label: 'History', path: '/history' },
+    { icon: FileText, label: 'Quotations', path: '/quotations' },
     { icon: BarChart3, label: 'Reports', path: '/reports', permission: 'VIEW_REPORTS' },
-    { icon: MenuIcon, label: 'Menu & Inventory', path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
-    { icon: Users, label: 'Users', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
-    { icon: Printer, label: 'Print Designer', path: `/print-designer/${storeId}`, permission: 'MANAGE_PRINT_DESIGNER' },
+    // Fix: replaced incorrectly closed template literals with proper closing backticks
+    { icon: MenuIcon, label: 'Menu', path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
+    // Fix: replaced incorrectly closed template literals with proper closing backticks
+    { icon: Users, label: 'Staff', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
+    { icon: Printer, label: 'Designer', path: `/print-designer/${storeId}`, permission: 'MANAGE_PRINT_DESIGNER' },
   ];
 
-  const handleStoreClick = (sid: string) => {
-      if (currentStoreId !== sid) {
-          switchStore(sid);
-      }
-  };
-
   const currentStore = stores.find(s => s.id === currentStoreId);
+  const storeActions = currentStoreId ? getStoreActions(currentStoreId) : [];
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      <div className="w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-lg z-30">
-        <div className="p-8">
-          <h1 className="text-2xl font-black text-blue-600 tracking-tighter italic">OmniPOS</h1>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-Store Suite</p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 space-y-8 custom-scrollbar pb-8">
-          {/* Global Management Section */}
-          <div>
-            <div className="mb-3 px-4">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Global Management</span>
-            </div>
-            <div className="space-y-1">
-              {globalMenuItems.filter(item => !item.roles || item.roles.includes(user?.role as UserRole)).map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
-                >
-                  <item.icon size={18} className={location.pathname === item.path ? 'text-white' : 'text-gray-400'} />
-                  <span className="font-bold text-sm">{item.label}</span>
-                </button>
-              ))}
-            </div>
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      {/* Primary Top Bar */}
+      <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col cursor-pointer" onClick={() => navigate('/')}>
+            <h1 className="text-xl font-black text-blue-600 tracking-tighter italic leading-none">OmniPOS</h1>
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-Store Suite</span>
           </div>
 
-          {/* Stores Management Section */}
-          <div>
-            <div className="mb-3 px-4 flex justify-between items-center">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Stores & Stations</span>
-              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">{stores.length}</span>
-            </div>
-            <div className="space-y-3">
-              {stores.map((store) => {
-                const isExpanded = currentStoreId === store.id;
-                const actions = getStoreActions(store.id);
-
-                return (
-                  <div key={store.id} className="space-y-1">
-                    <button
-                      onClick={() => handleStoreClick(store.id)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all border ${isExpanded ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800' : 'border-transparent text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`p-1.5 rounded-lg ${isExpanded ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
-                          <StoreIcon size={16} />
-                        </div>
-                        <span className={`font-black text-xs truncate uppercase tracking-tight ${isExpanded ? 'text-blue-700 dark:text-blue-300' : ''}`}>
-                          {store.name}
-                        </span>
-                      </div>
-                      {isExpanded ? <ChevronDown size={14} className="text-blue-500" /> : <ChevronRight size={14} className="text-gray-400" />}
-                    </button>
-
-                    {isExpanded && (
-                      <div className="ml-4 pl-4 border-l-2 border-blue-100 dark:border-blue-900 space-y-1 py-1 animate-in slide-in-from-top-1 duration-200">
-                        {actions.filter(a => {
-                            if (a.roles && !a.roles.includes(user?.role as UserRole)) return false;
-                            if (a.permission && !hasPermission(a.permission as Permission)) return false;
-                            return true;
-                        }).map((action) => (
-                          <button
-                            key={action.path}
-                            onClick={() => navigate(action.path)}
-                            className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg transition-all ${location.pathname === action.path ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                          >
-                            <action.icon size={14} className={location.pathname === action.path ? 'text-white' : 'text-gray-400'} />
-                            <span className="font-bold text-xs">{action.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <nav className="flex items-center gap-1">
+            {globalMenuItems.filter(item => !item.roles || item.roles.includes(user?.role as UserRole)).map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-bold ${location.pathname === item.path ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+              >
+                <item.icon size={16} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
 
-        <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-700">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-transparent hover:border-red-100">
-            <LogOut size={18} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
+        <div className="flex items-center gap-4">
+          <SyncIndicator />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20 shrink-0">
-          <div className="flex items-center gap-4">
-            {currentStore && (
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{currentStore.name}</span>
+          <div className="h-8 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
+
+          {/* Store Switcher Dropdown */}
+          <div className="relative" ref={storeMenuRef}>
+            <button
+              onClick={() => setIsStoreMenuOpen(!isStoreMenuOpen)}
+              className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-all ${currentStore ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}
+            >
+              <StoreIcon size={16} />
+              <span className="text-xs font-black uppercase tracking-tight max-w-[150px] truncate">
+                {currentStore?.name || 'Select Store'}
+              </span>
+              <ChevronDown size={14} className={isStoreMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+
+            {isStoreMenuOpen && (
+              <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl shadow-2xl py-3 z-[60] animate-in slide-in-from-top-2 duration-200">
+                <div className="px-4 pb-2 mb-2 border-b dark:border-gray-700 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Locations</span>
+                    <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{stores.length}</span>
                 </div>
+                <div className="max-h-80 overflow-y-auto px-2 custom-scrollbar">
+                  {stores.map((store) => (
+                    <button
+                      key={store.id}
+                      onClick={() => {
+                        switchStore(store.id);
+                        setIsStoreMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl text-left transition-all ${currentStoreId === store.id ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <div className={`p-2 rounded-lg ${currentStoreId === store.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
+                        <StoreIcon size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-xs font-black uppercase truncate ${currentStoreId === store.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{store.name}</p>
+                        <p className="text-[9px] text-gray-400 truncate mt-0.5">{store.address}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <SyncIndicator />
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">
-              <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-black dark:text-white leading-tight uppercase">{user?.name}</p>
-                <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
-              </div>
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-600">
-                <UserCircle size={20} />
-              </div>
+          <div className="flex items-center gap-3 pl-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] font-black dark:text-white leading-tight uppercase">{user?.name}</p>
+              <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
             </div>
+            <button onClick={logout} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all border border-transparent hover:border-red-100" title="Logout">
+              <LogOut size={18} />
+            </button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="flex-1 overflow-hidden">
-          {children}
-        </main>
-      </div>
+      {/* Secondary Action Bar (Contextual to selected store) */}
+      {currentStoreId && (
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-2 flex items-center justify-center gap-1 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide">
+          {storeActions.filter(a => {
+              if (a.permission && !hasPermission(a.permission as Permission)) return false;
+              return true;
+          }).map((action) => (
+            <button
+              key={action.path}
+              onClick={() => navigate(action.path)}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl transition-all whitespace-nowrap ${location.pathname === action.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold'}`}
+            >
+              <action.icon size={14} className={location.pathname === action.path ? 'text-white' : 'text-gray-400'} />
+              <span className="text-xs font-black uppercase tracking-tight">{action.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-hidden p-6">
+        <div className="h-full max-w-[1600px] mx-auto overflow-y-auto custom-scrollbar pr-2">
+            {children}
+        </div>
+      </main>
     </div>
   );
 };
