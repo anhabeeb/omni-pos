@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../services/db';
 import { Employee, UserRole } from '../types';
 import { useAuth } from '../App';
@@ -15,8 +16,12 @@ import {
   X,
   AlertCircle,
   Hash,
-  Loader2
+  Loader2,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
+import { utils, writeFile, read } from 'xlsx';
 
 export default function EmployeeManagement() {
   const { user: currentUser } = useAuth();
@@ -25,6 +30,8 @@ export default function EmployeeManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<Employee> | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Employee>>({
@@ -124,6 +131,101 @@ export default function EmployeeManagement() {
     }
   };
 
+  const handleExport = () => {
+      if (!employees.length) {
+          alert("No employee records to export.");
+          return;
+      }
+
+      const exportData = employees.map(emp => ({
+          'Employee ID': emp.empId,
+          'Full Name': emp.fullName,
+          'DOB': emp.dob,
+          'Nationality': emp.nationality,
+          'ID/Passport Number': emp.idNumber,
+          'Phone Number': emp.phoneNumber,
+          'Emergency Contact Name': emp.emergencyContactPerson,
+          'Emergency Relation': emp.emergencyRelation,
+          'Emergency Contact Phone': emp.emergencyContactNumber,
+          'Created At': new Date(emp.createdAt).toLocaleString()
+      }));
+
+      const ws = utils.json_to_sheet(exportData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Employees");
+      writeFile(wb, `OmniPOS_Employee_Registry_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleDownloadTemplate = () => {
+      const templateData = [{
+          'Full Name': 'Ahmed Ali',
+          'DOB': '1990-01-01',
+          'Nationality': 'Maldivian',
+          'ID Number': 'A000000',
+          'Phone Number': '+960 7771234',
+          'Emergency Contact Name': 'Mariyam Ali',
+          'Emergency Relation': 'Mother',
+          'Emergency Contact Phone': '+960 7775678'
+      }];
+
+      const ws = utils.json_to_sheet(templateData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Template");
+      writeFile(wb, "Employee_Import_Template.xlsx");
+  };
+
+  const triggerImport = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files?.length) return;
+      const file = e.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async (event) => {
+          try {
+              const bstr = event.target?.result;
+              const wb = read(bstr, { type: 'binary' });
+              const wsName = wb.SheetNames[0];
+              const ws = wb.Sheets[wsName];
+              const data = utils.sheet_to_json<any>(ws);
+
+              if (!data.length) {
+                  alert("File is empty.");
+                  return;
+              }
+
+              let addedCount = 0;
+              for (const row of data) {
+                  // Map Excel columns to Employee fields
+                  const newEmp: Partial<Employee> = {
+                      fullName: row['Full Name'] || row['Name'],
+                      dob: row['DOB'] || row['Date of Birth'],
+                      nationality: row['Nationality'],
+                      idNumber: row['ID Number'] || row['ID/Passport Number'],
+                      phoneNumber: row['Phone Number'] || row['Contact Number'],
+                      emergencyContactPerson: row['Emergency Contact Name'] || row['Emergency Person'],
+                      emergencyRelation: row['Emergency Relation'],
+                      emergencyContactNumber: row['Emergency Contact Phone'] || row['Emergency Phone']
+                  };
+
+                  if (newEmp.fullName && newEmp.idNumber) {
+                      await db.addEmployee(newEmp);
+                      addedCount++;
+                  }
+              }
+
+              alert(`Successfully imported ${addedCount} employee records.`);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+          } catch (err) {
+              console.error("Import failed:", err);
+              alert("Error parsing file. Ensure it's a valid Excel format.");
+          }
+      };
+      reader.readAsBinaryString(file);
+  };
+
   const filteredEmployees = employees.filter(emp => {
     const term = searchTerm.toLowerCase();
     return (
@@ -147,18 +249,49 @@ export default function EmployeeManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Employee Management</h1>
           <p className="text-gray-500 dark:text-gray-400">Maintain records and emergency contacts for all staff.</p>
         </div>
         
-        <button 
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-bold"
-        >
-          <Plus size={18} /> Add Employee
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
+            title="Download Import Template"
+          >
+            <FileSpreadsheet size={18} /> Template
+          </button>
+          
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
+          >
+            <Download size={18} /> Export
+          </button>
+
+          <button 
+            onClick={triggerImport}
+            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
+          >
+            <Upload size={18} /> Import
+            <input 
+              ref={fileInputRef} 
+              type="file" 
+              accept=".xlsx, .xls, .csv" 
+              className="hidden" 
+              onChange={handleFileChange} 
+            />
+          </button>
+
+          <button 
+            onClick={handleOpenCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-bold text-sm"
+          >
+            <Plus size={18} /> Add Employee
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -281,7 +414,7 @@ export default function EmployeeManagement() {
               </h2>
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
               >
                 <X size={20} className="text-gray-500" />
               </button>
@@ -416,7 +549,7 @@ export default function EmployeeManagement() {
                 disabled={isSaving}
                 className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
               >
-                {isSaving && <Loader2 className="animate-spin" size={16} />}
+                {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
                 {editingEmployee ? 'Update Record' : 'Save Employee'}
               </button>
             </div>
