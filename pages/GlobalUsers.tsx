@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { User, UserRole, Store, Permission, RolePermissionConfig, Employee } from '../types';
-import { Plus, Trash2, Shield, ShieldAlert, UserPlus, Lock, Briefcase, ChefHat, Monitor, UtensilsCrossed, Edit2, Search, CheckSquare, Square, Settings, Check, X, UserCheck, Hash, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Shield, ShieldAlert, UserPlus, Lock, Briefcase, ChefHat, Monitor, UtensilsCrossed, Edit2, Search, CheckSquare, Square, Settings, Check, X, UserCheck, Hash, AlertCircle, Loader2, FileBarChart, History as HistoryIcon, FileText } from 'lucide-react';
 import { useAuth } from '../App';
 
 const ALL_PERMISSIONS: { id: Permission; label: string; category: string }[] = [
@@ -14,6 +15,8 @@ const ALL_PERMISSIONS: { id: Permission; label: string; category: string }[] = [
     { id: 'POS_OPEN_CLOSE_REGISTER', label: 'Open/Close Register', category: 'POS' },
     { id: 'VIEW_KOT', label: 'View Kitchen Display', category: 'Operations' },
     { id: 'PROCESS_KOT', label: 'Process KOT Orders', category: 'Operations' },
+    { id: 'VIEW_HISTORY', label: 'View Sales & Register Logs', category: 'Audit' },
+    { id: 'VIEW_QUOTATIONS', label: 'View Quotation History', category: 'Audit' },
     { id: 'VIEW_REPORTS', label: 'View Reports', category: 'Reports' },
     { id: 'MANAGE_INVENTORY', label: 'Manage Inventory & Menu', category: 'Management' },
     { id: 'MANAGE_CUSTOMERS', label: 'Manage Customers', category: 'Management' },
@@ -257,6 +260,7 @@ export default function GlobalUsers() {
           case UserRole.SUPER_ADMIN: return <ShieldAlert size={20} />;
           case UserRole.ADMIN: return <Shield size={20} />;
           case UserRole.MANAGER: return <Briefcase size={20} />;
+          case UserRole.ACCOUNTANT: return <FileBarChart size={20} />;
           case UserRole.CHEF: return <ChefHat size={20} />;
           case UserRole.WAITER: return <UtensilsCrossed size={20} />;
           default: return <Monitor size={20} />;
@@ -378,7 +382,7 @@ export default function GlobalUsers() {
                               )}
                           </div>
                           <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {['POS', 'Operations', 'Reports', 'Management'].map(category => (
+                              {['POS', 'Operations', 'Audit', 'Reports', 'Management'].map(category => (
                                   <div key={category} className="space-y-2">
                                       <h4 className="text-[10px] font-black text-gray-400 uppercase border-b pb-1 mb-2">{category}</h4>
                                       {ALL_PERMISSIONS.filter(p => p.category === category).map(perm => {
@@ -496,6 +500,7 @@ export default function GlobalUsers() {
                             {(isEditingSuperAdmin || currentUser?.role === UserRole.SUPER_ADMIN) && <option value={UserRole.SUPER_ADMIN}>SUPER ADMINISTRATOR (SYSTEM)</option>}
                             {currentUser?.role === UserRole.SUPER_ADMIN && <option value={UserRole.ADMIN}>ADMINISTRATOR (GLOBAL)</option>}
                             <option value={UserRole.MANAGER}>STORE MANAGER</option>
+                            <option value={UserRole.ACCOUNTANT}>ACCOUNTANT / AUDITOR</option>
                             <option value={UserRole.SUPERVISOR}>SUPERVISOR</option>
                             <option value={UserRole.CASHIER}>CASHIER</option>
                             <option value={UserRole.CHEF}>KITCHEN CHEF</option>

@@ -37,7 +37,12 @@ import {
   UploadCloud,
   ArrowUpRight,
   CloudDownload,
-  Settings
+  Settings,
+  X,
+  Lock,
+  User as UserIcon,
+  Save,
+  Key
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -288,12 +293,172 @@ const SyncIndicator = () => {
     );
 };
 
+const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const { user, login } = useAuth();
+  const [name, setName] = useState(user?.name || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!user) return;
+    if (newPassword && newPassword !== confirmPassword) {
+      setError('New passwords do not match.');
+      return;
+    }
+
+    if (newPassword && !currentPassword) {
+      setError('Please provide current password to update it.');
+      return;
+    }
+
+    if (currentPassword && currentPassword !== user.password) {
+      setError('Invalid current password.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updatedUser = {
+        ...user,
+        name: name,
+        password: newPassword ? newPassword : user.password
+      };
+
+      await db.updateUser(updatedUser);
+      login(updatedUser); // Update local session state
+      setSuccess('Profile updated successfully!');
+      setTimeout(() => {
+        onClose();
+        setSuccess('');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }, 1500);
+    } catch (e: any) {
+      setError('Failed to update profile: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-50 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/30">
+          <h2 className="text-xl font-black dark:text-white flex items-center gap-3">
+            <UserCircle className="text-blue-600" /> User Profile
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+            <X size={20} className="text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
+          {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-red-100"><AlertCircle size={16}/> {error}</div>}
+          {success && <div className="bg-green-50 text-green-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-green-100"><CheckCircle size={16}/> {success}</div>}
+
+          <div className="grid grid-cols-2 gap-4 bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+             <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Username</p>
+                <p className="text-sm font-mono font-bold dark:text-blue-300">@{user?.username}</p>
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">System Role</p>
+                <p className="text-sm font-bold dark:text-white uppercase">{user?.role}</p>
+             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Display Name</label>
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-3 text-gray-400" size={16} />
+              <input 
+                type="text" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" 
+                required
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 border-t dark:border-gray-700 space-y-4">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <Key size={12}/> Security (Update Password)
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Current Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                  <input 
+                    type="password" 
+                    value={currentPassword} 
+                    onChange={(e) => setCurrentPassword(e.target.value)} 
+                    placeholder="Verification needed to change"
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">New Password</label>
+                  <input 
+                    type="password" 
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Confirm New</label>
+                  <input 
+                    type="password" 
+                    value={confirmPassword} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6 border-t dark:border-gray-700">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl transition-all">Cancel</button>
+            <button 
+              type="submit" 
+              disabled={isSaving}
+              className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
-  const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
+  const { user, logout, currentStoreId, switchStore, hasPermission, openProfile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [stores, setStores] = useState<Store[]>([]);
   const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const storeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -317,7 +482,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   const globalMenuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT] },
     { icon: UserSquare, label: 'Employee Management', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
     { icon: ShieldCheck, label: 'User & Access Management', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
@@ -325,9 +490,10 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const getStoreActions = (storeId: string) => [
     { icon: ShoppingCart, label: 'POS', path: '/pos', permission: 'POS_ACCESS' },
     { icon: ChefHat, label: 'Kitchen', path: '/kot', permission: 'VIEW_KOT' },
-    { icon: History, label: 'History', path: '/history' },
-    { icon: FileText, label: 'Quotations', path: '/quotations' },
+    { icon: History, label: 'History', path: '/history', permission: 'VIEW_HISTORY' },
+    { icon: FileText, label: 'Quotations', path: '/quotations', permission: 'VIEW_QUOTATIONS' },
     { icon: BarChart3, label: 'Reports', path: '/reports', permission: 'VIEW_REPORTS' },
+    { icon: UserCircle, label: 'Customers', path: `/store/${storeId}/customers`, permission: 'MANAGE_CUSTOMERS' },
     { icon: MenuIcon, label: 'Menu', path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
     { icon: Users, label: 'Employee Management', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
     { icon: Printer, label: 'Designer', path: `/print-designer/${storeId}`, permission: 'MANAGE_PRINT_DESIGNER' },
@@ -338,6 +504,8 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
+      
       {/* Primary Top Bar */}
       <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
         <div className="flex items-center gap-8">
@@ -409,10 +577,19 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
           </div>
 
           <div className="flex items-center gap-3 pl-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-black dark:text-white leading-tight uppercase">{user?.name}</p>
-              <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
-            </div>
+            <button 
+              onClick={() => setIsProfileModalOpen(true)}
+              className="group flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 p-1.5 pr-3 rounded-2xl transition-all"
+              title="View Profile"
+            >
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                <UserIcon size={18} />
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] font-black dark:text-white leading-tight uppercase group-hover:text-blue-600 transition-colors">{user?.name}</p>
+                <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
+              </div>
+            </button>
             <button onClick={logout} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all border border-transparent hover:border-red-100" title="Logout">
               <LogOut size={18} />
             </button>
@@ -508,7 +685,10 @@ export default function App() {
       return config ? config.permissions.includes(permission) : false;
   };
 
-  const openProfile = () => {};
+  const openProfile = () => {
+    // This is handled via state inside LayoutWrapper for UI reactivity, 
+    // but kept here for context completeness if needed by other pages.
+  };
 
   return (
     <AuthContext.Provider value={{ user, currentStoreId, login, logout, switchStore, hasPermission, openProfile }}>
@@ -517,7 +697,7 @@ export default function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/" element={user ? (
               <LayoutWrapper>
-                  {user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER ? (
+                  {user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER || user.role === UserRole.ACCOUNTANT ? (
                     <Navigate to="/dashboard" />
                   ) : (
                     <Navigate to="/pos" />

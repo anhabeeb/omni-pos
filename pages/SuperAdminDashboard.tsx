@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { Store, UserRole, Order, OrderStatus, ActiveSession } from '../types';
@@ -100,11 +101,19 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const isSuperOrAdmin = [UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(user?.role as UserRole);
+
   const handleDeleteStore = async (e: React.FormEvent) => {
       e.preventDefault();
       setDeleteError('');
 
       if (!user || !storeToDelete || isSaving) return;
+
+      // Double check permission inside handler
+      if (!isSuperOrAdmin) {
+          setDeleteError('Permission Denied: Only Administrators can delete stores.');
+          return;
+      }
 
       if (confirmPassword === user.password) {
           setIsSaving(true);
@@ -215,9 +224,7 @@ export default function SuperAdminDashboard() {
   };
 
   const hasAccess = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER].includes(user?.role as UserRole);
-  const isSuperOrAdmin = [UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(user?.role as UserRole);
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
-
+  
   if (!hasAccess) {
     return <div className="text-gray-800 dark:text-gray-200">Access Denied</div>;
   }
@@ -333,7 +340,7 @@ export default function SuperAdminDashboard() {
                                     <Edit size={16} /> Edit Details
                                 </button>
                             )}
-                            {isSuperAdmin && (
+                            {isSuperOrAdmin && (
                                 <button 
                                     onClick={() => openDeleteModal(store)}
                                     className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 hover:text-white hover:bg-red-600 dark:hover:bg-red-600 px-3 py-1.5 rounded-lg transition-all font-bold"

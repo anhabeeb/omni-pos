@@ -3,6 +3,7 @@ export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER',
+  ACCOUNTANT = 'ACCOUNTANT',
   SUPERVISOR = 'SUPERVISOR',
   CASHIER = 'CASHIER',
   CHEF = 'CHEF',
@@ -25,6 +26,8 @@ export type Permission =
   | 'VIEW_KOT'
   | 'PROCESS_KOT'
   | 'MANAGE_INVENTORY'
+  | 'VIEW_HISTORY'
+  | 'VIEW_QUOTATIONS'
   | 'VIEW_LIVE_ACTIVITY'; 
 
 export interface RolePermissionConfig {

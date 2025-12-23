@@ -447,12 +447,15 @@ export const db = {
         // 1. Setup default local data structure
         const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
-            const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
-                role,
-                permissions: role === UserRole.SUPER_ADMIN ? [] : []
-            }));
-            const cashier = defaultPerms.find(p => p.role === UserRole.CASHIER);
-            if (cashier) cashier.permissions = ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER'];
+            const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => {
+                let permissions: Permission[] = [];
+                if (role === UserRole.CASHIER) {
+                    permissions = ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER'];
+                } else if (role === UserRole.ACCOUNTANT) {
+                    permissions = ['VIEW_HISTORY', 'VIEW_QUOTATIONS', 'MANAGE_CUSTOMERS', 'VIEW_REPORTS'];
+                }
+                return { role, permissions };
+            });
             setItem('global_permissions', defaultPerms);
         }
 
