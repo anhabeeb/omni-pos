@@ -318,8 +318,8 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   const globalMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
-    { icon: UserSquare, label: 'Staff', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { icon: ShieldCheck, label: 'Access', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: UserSquare, label: 'Employee Management', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: ShieldCheck, label: 'User & Access Management', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
 
   const getStoreActions = (storeId: string) => [
@@ -328,10 +328,8 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
     { icon: History, label: 'History', path: '/history' },
     { icon: FileText, label: 'Quotations', path: '/quotations' },
     { icon: BarChart3, label: 'Reports', path: '/reports', permission: 'VIEW_REPORTS' },
-    // Fix: replaced incorrectly closed template literals with proper closing backticks
     { icon: MenuIcon, label: 'Menu', path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
-    // Fix: replaced incorrectly closed template literals with proper closing backticks
-    { icon: Users, label: 'Staff', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
+    { icon: Users, label: 'Employee Management', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
     { icon: Printer, label: 'Designer', path: `/print-designer/${storeId}`, permission: 'MANAGE_PRINT_DESIGNER' },
   ];
 
@@ -353,7 +351,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-bold ${location.pathname === item.path ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-bold whitespace-nowrap ${location.pathname === item.path ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
               >
                 <item.icon size={16} />
                 <span>{item.label}</span>
