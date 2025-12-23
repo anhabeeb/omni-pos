@@ -63,7 +63,8 @@ export default {
               "CREATE TABLE IF NOT EXISTS `orders` (id TEXT PRIMARY KEY, orderNumber TEXT, storeId TEXT, shiftId TEXT, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy TEXT, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
               "CREATE TABLE IF NOT EXISTS `quotations` (id TEXT PRIMARY KEY, quotationNumber TEXT, storeId TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy TEXT, createdAt INTEGER)",
               "CREATE TABLE IF NOT EXISTS `shifts` (id TEXT PRIMARY KEY, shiftNumber INTEGER, storeId TEXT, openedBy TEXT, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy TEXT, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
-              "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)"
+              "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
+              "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)"
             ];
             for (const q of schema) await DB.prepare(q).run();
             return jsonResponse({ success: true });
@@ -100,8 +101,6 @@ export default {
     }
 
     // Fallback: Return a 404 to let Cloudflare Assets handle static file requests
-    // When using standard Workers with the 'assets' config, this ensures that 
-    // paths not matching the API route correctly load the frontend.
     return new Response(null, { status: 404 });
   }
 };

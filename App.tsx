@@ -33,7 +33,8 @@ import {
   Terminal,
   Activity,
   Unplug,
-  ShieldCheck
+  ShieldCheck,
+  UploadCloud
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -70,6 +71,7 @@ const SyncIndicator = () => {
     const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean, trace?: string} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
+    const [isBootstrapping, setIsBootstrapping] = useState(false);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -109,6 +111,17 @@ const SyncIndicator = () => {
             alert("Connection error during repair: " + e.message);
         } finally {
             setIsRepairing(false);
+        }
+    };
+
+    const handleBootstrap = async () => {
+        if (!confirm("This will queue ALL your existing local data for upload. It will not delete anything local. Proceed?")) return;
+        setIsBootstrapping(true);
+        try {
+            await db.syncAllLocalToCloud();
+            alert("Bootstrap complete! Your local records have been queued for upload.");
+        } finally {
+            setIsBootstrapping(false);
         }
     };
 
@@ -203,6 +216,17 @@ const SyncIndicator = () => {
                         </div>
                     ) : (
                         <>
+                            {status.status === 'CONNECTED' && (
+                                <button 
+                                    onClick={handleBootstrap}
+                                    disabled={isBootstrapping}
+                                    className="w-full flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] font-black uppercase rounded-lg border border-blue-100 dark:border-blue-800 hover:bg-blue-100 transition-all"
+                                >
+                                    {isBootstrapping ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
+                                    Push Local Data to Cloud
+                                </button>
+                            )}
+
                             {status.status === 'MOCKED' && (
                                 <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
                                     <div className="flex items-center gap-2 mb-1 text-red-600">
@@ -210,9 +234,8 @@ const SyncIndicator = () => {
                                         <p className="text-[11px] font-black uppercase">Backend Configuration Issue</p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
-                                        Your server is returning a default response. This usually means the <span className="font-mono">/api</span> route is not correctly mapped to your Functions.
+                                        Your server is returning a default response. This usually means the <span className="font-mono">/api</span> route is not correctly mapped.
                                     </p>
-                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Ensure wrangler.toml is correct and D1 is bound.</p>
                                 </div>
                             )}
 
@@ -220,14 +243,14 @@ const SyncIndicator = () => {
                                 <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
                                     <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
-                                    {status.error.includes("schema") && (
+                                    {status.error.includes("no such table") && (
                                         <button 
                                             onClick={handleRepairSchema}
                                             disabled={isRepairing}
                                             className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors"
                                         >
                                             {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
-                                            Initialize Tables
+                                            Initialize Cloud Tables
                                         </button>
                                     )}
                                 </div>
@@ -243,12 +266,6 @@ const SyncIndicator = () => {
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
                                     
-                                    {diagResult.trace && (
-                                        <div className="mt-1 flex items-center gap-1.5 text-[9px] text-gray-400 font-mono italic">
-                                            <Activity size={10} /> {diagResult.trace}
-                                        </div>
-                                    )}
-
                                     {!diagResult.success && diagResult.message.includes("no such table") && (
                                         <button 
                                             onClick={handleRepairSchema}
@@ -256,15 +273,8 @@ const SyncIndicator = () => {
                                             className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded hover:bg-blue-700 transition-colors"
                                         >
                                             {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
-                                            Repair Schema
+                                            Repair Cloud Schema
                                         </button>
-                                    )}
-
-                                    {diagResult.hint && (
-                                        <div className="mt-2 pt-2 border-t border-black/5">
-                                            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold italic uppercase mb-1">Setup Steps:</p>
-                                            <p className="text-[10px] text-blue-500/80 dark:text-blue-300 font-medium">{diagResult.hint}</p>
-                                        </div>
                                     )}
                                 </div>
                             )}

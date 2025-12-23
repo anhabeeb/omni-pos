@@ -1,8 +1,9 @@
+
 import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem } from '../types';
 
 const CLOUDFLARE_CONFIG = {
-    DB_NAME: 'omni-pos',
-    DB_ID: 'a50fddea-e22f-419c-afb8-6c40464e4a6a',
+    DB_NAME: 'pos',
+    DB_ID: '5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f',
     SYNC_ENDPOINT: '/api/sync' 
 };
 
@@ -62,23 +63,21 @@ const broadcastSyncUpdate = () => {
 };
 
 const handleSyncResponse = async (response: Response) => {
-    const isVerified = response.headers.get('X-OmniPOS-System') === 'verified';
+    const verification = response.headers.get('X-OmniPOS-Verification');
     const text = await response.text();
 
-    if (!isVerified) {
-        if (text.includes("Hello world")) {
+    if (verification !== 'authorized') {
+        if (text.toLowerCase().includes("hello world")) {
             currentSyncStatus = 'MOCKED';
-            throw new Error("Default Cloudflare 'Hello World' detected. Your API function is being bypassed.");
+            throw new Error("Cloudflare 'Hello World' Worker detected. Your API is being intercepted.");
         }
-        if (text.trim().startsWith("<")) {
-            throw new Error("Received HTML instead of JSON. The request likely hit a 404 page or index.html.");
-        }
+        throw new Error("Backend mismatch: API route returned unexpected content.");
     }
 
     try {
         return JSON.parse(text);
     } catch (e) {
-        throw new Error(`Invalid JSON Response (HTTP ${response.status}): ${text.substring(0, 50)}...`);
+        throw new Error(`Invalid Backend Response: ${text.substring(0, 50)}...`);
     }
 };
 
@@ -131,7 +130,7 @@ const processSyncQueue = async () => {
 
             if (response.status === 404) {
                 isBackendMissing = true;
-                throw new Error("Backend API route (/api/sync) is missing. Check deployment.");
+                throw new Error("Backend API route (/api/sync) is missing.");
             }
 
             const result = await handleSyncResponse(response);
@@ -148,7 +147,7 @@ const processSyncQueue = async () => {
         } catch (e: any) {
             console.error('Sync process interrupted:', e);
             lastSyncError = e.message;
-            currentSyncStatus = e.message.includes('Hello World') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
+            currentSyncStatus = e.message.includes('intercepted') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
             isDatabaseReachable = false; 
             broadcastSyncUpdate();
             break; 
@@ -193,7 +192,7 @@ export const db = {
         } catch (e: any) {
             isDatabaseReachable = false;
             lastSyncError = e.message;
-            currentSyncStatus = e.message.includes('Hello World') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
+            currentSyncStatus = e.message.includes('intercepted') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
             broadcastSyncUpdate();
             return false;
         }
@@ -221,29 +220,70 @@ export const db = {
                 body: JSON.stringify({ action: 'WRITE_TEST' })
             });
 
-            const trace = response.headers.get('X-OmniPOS-Trace') || 'No trace (Interpreted response)';
-            const isVerified = response.headers.get('X-OmniPOS-System') === 'verified';
+            const verification = response.headers.get('X-OmniPOS-Verification');
 
             if (response.status === 404) {
                 return { 
                     success: false, 
                     message: "API route /api/sync returned 404.", 
-                    hint: "Ensure 'functions/api/sync.ts' exists and Wrangler is running with --d1 DB.",
-                    is404: true,
-                    trace
+                    hint: "Rename 'wrangler-config.txt' to 'wrangler.toml' and ensure your D1 database is bound to the name 'DB'.",
+                    is404: true
+                };
+            }
+
+            if (verification !== 'authorized') {
+                return {
+                    success: false,
+                    message: "Generic Cloudflare response detected.",
+                    hint: "A standalone Worker is likely bound to your domain. Check Cloudflare Dashboard."
                 };
             }
 
             const result = await handleSyncResponse(response);
-            if (result.success) return { success: true, message: result.message, trace };
-            return { success: false, message: result.error, hint: result.hint, trace };
+            if (result.success) return { success: true, message: result.message };
+            return { success: false, message: result.error, hint: result.hint };
         } catch (e: any) {
             return { 
                 success: false, 
                 message: e.message,
-                hint: e.message.includes("Hello World") ? "A default Cloudflare Worker is blocking our API. Delete any stand-alone workers or check your Pages Functions config." : undefined
+                hint: "Check your internet connection."
             };
         }
+    },
+
+    syncAllLocalToCloud: async () => {
+        const stores = await db.getStores();
+        const users = await db.getUsers();
+        const emps = await db.getEmployees();
+        const perms = await db.getRolePermissions();
+
+        // Push Global Data
+        users.forEach(u => addToSyncQueue('INSERT', 'users', u));
+        stores.forEach(s => addToSyncQueue('INSERT', 'stores', s));
+        emps.forEach(e => addToSyncQueue('INSERT', 'employees', e));
+        perms.forEach(p => addToSyncQueue('UPDATE', 'global_permissions', p));
+
+        // Push Store-Specific Data
+        for (const store of stores) {
+            const prods = await db.getProducts(store.id);
+            const cats = await db.getCategories(store.id);
+            const custs = await db.getCustomers(store.id);
+            const inv = await db.getInventory(store.id);
+            const orders = await db.getOrders(store.id);
+            const quotes = await db.getQuotations(store.id);
+            const shifts = await db.getRegisterShifts(store.id);
+
+            prods.forEach(p => addToSyncQueue('INSERT', 'products', p));
+            cats.forEach(c => addToSyncQueue('INSERT', 'categories', c));
+            custs.forEach(c => addToSyncQueue('INSERT', 'customers', c));
+            inv.forEach(i => addToSyncQueue('INSERT', 'inventory', i));
+            orders.forEach(o => addToSyncQueue('INSERT', 'orders', o));
+            quotes.forEach(q => addToSyncQueue('INSERT', 'quotations', q));
+            shifts.forEach(s => addToSyncQueue('INSERT', 'shifts', s));
+        }
+
+        processSyncQueue();
+        return true;
     },
 
     init: async () => {
@@ -285,7 +325,6 @@ export const db = {
         isBackendMissing
     }),
 
-    // --- Standard Methods ---
     getUsers: async () => getItem<User[]>('global_users', []),
     addUser: async (u: User) => {
         const users = await db.getUsers();
@@ -326,7 +365,7 @@ export const db = {
     updateRolePermissions: async (config: RolePermissionConfig) => {
         const configs = await db.getRolePermissions();
         setItem('global_permissions', configs.map(c => c.role === config.role ? config : c));
-        addToSyncQueue('UPDATE', 'permissions', config);
+        addToSyncQueue('UPDATE', 'global_permissions', config);
     },
     getEmployees: async () => getItem<Employee[]>('global_employees', []),
     addEmployee: async (data: Partial<Employee>) => {
@@ -493,22 +532,18 @@ export const db = {
         const shift = shifts[shiftIdx];
         const orders = await db.getOrders(storeId);
         const shiftOrders = orders.filter(o => o.shiftId === shiftId);
-        let totalCashSales = 0; let totalCashRefunds = 0;
+        let totalCashSales = 0;
+        let totalCashRefunds = 0;
         shiftOrders.forEach(o => {
-            o.transactions?.forEach(t => {
-                if (t.method === 'CASH') {
-                    if (t.type === 'PAYMENT') totalCashSales += t.amount;
-                    if (t.type === 'REVERSAL') totalCashRefunds += t.amount;
-                }
-            });
+            if (o.paymentMethod === 'CASH') {
+                if (o.status === OrderStatus.COMPLETED) totalCashSales += o.total;
+                if (o.status === OrderStatus.RETURNED) totalCashRefunds += o.total;
+            }
         });
         const expectedCash = shift.startingCash + totalCashSales - totalCashRefunds;
-        const difference = actualCash - expectedCash;
-        const heldCount = shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD).length;
-        const updatedShift: RegisterShift = { ...shift, status: 'CLOSED', closedAt: Date.now(), actualCash, expectedCash, difference, notes, closingDenominations: denominations, totalCashSales, totalCashRefunds, heldOrdersCount: heldCount };
-        shifts[shiftIdx] = updatedShift;
-        setItem(`store_${storeId}_shifts`, shifts);
-        addToSyncQueue('UPDATE', 'shifts', updatedShift);
+        const closedShift: RegisterShift = { ...shift, status: 'CLOSED', closedAt: Date.now(), actualCash, expectedCash, difference: actualCash - expectedCash, totalCashSales, totalCashRefunds, heldOrdersCount: shiftOrders.filter(o => o.status === OrderStatus.ON_HOLD).length, notes, closingDenominations: denominations };
+        setItem(`store_${storeId}_shifts`, shifts.map(s => s.id === shiftId ? closedShift : s));
+        addToSyncQueue('UPDATE', 'shifts', closedShift);
         return true;
     }
 };
