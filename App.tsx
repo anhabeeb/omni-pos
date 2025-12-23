@@ -38,7 +38,9 @@ import {
   Globe,
   Settings2,
   Database,
-  Terminal
+  Terminal,
+  Activity,
+  Unplug
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -72,7 +74,7 @@ export const useAuth = () => useContext(AuthContext);
 
 const SyncIndicator = () => {
     const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean }>(db.getSyncStatus());
-    const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean} | null>(null);
+    const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean, trace?: string} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
 
@@ -151,6 +153,12 @@ const SyncIndicator = () => {
                 bg: 'bg-purple-50 dark:bg-purple-900/10',
                 spin: true 
             };
+            case 'MOCKED': return { 
+                icon: Unplug, 
+                text: 'Placeholder API', 
+                color: 'text-red-600', 
+                bg: 'bg-red-50 dark:bg-red-900/20' 
+            };
             case 'OFFLINE': return { 
                 icon: CloudOff, 
                 text: status.pendingCount > 0 ? `${status.pendingCount} Unsynced` : 'Offline Mode', 
@@ -202,7 +210,20 @@ const SyncIndicator = () => {
                         </div>
                     ) : (
                         <>
-                            {status.error && (
+                            {status.status === 'MOCKED' && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
+                                    <div className="flex items-center gap-2 mb-1 text-red-600">
+                                        <AlertCircle size={16}/>
+                                        <p className="text-[11px] font-black uppercase">Infrastructure Issue</p>
+                                    </div>
+                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
+                                        Your backend returned <span className="font-mono font-bold">"Hello world"</span>. This means you have a default Cloudflare worker intercepting the <span className="font-mono">/api</span> route. 
+                                    </p>
+                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Check: Functions > Settings in Cloudflare Pages dashboard.</p>
+                                </div>
+                            )}
+
+                            {status.error && status.status !== 'MOCKED' && (
                                 <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
                                     <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
@@ -229,6 +250,12 @@ const SyncIndicator = () => {
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
                                     
+                                    {diagResult.trace && (
+                                        <div className="mt-1 flex items-center gap-1.5 text-[9px] text-gray-400 font-mono italic">
+                                            <Activity size={10} /> {diagResult.trace}
+                                        </div>
+                                    )}
+
                                     {!diagResult.success && diagResult.message.includes("no such table") && (
                                         <button 
                                             onClick={handleRepairSchema}
@@ -273,10 +300,7 @@ const SyncIndicator = () => {
     );
 };
 
-// ... LayoutWrapper and App components remain exactly as they were ...
-/**
- * LayoutWrapper provides the sidebar and top navigation for authenticated users.
- */
+// ... Remaining LayoutWrapper and App code is unchanged ...
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
   const location = useLocation();

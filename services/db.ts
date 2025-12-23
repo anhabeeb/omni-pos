@@ -36,7 +36,7 @@ interface SyncTask {
     attempts: number;
 }
 
-export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING' | 'DISABLED';
+export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING' | 'DISABLED' | 'MOCKED';
 let currentSyncStatus: SyncStatus = 'CONNECTED';
 let lastSyncError: string | null = null;
 let isDatabaseReachable = false;
@@ -59,6 +59,27 @@ const broadcastSyncUpdate = () => {
             isBackendMissing
         } 
     }));
+};
+
+const handleSyncResponse = async (response: Response) => {
+    const isVerified = response.headers.get('X-OmniPOS-System') === 'verified';
+    const text = await response.text();
+
+    if (!isVerified) {
+        if (text.includes("Hello world")) {
+            currentSyncStatus = 'MOCKED';
+            throw new Error("Default Cloudflare 'Hello World' detected. Your API function is being bypassed.");
+        }
+        if (text.trim().startsWith("<")) {
+            throw new Error("Received HTML instead of JSON. The request likely hit a 404 page or index.html.");
+        }
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error(`Invalid JSON Response (HTTP ${response.status}): ${text.substring(0, 50)}...`);
+    }
 };
 
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
@@ -96,13 +117,6 @@ const processSyncQueue = async () => {
     }
 
     let queue = getSyncQueue();
-    if (queue.length === 0) {
-        currentSyncStatus = 'CONNECTED';
-        broadcastSyncUpdate();
-        isProcessingSync = false;
-        return;
-    }
-
     while (queue.length > 0) {
         const task = queue[0];
         try {
@@ -117,16 +131,10 @@ const processSyncQueue = async () => {
 
             if (response.status === 404) {
                 isBackendMissing = true;
-                throw new Error("Backend API route (/api/sync) is missing. Sync disabled.");
+                throw new Error("Backend API route (/api/sync) is missing. Check deployment.");
             }
 
-            const text = await response.text();
-            let result;
-            try {
-                result = JSON.parse(text);
-            } catch (e) {
-                throw new Error(`Invalid JSON from server (HTTP ${response.status})`);
-            }
+            const result = await handleSyncResponse(response);
 
             if (!response.ok || result.success === false) {
                 throw new Error(result.error || `Server Error ${response.status}`);
@@ -140,7 +148,7 @@ const processSyncQueue = async () => {
         } catch (e: any) {
             console.error('Sync process interrupted:', e);
             lastSyncError = e.message;
-            currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
+            currentSyncStatus = e.message.includes('Hello World') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
             isDatabaseReachable = false; 
             broadcastSyncUpdate();
             break; 
@@ -171,13 +179,7 @@ export const db = {
                 throw new Error("Sync endpoint not found (404).");
             }
 
-            const text = await response.text();
-            let result;
-            try {
-                result = JSON.parse(text);
-            } catch (e) {
-                throw new Error(`Server returned non-JSON (HTTP ${response.status})`);
-            }
+            const result = await handleSyncResponse(response);
 
             if (result.success) {
                 isDatabaseReachable = true;
@@ -191,7 +193,7 @@ export const db = {
         } catch (e: any) {
             isDatabaseReachable = false;
             lastSyncError = e.message;
-            currentSyncStatus = navigator.onLine ? 'ERROR' : 'OFFLINE';
+            currentSyncStatus = e.message.includes('Hello World') ? 'MOCKED' : (navigator.onLine ? 'ERROR' : 'OFFLINE');
             broadcastSyncUpdate();
             return false;
         }
@@ -211,7 +213,7 @@ export const db = {
 
     isSyncEnabled: () => getItem<boolean>('sync_enabled', true),
 
-    verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string, is404?: boolean}> => {
+    verifyWriteAccess: async (): Promise<{success: boolean, message: string, hint?: string, is404?: boolean, trace?: string}> => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
@@ -219,20 +221,28 @@ export const db = {
                 body: JSON.stringify({ action: 'WRITE_TEST' })
             });
 
+            const trace = response.headers.get('X-OmniPOS-Trace') || 'No trace (Interpreted response)';
+            const isVerified = response.headers.get('X-OmniPOS-System') === 'verified';
+
             if (response.status === 404) {
                 return { 
                     success: false, 
                     message: "API route /api/sync returned 404.", 
-                    hint: "Ensure 'functions/api/sync.ts' exists and the server is running with Cloudflare support (e.g. wrangler pages dev).",
-                    is404: true
+                    hint: "Ensure 'functions/api/sync.ts' exists and Wrangler is running with --d1 DB.",
+                    is404: true,
+                    trace
                 };
             }
 
-            const result = await response.json();
-            if (result.success) return { success: true, message: result.message };
-            return { success: false, message: result.error, hint: result.hint };
+            const result = await handleSyncResponse(response);
+            if (result.success) return { success: true, message: result.message, trace };
+            return { success: false, message: result.error, hint: result.hint, trace };
         } catch (e: any) {
-            return { success: false, message: e.message };
+            return { 
+                success: false, 
+                message: e.message,
+                hint: e.message.includes("Hello World") ? "A default Cloudflare Worker is blocking our API. Delete any stand-alone workers or check your Pages Functions config." : undefined
+            };
         }
     },
 
@@ -275,7 +285,7 @@ export const db = {
         isBackendMissing
     }),
 
-    // --- Standard DB Methods ---
+    // --- Standard Methods ---
     getUsers: async () => getItem<User[]>('global_users', []),
     addUser: async (u: User) => {
         const users = await db.getUsers();

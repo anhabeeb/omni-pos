@@ -3,58 +3,76 @@
  */
 
 interface Env {
-  DB: any;
+  DB?: any;
+  db?: any;
 }
 
 const jsonResponse = (data: any, status = 200) => {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-OmniPOS-System': 'verified',
+      'X-OmniPOS-Trace': 'sync-function-hit-' + Date.now(),
+      'Access-Control-Allow-Origin': '*'
+    }
   });
 };
 
 export const onRequestPost = async (context: { env: Env; request: Request }): Promise<Response> => {
   try {
-    const { DB } = context.env;
+    // 1. Resolve Binding (Handle case-sensitivity: DB vs db)
+    const DB = context.env.DB || context.env.db;
 
-    // 1. Verify Database Binding
     if (!DB) {
+      const keys = Object.keys(context.env);
       return jsonResponse({ 
         success: false,
-        error: 'The D1 Database binding "DB" is not connected to this project.',
-        hint: 'Go to Cloudflare Pages > Settings > Functions > D1 Database Bindings and add "DB".',
-        code: 'MISSING_BINDING'
+        error: 'Database binding not found.',
+        hint: `Available env keys: ${keys.join(', ')}. Please ensure you have a D1 binding named "DB" or "db" in your Cloudflare Dashboard.`,
+        code: 'MISSING_BINDING',
+        debug_keys: keys
       }, 500);
     }
     
     // 2. Parse Payload
     let payload: any;
     try {
-      payload = await context.request.json();
+      const text = await context.request.text();
+      payload = JSON.parse(text);
     } catch (e) {
-      return jsonResponse({ success: false, error: 'Malformed JSON request body' }, 400);
+      return jsonResponse({ 
+        success: false, 
+        error: 'Malformed JSON request body',
+        details: 'The server expected JSON but received something else.' 
+      }, 400);
     }
 
     const { action, table, data } = payload;
 
-    // 3. Handle PING (Connection Test)
+    // 3. Handle PING
     if (action === 'PING') {
       try {
         await DB.prepare('SELECT 1').run();
-        return jsonResponse({ success: true, message: 'pong', timestamp: Date.now() });
+        return jsonResponse({ 
+            success: true, 
+            message: 'pong', 
+            binding_used: context.env.DB ? 'DB' : 'db',
+            system: 'OmniPOS v1.0'
+        });
       } catch (e: any) {
           if (e.message.includes("no such table")) {
               return jsonResponse({ 
                   success: false, 
                   error: 'Binding exists, but schema is not initialized.',
                   code: 'SCHEMA_MISSING' 
-              }, 200); // Return 200 so UI can handle the setup
+              }, 200);
           }
         return jsonResponse({ success: false, error: `DB Query Failed: ${e.message}` }, 500);
       }
     }
 
-    // 4. Handle INIT_SCHEMA (Provisioning)
+    // 4. Handle INIT_SCHEMA
     if (action === 'INIT_SCHEMA') {
         try {
             const schema = [
@@ -79,7 +97,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         }
     }
 
-    // 5. Handle WRITE_TEST (Diagnostic)
+    // 5. Handle WRITE_TEST
     if (action === 'WRITE_TEST') {
       try {
         const testId = `diag_${Date.now()}`;
@@ -87,7 +105,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
           .bind(testId, "Diagnostic Store", 0)
           .run();
         await DB.prepare("DELETE FROM `stores` WHERE id = ?").bind(testId).run();
-        return jsonResponse({ success: true, message: 'Database is writable.' });
+        return jsonResponse({ success: true, message: 'Database is writable.', binding: context.env.DB ? 'DB' : 'db' });
       } catch (e: any) {
           let hint = "Check if tables are created.";
           if (e.message.includes("no such table")) hint = "The 'stores' table is missing. Use the 'Repair Schema' button.";
