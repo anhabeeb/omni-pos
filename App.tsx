@@ -37,7 +37,8 @@ import {
   Wrench,
   Globe,
   Settings2,
-  Database
+  Database,
+  Terminal
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -73,6 +74,7 @@ const SyncIndicator = () => {
     const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean }>(db.getSyncStatus());
     const [diagResult, setDiagResult] = useState<{success: boolean, message: string, hint?: string, is404?: boolean} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
+    const [isRepairing, setIsRepairing] = useState(false);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -90,6 +92,28 @@ const SyncIndicator = () => {
             setDiagResult(res);
         } finally {
             setIsTesting(false);
+        }
+    };
+
+    const handleRepairSchema = async () => {
+        setIsRepairing(true);
+        try {
+            const response = await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'INIT_SCHEMA' })
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert("Database schema initialized! Please refresh the page.");
+                window.location.reload();
+            } else {
+                alert("Repair failed: " + result.error);
+            }
+        } catch (e: any) {
+            alert("Connection error during repair: " + e.message);
+        } finally {
+            setIsRepairing(false);
         }
     };
 
@@ -182,6 +206,16 @@ const SyncIndicator = () => {
                                 <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
                                     <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status Report:</p>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
+                                    {status.error.includes("schema") && (
+                                        <button 
+                                            onClick={handleRepairSchema}
+                                            disabled={isRepairing}
+                                            className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors"
+                                        >
+                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
+                                            Initialize Tables
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
@@ -194,6 +228,18 @@ const SyncIndicator = () => {
                                         </p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
+                                    
+                                    {!diagResult.success && diagResult.message.includes("no such table") && (
+                                        <button 
+                                            onClick={handleRepairSchema}
+                                            disabled={isRepairing}
+                                            className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded hover:bg-blue-700 transition-colors"
+                                        >
+                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
+                                            Repair Schema
+                                        </button>
+                                    )}
+
                                     {diagResult.hint && (
                                         <div className="mt-2 pt-2 border-t border-black/5">
                                             <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold italic uppercase mb-1">Setup Steps:</p>
@@ -227,7 +273,10 @@ const SyncIndicator = () => {
     );
 };
 
-// LayoutWrapper providing sidebar and top navigation
+// ... LayoutWrapper and App components remain exactly as they were ...
+/**
+ * LayoutWrapper provides the sidebar and top navigation for authenticated users.
+ */
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, currentStoreId, switchStore, hasPermission } = useAuth();
   const location = useLocation();

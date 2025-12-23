@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:functions": "wrangler pages dev ./dist --compatibility-date=2024-04-01 --d1 DB",
+    "dev:all": "wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
