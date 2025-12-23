@@ -30,9 +30,10 @@ const setItem = <T>(key: string, value: T): void => {
 
 interface SyncTask {
     id: string;
-    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST';
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST' | 'GET_EXISTING_IDS';
     table?: string;
     data?: any;
+    storeId?: string;
     timestamp: number;
     attempts: number;
 }
@@ -92,6 +93,23 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
         attempts: 0
     };
     saveSyncQueue([...queue, task]);
+    
+    if (getItem<boolean>('sync_enabled', true)) {
+        processSyncQueue();
+    }
+};
+
+const batchAddTasksToSyncQueue = (tasks: { action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any }[]) => {
+    const currentQueue = getSyncQueue();
+    const newTasks: SyncTask[] = tasks.map(t => ({
+        id: uuid(),
+        action: t.action,
+        table: t.table,
+        data: t.data,
+        timestamp: Date.now(),
+        attempts: 0
+    }));
+    saveSyncQueue([...currentQueue, ...newTasks]);
     
     if (getItem<boolean>('sync_enabled', true)) {
         processSyncQueue();
@@ -226,7 +244,7 @@ export const db = {
                 return { 
                     success: false, 
                     message: "API route /api/sync returned 404.", 
-                    hint: "Rename 'wrangler-config.txt' to 'wrangler.toml' and ensure your D1 database is bound to the name 'DB'.",
+                    hint: "Ensure your worker is correctly deployed.",
                     is404: true
                 };
             }
@@ -235,7 +253,7 @@ export const db = {
                 return {
                     success: false,
                     message: "Generic Cloudflare response detected.",
-                    hint: "A standalone Worker is likely bound to your domain. Check Cloudflare Dashboard."
+                    hint: "Verify worker deployment."
                 };
             }
 
@@ -243,46 +261,101 @@ export const db = {
             if (result.success) return { success: true, message: result.message };
             return { success: false, message: result.error, hint: result.hint };
         } catch (e: any) {
-            return { 
-                success: false, 
-                message: e.message,
-                hint: "Check your internet connection."
-            };
+            return { success: false, message: e.message, hint: "Check internet connection." };
+        }
+    },
+
+    getServerIds: async (table: string, storeId?: string): Promise<{ids: string[], orderNumbers?: string[]}> => {
+        try {
+            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'GET_EXISTING_IDS', table, storeId })
+            });
+            const result = await handleSyncResponse(response);
+            return { ids: result.ids || [], orderNumbers: result.orderNumbers || [] };
+        } catch (e) {
+            console.error(`Failed to fetch server IDs for ${table}`, e);
+            return { ids: [] };
         }
     },
 
     syncAllLocalToCloud: async () => {
+        const tasks: { action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any }[] = [];
+        
         const stores = await db.getStores();
         const users = await db.getUsers();
         const emps = await db.getEmployees();
         const perms = await db.getRolePermissions();
 
-        // Push Global Data
-        users.forEach(u => addToSyncQueue('INSERT', 'users', u));
-        stores.forEach(s => addToSyncQueue('INSERT', 'stores', s));
-        emps.forEach(e => addToSyncQueue('INSERT', 'employees', e));
-        perms.forEach(p => addToSyncQueue('UPDATE', 'global_permissions', p));
+        // Push Global Data (Using Replace logic by default)
+        users.forEach(u => tasks.push({ action: 'INSERT', table: 'users', data: u }));
+        stores.forEach(s => tasks.push({ action: 'INSERT', table: 'stores', data: s }));
+        emps.forEach(e => tasks.push({ action: 'INSERT', table: 'employees', data: e }));
+        perms.forEach(p => tasks.push({ action: 'UPDATE', table: 'global_permissions', data: p }));
 
-        // Push Store-Specific Data
+        // Push Store-Specific Data with Conflict Resolution
         for (const store of stores) {
-            const prods = await db.getProducts(store.id);
-            const cats = await db.getCategories(store.id);
-            const custs = await db.getCustomers(store.id);
-            const inv = await db.getInventory(store.id);
-            const orders = await db.getOrders(store.id);
-            const quotes = await db.getQuotations(store.id);
-            const shifts = await db.getRegisterShifts(store.id);
+            const [prods, cats, custs, inv, orders, quotes, shifts] = await Promise.all([
+                db.getProducts(store.id),
+                db.getCategories(store.id),
+                db.getCustomers(store.id),
+                db.getInventory(store.id),
+                db.getOrders(store.id),
+                db.getQuotations(store.id),
+                db.getRegisterShifts(store.id)
+            ]);
 
-            prods.forEach(p => addToSyncQueue('INSERT', 'products', p));
-            cats.forEach(c => addToSyncQueue('INSERT', 'categories', c));
-            custs.forEach(c => addToSyncQueue('INSERT', 'customers', c));
-            inv.forEach(i => addToSyncQueue('INSERT', 'inventory', i));
-            orders.forEach(o => addToSyncQueue('INSERT', 'orders', o));
-            quotes.forEach(q => addToSyncQueue('INSERT', 'quotations', q));
-            shifts.forEach(s => addToSyncQueue('INSERT', 'shifts', s));
+            // Fetch current state from server to avoid duplicates / sequential collisions
+            const serverState = await db.getServerIds('orders', store.id);
+            const serverOrderNumbers = new Set(serverState.orderNumbers || []);
+            const serverIds = new Set(serverState.ids || []);
+
+            // 1. Process Orders first (Special sequential collision check)
+            let updatedOrders = [...orders];
+            let ordersChanged = false;
+
+            updatedOrders.forEach((o, idx) => {
+                let collision = false;
+                
+                // If ID exists on server, generate NEW ID (User requirement: no repeat, move to next)
+                if (serverIds.has(o.id)) {
+                    o.id = uuid();
+                    collision = true;
+                }
+
+                // If Order Number exists on server for this store, increment it
+                while (serverOrderNumbers.has(o.orderNumber)) {
+                    const currentNum = parseInt(o.orderNumber) || 0;
+                    o.orderNumber = (currentNum + 1).toString().padStart(4, '0');
+                    collision = true;
+                }
+
+                if (collision) {
+                    serverIds.add(o.id);
+                    serverOrderNumbers.add(o.orderNumber);
+                    ordersChanged = true;
+                }
+                
+                tasks.push({ action: 'INSERT', table: 'orders', data: o });
+            });
+
+            if (ordersChanged) {
+                setItem(`store_${store.id}_orders`, updatedOrders);
+            }
+
+            // 2. Process other records
+            prods.forEach(p => tasks.push({ action: 'INSERT', table: 'products', data: p }));
+            cats.forEach(c => tasks.push({ action: 'INSERT', table: 'categories', data: c }));
+            custs.forEach(c => tasks.push({ action: 'INSERT', table: 'customers', data: c }));
+            inv.forEach(i => tasks.push({ action: 'INSERT', table: 'inventory', data: i }));
+            quotes.forEach(q => tasks.push({ action: 'INSERT', table: 'quotations', data: q }));
+            shifts.forEach(s => tasks.push({ action: 'INSERT', table: 'shifts', data: s }));
         }
 
-        processSyncQueue();
+        if (tasks.length > 0) {
+            batchAddTasksToSyncQueue(tasks);
+        }
         return true;
     },
 
@@ -473,8 +546,20 @@ export const db = {
     getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
     addOrder: async (storeId: string, o: Order) => {
         const orders = await db.getOrders(storeId);
+        
+        // Before adding, check for local duplicates if offline
+        const serverState = await db.getServerIds('orders', storeId);
+        const serverNums = new Set(serverState.orderNumbers || []);
+        
         const nextNum = await db.getNextOrderNumber(storeId);
-        const newOrder = { ...o, id: o.id || uuid(), orderNumber: o.orderNumber || nextNum, storeId };
+        let finalNum = o.orderNumber || nextNum;
+        
+        // User requested conflict resolution: increment if exists
+        while (serverNums.has(finalNum)) {
+            finalNum = (parseInt(finalNum) + 1).toString().padStart(4, '0');
+        }
+
+        const newOrder = { ...o, id: o.id || uuid(), orderNumber: finalNum, storeId };
         setItem(`store_${storeId}_orders`, [...orders, newOrder]);
         addToSyncQueue('INSERT', 'orders', newOrder);
         return newOrder;

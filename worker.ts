@@ -45,11 +45,32 @@ export default {
             return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
           }
 
-          const { action, table, data } = payload;
+          const { action, table, data, storeId } = payload;
 
           if (action === 'PING') {
             await DB.prepare('SELECT 1').run();
             return jsonResponse({ success: true, message: 'pong' });
+          }
+
+          if (action === 'GET_EXISTING_IDS') {
+            if (!table) return jsonResponse({ success: false, error: 'Table required' }, 400);
+            
+            let query = `SELECT id FROM \`${table}\``;
+            if (storeId && table !== 'users' && table !== 'stores' && table !== 'employees' && table !== 'global_permissions') {
+                query += ` WHERE storeId = ?`;
+            }
+            
+            const { results } = await DB.prepare(query).bind(storeId || '').run();
+            const ids = results.map((r: any) => r.id);
+            
+            // Also fetch orderNumbers if syncing orders to check for sequential conflicts
+            let orderNumbers: string[] = [];
+            if (table === 'orders' && storeId) {
+                const ordRes = await DB.prepare(`SELECT orderNumber FROM orders WHERE storeId = ?`).bind(storeId).run();
+                orderNumbers = ordRes.results.map((r: any) => r.orderNumber);
+            }
+
+            return jsonResponse({ success: true, ids, orderNumbers });
           }
 
           if (action === 'INIT_SCHEMA') {

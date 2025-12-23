@@ -34,7 +34,8 @@ import {
   Activity,
   Unplug,
   ShieldCheck,
-  UploadCloud
+  UploadCloud,
+  ArrowUpRight
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -72,6 +73,7 @@ const SyncIndicator = () => {
     const [isTesting, setIsTesting] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(false);
+    const [bootstrapStatus, setBootstrapStatus] = useState<string | null>(null);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -115,13 +117,26 @@ const SyncIndicator = () => {
     };
 
     const handleBootstrap = async () => {
-        if (!confirm("This will queue ALL your existing local data for upload. It will not delete anything local. Proceed?")) return;
+        if (!confirm("This will scan ALL local data and push missing or conflicting records to the cloud. ID conflicts will be automatically resolved by re-indexing. Proceed?")) return;
         setIsBootstrapping(true);
+        setBootstrapStatus("Verifying Cloud Connection...");
         try {
+            const ok = await db.testConnection();
+            if (!ok) {
+                alert("Sync failed: Cloud backend is offline.");
+                return;
+            }
+            setBootstrapStatus("Detecting Conflicts & Re-indexing...");
             await db.syncAllLocalToCloud();
-            alert("Bootstrap complete! Your local records have been queued for upload.");
-        } finally {
+            setBootstrapStatus("Queued for Sync");
+            setTimeout(() => {
+                setBootstrapStatus(null);
+                setIsBootstrapping(false);
+            }, 2000);
+        } catch (e: any) {
+            alert("Error during sync preparation: " + e.message);
             setIsBootstrapping(false);
+            setBootstrapStatus(null);
         }
     };
 
@@ -216,25 +231,28 @@ const SyncIndicator = () => {
                         </div>
                     ) : (
                         <>
-                            {status.status === 'CONNECTED' && (
-                                <button 
-                                    onClick={handleBootstrap}
-                                    disabled={isBootstrapping}
-                                    className="w-full flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] font-black uppercase rounded-lg border border-blue-100 dark:border-blue-800 hover:bg-blue-100 transition-all"
-                                >
-                                    {isBootstrapping ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
-                                    Push Local Data to Cloud
-                                </button>
+                            {(status.status === 'CONNECTED' || status.status === 'OFFLINE') && (
+                                <div className="space-y-2">
+                                    <button 
+                                        onClick={handleBootstrap}
+                                        disabled={isBootstrapping}
+                                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70"
+                                    >
+                                        {isBootstrapping ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
+                                        {bootstrapStatus || "Sync All Local Data"}
+                                    </button>
+                                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase italic">Automatic conflict resolution enabled</p>
+                                </div>
                             )}
 
                             {status.status === 'MOCKED' && (
                                 <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
                                     <div className="flex items-center gap-2 mb-1 text-red-600">
                                         <AlertCircle size={16}/>
-                                        <p className="text-[11px] font-black uppercase">Backend Configuration Issue</p>
+                                        <p className="text-[11px] font-black uppercase">Backend Mismatch</p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
-                                        Your server is returning a default response. This usually means the <span className="font-mono">/api</span> route is not correctly mapped.
+                                        Your server is returning a default response. This usually means the API is not correctly mapped.
                                     </p>
                                 </div>
                             )}
