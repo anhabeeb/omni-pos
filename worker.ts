@@ -60,21 +60,21 @@ export default {
             
             if (user) {
                 const now = Date.now();
-                // Session timeout threshold: 5 minutes
+                // Session timeout threshold: 5 minutes of inactivity allows a new login
                 const SESSION_TIMEOUT = 300000; 
 
                 // Check for existing active session
-                const activeSession = await DB.prepare('SELECT lastActive FROM sessions WHERE userId = ?').bind(user.id).first();
+                const activeSession = await DB.prepare('SELECT lastActive, status FROM sessions WHERE userId = ?').bind(user.id).first();
                 
-                if (activeSession && (now - activeSession.lastActive < SESSION_TIMEOUT)) {
+                if (activeSession && activeSession.status === 'logged_in' && (now - activeSession.lastActive < SESSION_TIMEOUT)) {
                     return jsonResponse({ 
                         success: false, 
-                        error: 'Already logged in from another device. Sign out and Login.' 
+                        error: 'Concurrent Session Blocked: This user is already logged in on another device. Please log out from that device first or wait for the session to expire (5 min).' 
                     }, 403);
                 }
 
-                // Create or update session lock
-                await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive) VALUES (?, ?)').bind(user.id, now).run();
+                // Create or update session lock - Mark as logged_in
+                await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive, status) VALUES (?, ?, ?)').bind(user.id, now, 'logged_in').run();
 
                 const u = { ...user };
                 if (typeof u.storeIds === 'string') u.storeIds = JSON.parse(u.storeIds);
@@ -85,12 +85,14 @@ export default {
 
           if (action === 'HEARTBEAT') {
             if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
-            await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive) VALUES (?, ?)').bind(userId, Date.now()).run();
+            // Maintain the logged_in status and update timestamp
+            await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive, status) VALUES (?, ?, ?)').bind(userId, Date.now(), 'logged_in').run();
             return jsonResponse({ success: true });
           }
 
           if (action === 'LOGOUT') {
              if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
+             // Fully remove session record to allow immediate login on any device
              await DB.prepare('DELETE FROM sessions WHERE userId = ?').bind(userId).run();
              return jsonResponse({ success: true });
           }
@@ -149,7 +151,7 @@ export default {
               "CREATE TABLE IF NOT EXISTS `shifts` (id TEXT PRIMARY KEY, shiftNumber INTEGER, storeId TEXT, openedBy TEXT, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy TEXT, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
               "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
               "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER)"
+              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER, status TEXT)"
             ];
             for (const q of schema) await DB.prepare(q).run();
             return jsonResponse({ success: true });
@@ -157,7 +159,7 @@ export default {
 
           if (action === 'WRITE_TEST') {
             await DB.prepare('SELECT name FROM sqlite_master WHERE type="table" LIMIT 1').run();
-            return jsonResponse({ success: true, message: 'D1 Database is correctly bound and reachable.' });
+            return jsonResponse({ success: true, message: 'D1 Database is correctly bound and readable.' });
           }
 
           if (!table || !data) return jsonResponse({ success: false, error: 'Missing parameters' }, 400);

@@ -64,7 +64,7 @@ interface AuthContextType {
   user: User | null;
   currentStoreId: string | null; 
   login: (u: User, storeId?: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   switchStore: (storeId: string) => void;
   hasPermission: (permission: Permission) => boolean;
   openProfile: () => void;
@@ -665,8 +665,15 @@ export default function App() {
     }
   };
 
-  const logout = () => {
-    if (user) db.removeSession(user.id);
+  const logout = async () => {
+    if (user) {
+      // Robustly await server-side logout to release the device lock immediately
+      try {
+        await db.removeSession(user.id);
+      } catch (e) {
+        console.warn("Server logout cleanup failed", e);
+      }
+    }
     setUser(null);
     setCurrentStoreId(null);
     localStorage.removeItem('user');
@@ -686,8 +693,7 @@ export default function App() {
   };
 
   const openProfile = () => {
-    // This is handled via state inside LayoutWrapper for UI reactivity, 
-    // but kept here for context completeness if needed by other pages.
+    // Handled in LayoutWrapper state
   };
 
   return (
