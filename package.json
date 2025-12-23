@@ -7,7 +7,9 @@
     "dev": "vite",
     "dev:all": "wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "db:setup": "wrangler d1 execute pos --remote --command='SELECT 1'"
   },
   "dependencies": {
     "react": "^19.0.0",

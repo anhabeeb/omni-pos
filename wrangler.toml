@@ -10,6 +10,3 @@ database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
 [vars]
 # Environment variables accessible in your functions
 # e.g., SESSION_TIMEOUT = "3600"
-
-[site]
-bucket = "./dist"
