@@ -82,7 +82,7 @@
     scrollbar-width: none;
   }
 
-  /* Initial System Loader Styles */
+  /* Initial System Loader Styles - Fixed to White as requested */
   #initial-loader {
     display: flex;
     flex-direction: column;
@@ -90,14 +90,12 @@
     justify-content: center;
     height: 100vh;
     width: 100vw;
-    background-color: #ffffff;
-    transition: background-color 0.3s ease;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    #initial-loader {
-      background-color: #030712;
-    }
+    background-color: #ffffff !important; /* Forced white background */
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    color: #1e293b;
   }
 
   .loader-spinner {
@@ -111,7 +109,7 @@
   }
 
   .loader-brand {
-    font-size: 2rem;
+    font-size: 2.25rem;
     font-weight: 900;
     color: #2563eb;
     font-style: italic;
@@ -120,11 +118,11 @@
   }
 
   .loader-status {
-    margin-top: 8px;
-    font-size: 10px;
+    margin-top: 12px;
+    font-size: 11px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 0.3em;
+    letter-spacing: 0.4em;
     color: #94a3b8;
     animation: loader-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
@@ -140,7 +138,7 @@
 
   @keyframes loader-pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.4; }
   }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
