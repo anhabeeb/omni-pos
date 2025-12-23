@@ -16,6 +16,7 @@ import {
   History,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   FileText,
   Circle,
   CalendarCheck,
@@ -305,6 +306,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [stores, setStores] = useState<Store[]>([]);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const loadStores = async () => {
@@ -339,15 +341,27 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Reverted Sidebar UI: Fixed 256px width, White bg */}
-      <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-lg z-30">
-        <div className="p-8">
-          <h1 className="text-2xl font-black text-blue-600 tracking-tighter italic">OmniPOS</h1>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-Store Suite</p>
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-950 overflow-hidden">
+      {/* Reverted Sidebar UI: Dark Slate theme with collapse functionality */}
+      <div 
+        className={`bg-slate-900 flex flex-col transition-all duration-300 relative z-30 shadow-2xl ${isCollapsed ? 'w-20' : 'w-72'}`}
+      >
+        <div className={`p-6 mb-4 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          {!isCollapsed && (
+            <div>
+              <h1 className="text-2xl font-black text-white tracking-tighter italic">OmniPOS</h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Multi-Store Suite</p>
+            </div>
+          )}
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
+          >
+            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 space-y-1 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 space-y-1 custom-scrollbar scrollbar-hide">
           {menuItems.filter(item => {
             if (item.roles && !item.roles.includes(user?.role as UserRole)) return false;
             if (item.permission && !hasPermission(item.permission as Permission)) return false;
@@ -356,59 +370,62 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
-              <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-gray-400'} />
-              <span className="font-bold text-sm">{item.label}</span>
+              <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400 transition-colors'} />
+              {!isCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
             </button>
           ))}
 
           {currentStoreId && (
             <>
-              <div className="pt-6 pb-2 px-4">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Management</span>
+              <div className={`pt-6 pb-2 ${isCollapsed ? 'flex justify-center' : 'px-4'}`}>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{isCollapsed ? '•••' : 'Management'}</span>
               </div>
               {storeMenuItems.filter(item => !item.permission || hasPermission(item.permission as Permission)).map((item) => (
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                 >
-                  <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-gray-400'} />
-                  <span className="font-bold text-sm">{item.label}</span>
+                  <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400 transition-colors'} />
+                  {!isCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
                 </button>
               ))}
             </>
           )}
         </div>
 
-        <div className="p-4 mt-auto">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-transparent hover:border-red-100">
+        <div className="p-4 mt-auto border-t border-slate-800">
+          <button 
+            onClick={logout} 
+            className={`w-full flex items-center gap-3 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest ${isCollapsed ? 'justify-center' : ''}`}
+          >
             <LogOut size={18} />
-            <span>Logout</span>
+            {!isCollapsed && <span>Logout</span>}
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20">
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 z-20 shadow-sm">
           <div className="flex items-center gap-4">
             {stores.length > 1 && (
               <select 
                 value={currentStoreId || ''} 
                 onChange={(e) => switchStore(e.target.value)}
-                className="bg-gray-100 dark:bg-gray-700 border-none rounded-lg px-4 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="" disabled>Select Store Station</option>
+                <option value="" disabled>Select Station</option>
                 {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}
-            {currentStore && <span className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">{currentStore.name}</span>}
+            {currentStore && <span className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">{currentStore.name}</span>}
           </div>
 
           <div className="flex items-center gap-4">
             <SyncIndicator />
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-slate-800">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black dark:text-white leading-tight uppercase">{user?.name}</p>
                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
@@ -420,7 +437,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#F8FAFC] dark:bg-slate-950">
           {children}
         </main>
       </div>
