@@ -3,8 +3,8 @@ compatibility_date = "2024-11-01"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "omni-pos"
-database_id = "a50fddea-e22f-419c-afb8-6c40464e4a6a"
+database_name = "pos"
+database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
 
 [assets]
 directory = "./dist"
