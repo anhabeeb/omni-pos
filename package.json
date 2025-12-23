@@ -8,8 +8,8 @@
     "dev:all": "wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && npx wrangler pages deploy dist",
-    "wrangler:update": "npm install --save-dev wrangler@4",
+    "wrangler:install": "npm install --save-dev wrangler@4",
+    "deploy": "npm run build && npm wrangler run deploy dist",
     "db:setup": "wrangler d1 execute pos --remote --command='SELECT 1'"
   },
   "dependencies": {
