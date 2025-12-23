@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
@@ -16,32 +17,23 @@ import {
   History,
   ChevronDown,
   ChevronRight,
-  ChevronLeft,
   FileText,
-  Circle,
-  CalendarCheck,
-  X,
-  Layout,
-  IdCard,
-  Phone,
   UserCircle,
   AlertCircle,
   CheckCircle,
-  Hash,
   Loader2,
-  Lock,
   Cloud,
   CloudOff,
   RefreshCw,
   Zap,
   Package,
-  Wrench,
   Globe,
   Settings2,
   Database,
   Terminal,
   Activity,
-  Unplug
+  Unplug,
+  ShieldCheck
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -306,7 +298,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [stores, setStores] = useState<Store[]>([]);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const loadStores = async () => {
@@ -320,112 +311,140 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
     loadStores();
   }, [user]);
 
-  const currentStore = stores.find(s => s.id === currentStoreId);
+  const globalMenuItems = [
+    { icon: LayoutDashboard, label: 'Global Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
+    { icon: UserSquare, label: 'Employee Registry', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: ShieldCheck, label: 'User & Access', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+  ];
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
+  const getStoreActions = (storeId: string) => [
     { icon: ShoppingCart, label: 'POS System', path: '/pos', permission: 'POS_ACCESS' },
     { icon: ChefHat, label: 'Kitchen (KOT)', path: '/kot', permission: 'VIEW_KOT' },
     { icon: History, label: 'History', path: '/history', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CASHIER] },
     { icon: FileText, label: 'Quotations', path: '/quotations', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CASHIER] },
     { icon: BarChart3, label: 'Reports', path: '/reports', permission: 'VIEW_REPORTS' },
-    { icon: Users, label: 'Users', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { icon: IdCard, label: 'Employees', path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { icon: MenuIcon, label: 'Menu & Inventory', path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
+    { icon: Users, label: 'Users', path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
+    { icon: Printer, label: 'Print Designer', path: `/print-designer/${storeId}`, permission: 'MANAGE_PRINT_DESIGNER' },
   ];
 
-  const storeMenuItems = [
-    { icon: MenuIcon, label: 'Menu', path: `/store/${currentStoreId}/menu`, permission: 'MANAGE_INVENTORY' },
-    { icon: Package, label: 'Inventory', path: `/store/${currentStoreId}/inventory`, permission: 'MANAGE_INVENTORY' },
-    { icon: UserSquare, label: 'Customers', path: `/store/${currentStoreId}/customers`, permission: 'MANAGE_CUSTOMERS' },
-    { icon: Printer, label: 'Designer', path: `/print-designer/${currentStoreId}`, permission: 'MANAGE_PRINT_DESIGNER' },
-  ];
+  const handleStoreClick = (sid: string) => {
+      if (currentStoreId !== sid) {
+          switchStore(sid);
+      }
+  };
+
+  const isCurrentPathUnderStore = (sid: string) => {
+      if (currentStoreId !== sid) return false;
+      const actions = getStoreActions(sid);
+      return actions.some(a => location.pathname === a.path);
+  };
+
+  const currentStore = stores.find(s => s.id === currentStoreId);
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-950 overflow-hidden">
-      {/* Reverted Sidebar UI: Dark Slate theme with collapse functionality */}
-      <div 
-        className={`bg-slate-900 flex flex-col transition-all duration-300 relative z-30 shadow-2xl ${isCollapsed ? 'w-20' : 'w-72'}`}
-      >
-        <div className={`p-6 mb-4 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!isCollapsed && (
-            <div>
-              <h1 className="text-2xl font-black text-white tracking-tighter italic">OmniPOS</h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Multi-Store Suite</p>
-            </div>
-          )}
-          <button 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
-          >
-            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-          </button>
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      <div className="w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-lg z-30">
+        <div className="p-8">
+          <h1 className="text-2xl font-black text-blue-600 tracking-tighter italic">OmniPOS</h1>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-Store Suite</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 space-y-1 custom-scrollbar scrollbar-hide">
-          {menuItems.filter(item => {
-            if (item.roles && !item.roles.includes(user?.role as UserRole)) return false;
-            if (item.permission && !hasPermission(item.permission as Permission)) return false;
-            return true;
-          }).map((item) => (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-            >
-              <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400 transition-colors'} />
-              {!isCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
-            </button>
-          ))}
-
-          {currentStoreId && (
-            <>
-              <div className={`pt-6 pb-2 ${isCollapsed ? 'flex justify-center' : 'px-4'}`}>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{isCollapsed ? '•••' : 'Management'}</span>
-              </div>
-              {storeMenuItems.filter(item => !item.permission || hasPermission(item.permission as Permission)).map((item) => (
+        <div className="flex-1 overflow-y-auto px-4 space-y-8 custom-scrollbar pb-8">
+          {/* Global Management Section */}
+          <div>
+            <div className="mb-3 px-4">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Global Management</span>
+            </div>
+            <div className="space-y-1">
+              {globalMenuItems.filter(item => !item.roles || item.roles.includes(user?.role as UserRole)).map((item) => (
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
                 >
-                  <item.icon size={20} className={location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400 transition-colors'} />
-                  {!isCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
+                  <item.icon size={18} className={location.pathname === item.path ? 'text-white' : 'text-gray-400'} />
+                  <span className="font-bold text-sm">{item.label}</span>
                 </button>
               ))}
-            </>
-          )}
+            </div>
+          </div>
+
+          {/* Stores Management Section */}
+          <div>
+            <div className="mb-3 px-4 flex justify-between items-center">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Stores & Stations</span>
+              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">{stores.length}</span>
+            </div>
+            <div className="space-y-3">
+              {stores.map((store) => {
+                const isExpanded = currentStoreId === store.id;
+                const actions = getStoreActions(store.id);
+
+                return (
+                  <div key={store.id} className="space-y-1">
+                    <button
+                      onClick={() => handleStoreClick(store.id)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all border ${isExpanded ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800' : 'border-transparent text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-1.5 rounded-lg ${isExpanded ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
+                          <StoreIcon size={16} />
+                        </div>
+                        <span className={`font-black text-xs truncate uppercase tracking-tight ${isExpanded ? 'text-blue-700 dark:text-blue-300' : ''}`}>
+                          {store.name}
+                        </span>
+                      </div>
+                      {isExpanded ? <ChevronDown size={14} className="text-blue-500" /> : <ChevronRight size={14} className="text-gray-400" />}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="ml-4 pl-4 border-l-2 border-blue-100 dark:border-blue-900 space-y-1 py-1 animate-in slide-in-from-top-1 duration-200">
+                        {actions.filter(a => {
+                            if (a.roles && !a.roles.includes(user?.role as UserRole)) return false;
+                            if (a.permission && !hasPermission(a.permission as Permission)) return false;
+                            return true;
+                        }).map((action) => (
+                          <button
+                            key={action.path}
+                            onClick={() => navigate(action.path)}
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${location.pathname === action.path ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                          >
+                            <action.icon size={16} className={location.pathname === action.path ? 'text-white' : 'text-gray-400'} />
+                            <span className="font-bold text-xs">{action.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <div className="p-4 mt-auto border-t border-slate-800">
-          <button 
-            onClick={logout} 
-            className={`w-full flex items-center gap-3 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest ${isCollapsed ? 'justify-center' : ''}`}
-          >
+        <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-700">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-transparent hover:border-red-100">
             <LogOut size={18} />
-            {!isCollapsed && <span>Logout</span>}
+            <span>Logout</span>
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 z-20 shadow-sm">
+        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20">
           <div className="flex items-center gap-4">
-            {stores.length > 1 && (
-              <select 
-                value={currentStoreId || ''} 
-                onChange={(e) => switchStore(e.target.value)}
-                className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="" disabled>Select Station</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+            {currentStore && (
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{currentStore.name}</span>
+                </div>
             )}
-            {currentStore && <span className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">{currentStore.name}</span>}
           </div>
 
           <div className="flex items-center gap-4">
             <SyncIndicator />
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-slate-800">
+            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black dark:text-white leading-tight uppercase">{user?.name}</p>
                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
@@ -437,7 +456,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#F8FAFC] dark:bg-slate-950">
+        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {children}
         </main>
       </div>
