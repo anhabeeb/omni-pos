@@ -5,12 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "npx wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "wrangler:update": "npm install --save-dev wrangler@latest",
-    "deploy": "npm run build && npx wrangler pages deploy dist",
-    "db:setup": "npx wrangler d1 execute pos --remote --command='SELECT 1'"
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -27,7 +23,6 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0",
-    "wrangler": "^3.50.0"
+    "vite": "^6.0.0"
   }
 }
