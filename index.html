@@ -81,13 +81,81 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Initial System Loader Styles */
+  #initial-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+    background-color: #ffffff;
+    transition: background-color 0.3s ease;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #initial-loader {
+      background-color: #030712;
+    }
+  }
+
+  .loader-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #f1f5f9;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: loader-spin 1s linear infinite;
+    margin-bottom: 24px;
+  }
+
+  .loader-brand {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #2563eb;
+    font-style: italic;
+    letter-spacing: -0.05em;
+    animation: loader-fade-in 0.8s ease-out;
+  }
+
+  .loader-status {
+    margin-top: 8px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: #94a3b8;
+    animation: loader-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes loader-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes loader-fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes loader-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
 </head>
   <body class="bg-brand-bg transition-colors duration-300">
-    <div id="root"></div>
+    <div id="root">
+      <!-- High-Fidelity Pre-React Loader -->
+      <div id="initial-loader">
+        <div class="loader-spinner"></div>
+        <div class="loader-brand">OmniPOS</div>
+        <div class="loader-status">System Initializing</div>
+      </div>
+    </div>
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>

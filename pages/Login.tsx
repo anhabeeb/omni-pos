@@ -4,7 +4,7 @@ import { useAuth } from '../App';
 import { db } from '../services/db';
 import { User, Store, UserRole } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle, CloudDownload } from 'lucide-react';
+import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle, CloudDownload, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -59,27 +59,44 @@ export default function Login() {
             return;
         }
 
-        // 1. Try Local Login first
-        const users = await db.getUsers();
-        let foundUser = users.find(u => u.username === cleanUsername && u.password === cleanPassword);
+        let foundUser: User | undefined = undefined;
+
+        // CRITICAL: Always attempt Remote Login first to check for global session locks
+        // This prevents the "Local Login Bypass" where a user who is already synced 
+        // logs in on a second device without hitting the server.
+        setSyncStatus("Verifying global session lock...");
+        const remoteResult = await db.remoteLogin(cleanUsername, cleanPassword);
         
-        // 2. If Local fails, try Remote Login (New Device scenario)
-        if (!foundUser) {
-            setSyncStatus("Checking central database...");
-            const remoteResult = await db.remoteLogin(cleanUsername, cleanPassword);
-            
-            if (remoteResult.success && remoteResult.user) {
-                setSyncStatus("Device verified. Downloading account data...");
-                const hydrateSuccess = await db.pullAllFromCloud();
-                
-                if (hydrateSuccess) {
-                    foundUser = remoteResult.user;
-                } else {
-                    setError('Authenticated, but failed to download system data. Check your connection.');
-                }
+        if (remoteResult.success && remoteResult.user) {
+            setSyncStatus("Handshake successful. Syncing data...");
+            // Pull latest data to ensure this device is up to date
+            const hydrateSuccess = await db.pullAllFromCloud();
+            if (hydrateSuccess) {
+                foundUser = remoteResult.user;
             } else {
-                setError(remoteResult.error || 'Invalid credentials.');
+                setError('Authenticated, but failed to sync system data. Check your connection.');
             }
+        } else if (remoteResult.error && remoteResult.error.includes("logged in")) {
+            // This is the concurrent login block
+            setError(remoteResult.error);
+            setIsLoggingIn(false);
+            return;
+        } else {
+            // Server might be offline or returned an error
+            // Fallback to Local Login ONLY IF the server is unreachable 
+            // and credentials exist locally.
+            const users = await db.getUsers();
+            foundUser = users.find(u => u.username === cleanUsername && u.password === cleanPassword);
+            
+            if (!foundUser) {
+                setError(remoteResult.error || 'Invalid credentials or system offline.');
+                setIsLoggingIn(false);
+                return;
+            }
+            
+            // If we are logging in locally (offline), we should inform the user
+            // that concurrent session prevention is inactive.
+            console.warn("Logged in via local fallback. Global session locking is unavailable while offline.");
         }
 
         if (foundUser) {
@@ -88,7 +105,7 @@ export default function Login() {
                 navigate('/dashboard');
             } else {
                 const allStores = await db.getStores();
-                const stores = allStores.filter(s => foundUser.storeIds.includes(s.id) && s.isActive);
+                const stores = allStores.filter(s => foundUser!.storeIds.includes(s.id) && s.isActive);
                 
                 if (stores.length === 0) {
                     setError('Account not assigned to any active stores.');
@@ -150,8 +167,12 @@ export default function Login() {
         </div>
         
         {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-xl mb-4 text-xs font-bold flex items-center gap-2 border border-red-100 animate-in fade-in duration-300">
-                <AlertCircle size={16}/> {error}
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-4 text-xs font-bold flex items-start gap-3 border border-red-100 animate-in fade-in duration-300">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" /> 
+                <div className="flex-1">
+                  <p className="uppercase tracking-tight mb-1">Authorization Failed</p>
+                  <p className="text-gray-600 leading-tight font-medium">{error}</p>
+                </div>
             </div>
         )}
 
@@ -188,12 +209,16 @@ export default function Login() {
             disabled={isLoggingIn}
             className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
-            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Login'}
+            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Authorize Device to Login'}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Secured by Cloudflare</p>
+        <div className="mt-8 text-center flex flex-col items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full">
+                <ShieldCheck size={12} className="text-gray-400" />
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Secured by Cloudflare</p>
+            </div>
+            <p className="text-[9px] text-gray-300 font-medium">Session lock enforced globally across all devices.</p>
         </div>
       </div>
     </div>
