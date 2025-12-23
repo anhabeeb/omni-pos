@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
@@ -156,7 +155,7 @@ const SyncIndicator = () => {
             };
             case 'MOCKED': return { 
                 icon: Unplug, 
-                text: 'Placeholder API', 
+                text: 'Backend Error', 
                 color: 'text-red-600', 
                 bg: 'bg-red-50 dark:bg-red-900/20' 
             };
@@ -215,12 +214,12 @@ const SyncIndicator = () => {
                                 <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
                                     <div className="flex items-center gap-2 mb-1 text-red-600">
                                         <AlertCircle size={16}/>
-                                        <p className="text-[11px] font-black uppercase">Infrastructure Issue</p>
+                                        <p className="text-[11px] font-black uppercase">Backend Configuration Issue</p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
-                                        Your backend returned <span className="font-mono font-bold">"Hello world"</span>. This means you have a default Cloudflare worker intercepting the <span className="font-mono">/api</span> route. 
+                                        Your server is returning a default response. This usually means the <span className="font-mono">/api</span> route is not correctly mapped to your Functions.
                                     </p>
-                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Check: Functions &gt; Settings in Cloudflare Pages dashboard.</p>
+                                    <p className="text-[10px] text-red-500 font-bold mt-2 italic">Ensure wrangler.toml is correct and D1 is bound.</p>
                                 </div>
                             )}
 
@@ -287,7 +286,7 @@ const SyncIndicator = () => {
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
                                     disabled={isTesting}
-                                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1"
                                 >
                                     {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>}
                                     Run Diagnostic
@@ -341,7 +340,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Reverted Sidebar UI */}
+      {/* Reverted Sidebar UI: Fixed 256px width, White bg */}
       <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-lg z-30">
         <div className="p-8">
           <h1 className="text-2xl font-black text-blue-600 tracking-tighter italic">OmniPOS</h1>
@@ -400,7 +399,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
                 onChange={(e) => switchStore(e.target.value)}
                 className="bg-gray-100 dark:bg-gray-700 border-none rounded-lg px-4 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="" disabled>Select Store</option>
+                <option value="" disabled>Select Store Station</option>
                 {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}
