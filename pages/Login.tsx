@@ -188,12 +188,12 @@ export default function Login() {
             disabled={isLoggingIn}
             className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
-            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Authorize Device'}
+            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Login'}
           </button>
         </form>
 
         <div className="mt-8 text-center">
-            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Secured by Cloudflare D1</p>
+            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Secured by Cloudflare</p>
         </div>
       </div>
     </div>
