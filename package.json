@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
+    "dev:all": "npx wrangler pages dev . --d1 DB --compatibility-date=2024-04-01",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "wrangler:install": "npm install --save-dev wrangler@4",
-    "deploy": "npm run build && npm wrangler run deploy dist",
-    "db:setup": "wrangler d1 execute pos --remote --command='SELECT 1'"
+    "wrangler:update": "npm install --save-dev wrangler@latest",
+    "deploy": "npm run build && npx wrangler pages deploy dist",
+    "db:setup": "npx wrangler d1 execute pos --remote --command='SELECT 1'"
   },
   "dependencies": {
     "react": "^19.0.0",
