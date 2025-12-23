@@ -178,10 +178,10 @@ const SyncIndicator = () => {
 
     return (
         <div 
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all group relative cursor-help ${config.bg}`}
+          className={`flex items-center gap-2 px-3 py-1 rounded-lg border border-transparent transition-all group relative cursor-help ${config.bg}`}
         >
-            <Icon size={14} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
-            <span className={`text-[10px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
+            <Icon size={12} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
+            <span className={`text-[9px] font-black uppercase tracking-wider ${config.color}`}>{config.text}</span>
             
             <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[100] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200">
                 <div className="flex justify-between items-center mb-3">
@@ -334,12 +334,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
       }
   };
 
-  const isCurrentPathUnderStore = (sid: string) => {
-      if (currentStoreId !== sid) return false;
-      const actions = getStoreActions(sid);
-      return actions.some(a => location.pathname === a.path);
-  };
-
   const currentStore = stores.find(s => s.id === currentStoreId);
 
   return (
@@ -361,7 +355,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 hover:translate-x-1'}`}
                 >
                   <item.icon size={18} className={location.pathname === item.path ? 'text-white' : 'text-gray-400'} />
                   <span className="font-bold text-sm">{item.label}</span>
@@ -408,9 +402,9 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
                           <button
                             key={action.path}
                             onClick={() => navigate(action.path)}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${location.pathname === action.path ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                            className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg transition-all ${location.pathname === action.path ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                           >
-                            <action.icon size={16} className={location.pathname === action.path ? 'text-white' : 'text-gray-400'} />
+                            <action.icon size={14} className={location.pathname === action.path ? 'text-white' : 'text-gray-400'} />
                             <span className="font-bold text-xs">{action.label}</span>
                           </button>
                         ))}
@@ -424,7 +418,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-700">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-transparent hover:border-red-100">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-transparent hover:border-red-100">
             <LogOut size={18} />
             <span>Logout</span>
           </button>
@@ -432,7 +426,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20">
+        <header className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 z-20 shrink-0">
           <div className="flex items-center gap-4">
             {currentStore && (
                 <div className="flex items-center gap-2">
@@ -446,17 +440,17 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
             <SyncIndicator />
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-black dark:text-white leading-tight uppercase">{user?.name}</p>
-                <p className="text-[10px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
+                <p className="text-[10px] font-black dark:text-white leading-tight uppercase">{user?.name}</p>
+                <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
               </div>
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600">
-                <UserCircle size={24} />
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-600">
+                <UserCircle size={20} />
               </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <main className="flex-1 overflow-hidden">
           {children}
         </main>
       </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -311,7 +312,7 @@ export default function POS() {
           tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
           note: orderNote, 
           customerName: selectedCustomer?.name, 
-          customerPhone: selectedCustomer?.phone,
+          customerPhone: selectedCustomer?.phone, 
           customerTin: selectedCustomer?.tin,
           customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
           createdBy: user.id, createdAt: Date.now()
@@ -679,7 +680,6 @@ export default function POS() {
     if (!currentStoreId || !shift || isSaving) return;
     const totalCount = calculateDenomTotal();
     
-    // Optimistic Prompt Closure - Do this immediately to prevent double submission
     const shiftId = shift.id;
     setIsShiftConfirmOpen(false);
     setIsShiftModalOpen(false);
@@ -690,7 +690,7 @@ export default function POS() {
         if (success) { 
             setDenominations({}); 
             setShiftNote(''); 
-            setShift(null); // Immediate clear
+            setShift(null); 
             loadData(); 
             showToast("Register Closed Successfully", "SUCCESS"); 
         } else {
@@ -705,7 +705,7 @@ export default function POS() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden text-gray-800 dark:text-gray-200">
+    <div className="flex h-full bg-gray-50 dark:bg-gray-900 overflow-hidden text-gray-800 dark:text-gray-200">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
       
       {toast && (
@@ -717,44 +717,32 @@ export default function POS() {
           </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <div className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 md:px-4">
-            <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-                <div className="relative w-32 md:w-48 lg:w-64">
+      <div className="flex-1 flex flex-col min-w-0 relative h-full">
+        <div className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 shrink-0">
+            <div className="flex items-center gap-4 overflow-hidden">
+                <div className="relative w-48">
                     <Search className="absolute left-2 top-2.5 text-gray-400" size={14} />
                     <input className="w-full pl-7 pr-3 py-1.5 bg-white dark:bg-gray-700 rounded-lg text-xs outline-none dark:text-white border border-gray-200 dark:border-gray-700 focus:border-blue-500" placeholder="Search menu..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </div>
-                <div className="flex bg-white dark:bg-gray-700 p-1 rounded-lg text-[10px] md:text-xs font-medium overflow-hidden border border-gray-100 dark:border-gray-600">
-                    <button onClick={() => setActiveTab('MENU')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'MENU' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Menu</button>
-                    <button onClick={() => setActiveTab('ORDERS')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'ORDERS' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Active</button>
-                    <button onClick={() => setActiveTab('HELD')} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'HELD' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Held</button>
-                    <button onClick={() => { loadData(); setActiveTab('HISTORY'); }} className={`px-2 md:px-3 py-1 rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>History</button>
+                <div className="flex bg-white dark:bg-gray-700 p-1 rounded-lg text-xs font-medium border border-gray-100 dark:border-gray-600">
+                    <button onClick={() => setActiveTab('MENU')} className={`px-3 py-1 rounded-md transition-all ${activeTab === 'MENU' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Menu</button>
+                    <button onClick={() => setActiveTab('ORDERS')} className={`px-3 py-1 rounded-md transition-all ${activeTab === 'ORDERS' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Active</button>
+                    <button onClick={() => setActiveTab('HELD')} className={`px-3 py-1 rounded-md transition-all ${activeTab === 'HELD' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Held</button>
+                    <button onClick={() => { loadData(); setActiveTab('HISTORY'); }} className={`px-3 py-1 rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>History</button>
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                {shift && activeOrders.length > 0 && (
-                    <div className="hidden sm:flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <Activity size={14}/>
-                        <span className="text-[10px] font-black uppercase tracking-tight">{activeOrders.length} Active Orders</span>
-                    </div>
-                )}
-                {shift && heldOrders.length > 0 && (
-                    <div className="hidden sm:flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 px-3 py-1.5 rounded-lg border border-yellow-200 dark:border-yellow-800 animate-pulse">
-                        <PauseCircle size={14}/>
-                        <span className="text-[10px] font-black uppercase tracking-tight">{heldOrders.length} Held Orders</span>
-                    </div>
-                )}
-                <button onClick={() => { setDenominations({}); setShiftError(''); setIsShiftModalOpen(true); }} className={`flex items-center gap-2 px-3 md:px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 ${shift ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
-                    {shift ? <Lock size={16} /> : <Unlock size={16} />}
-                    <span className="hidden sm:inline">{shift ? 'Close Shift' : 'Open Shift'}</span>
+                <button onClick={() => { setDenominations({}); setShiftError(''); setIsShiftModalOpen(true); }} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 ${shift ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
+                    {shift ? <Lock size={14} /> : <Unlock size={14} />}
+                    <span>{shift ? 'Close Shift' : 'Open Shift'}</span>
                 </button>
             </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 md:p-3 custom-scrollbar flex flex-col relative">
+        <div className="flex-1 overflow-hidden flex flex-col p-3">
             {activeTab === 'MENU' ? (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-3 mb-2 custom-scrollbar-hide whitespace-nowrap">
+                    <div className="flex gap-2 overflow-x-auto pb-3 mb-2 shrink-0 custom-scrollbar-hide whitespace-nowrap">
                         <button 
                             onClick={() => setSelectedCategoryId('ALL')}
                             className={`px-3 py-1.5 rounded-full text-[10px] md:text-xs font-black uppercase transition-all border ${selectedCategoryId === 'ALL' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}
@@ -772,162 +760,155 @@ export default function POS() {
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2 md:gap-3 content-start flex-1">
-                        {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)).map(product => (
-                            <button 
-                                key={product.id} 
-                                onClick={() => addToCart(product)} 
-                                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden"
-                                style={{ padding: `${4 * menuScale}px` }}
-                            >
-                                <div 
-                                    className="w-full bg-gray-50 dark:bg-gray-700 rounded mb-1.5 flex items-center justify-center text-gray-300 overflow-hidden"
-                                    style={{ height: `${2.5 * menuScale}rem` }}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
+                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)).map(product => (
+                                <button 
+                                    key={product.id} 
+                                    onClick={() => addToCart(product)} 
+                                    className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
                                 >
-                                    {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={14 * menuScale}/>}
-                                </div>
-                                <h3 
-                                    className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-0.5 leading-tight"
-                                    style={{ fontSize: `${8 * menuScale}px` }}
-                                >
-                                    {product.name}
-                                </h3>
-                                <div 
-                                    className="mt-auto font-black text-blue-600"
-                                    style={{ fontSize: `${9 * menuScale}px` }}
-                                >
-                                    {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
-                                </div>
-                            </button>
-                        ))}
+                                    <div 
+                                        className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
+                                        style={{ height: `${3.5 * menuScale}rem` }}
+                                    >
+                                        {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={18 * menuScale}/>}
+                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
+                                        </div>
+                                    </div>
+                                    <h3 
+                                        className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-1 leading-tight h-8"
+                                        style={{ fontSize: `${9 * menuScale}px` }}
+                                    >
+                                        {product.name}
+                                    </h3>
+                                    <div 
+                                        className="mt-auto font-black text-blue-600"
+                                        style={{ fontSize: `${11 * menuScale}px` }}
+                                    >
+                                        {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="sticky bottom-4 right-4 self-end z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl transition-all hover:scale-105 group">
-                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl transition-colors group-hover:bg-blue-600 group-hover:text-white">
+                    <div className="absolute bottom-6 right-6 z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                             <Maximize2 size={16} />
                         </div>
-                        <div className="flex flex-col">
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="range"
-                                    min="0.75"
-                                    max="1.5"
-                                    step="0.05"
-                                    value={menuScale}
-                                    onChange={(e) => setMenuScale(parseFloat(e.target.value))}
-                                    className="w-24 md:w-32 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                />
-                                <span className="text-[10px] font-mono font-black text-blue-600 dark:text-blue-400 min-w-[32px]">{Math.round(menuScale * 100)}%</span>
-                            </div>
-                        </div>
+                        <input
+                            type="range"
+                            min="0.75"
+                            max="1.5"
+                            step="0.05"
+                            value={menuScale}
+                            onChange={(e) => setMenuScale(parseFloat(e.target.value))}
+                            className="w-24 md:w-32 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                        <span className="text-[10px] font-mono font-black text-blue-600 min-w-[32px]">{Math.round(menuScale * 100)}%</span>
                     </div>
                 </>
-            ) : activeTab === 'ORDERS' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {activeOrders.map(order => (
-                        <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-blue-500 shadow-sm flex flex-col transition-all hover:shadow-md">
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-bold dark:text-white text-lg">#{order.orderNumber}</h3>
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : order.kitchenStatus === 'PREPARING' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
-                            </div>
-                            <div className="text-xs text-gray-500 mb-4">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
-                            <div className="space-y-1 mb-4 overflow-hidden">
-                                {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] truncate opacity-70"> • {it.quantity}x {it.productName}</div>)}
-                                {order.items.length > 3 && <div className="text-[10px] text-gray-400 italic">+{order.items.length - 3} more items...</div>}
-                            </div>
-                            <div className="mt-auto pt-2 border-t dark:border-gray-700 flex justify-between items-center">
-                                <div className="flex gap-1">
-                                    <button onClick={() => resumeOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="Edit Order"><Edit size={14}/></button>
-                                    <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-1.5 bg-yellow-50 text-yellow-600 rounded hover:bg-yellow-100" title="Hold Order"><PauseCircle size={14}/></button>
-                                    <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100" title="Settle & Archive"><DollarSign size={14}/></button>
+            ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {activeTab === 'ORDERS' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {activeOrders.map(order => (
+                                <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-blue-500 shadow-sm flex flex-col transition-all hover:shadow-md">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="font-bold dark:text-white text-lg">#{order.orderNumber}</h3>
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : order.kitchenStatus === 'PREPARING' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-4">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                                    <div className="space-y-1 mb-4 overflow-hidden">
+                                        {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] truncate opacity-70"> • {it.quantity}x {it.productName}</div>)}
+                                        {order.items.length > 3 && <div className="text-[10px] text-gray-400 italic">+{order.items.length - 3} more items...</div>}
+                                    </div>
+                                    <div className="mt-auto pt-2 border-t dark:border-gray-700 flex justify-between items-center">
+                                        <div className="flex gap-1">
+                                            <button onClick={() => resumeOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"><Edit size={14}/></button>
+                                            <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-1.5 bg-yellow-50 text-yellow-600 rounded hover:bg-yellow-100"><PauseCircle size={14}/></button>
+                                            <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100"><DollarSign size={14}/></button>
+                                        </div>
+                                        <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
+                                    </div>
                                 </div>
-                                <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
-                            </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-            ) : activeTab === 'HELD' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {heldOrders.map(order => (
-                        <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm transition-all flex flex-col group">
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-bold dark:text-white text-lg">#{order.orderNumber}</h3>
-                                <span className="text-[8px] font-black uppercase bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">On Hold</span>
-                            </div>
-                            <div className="text-xs text-gray-500 mb-4">HELD • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
-                            <div className="space-y-1 mb-4 overflow-hidden">
-                                {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] truncate opacity-70"> • {it.quantity}x {it.productName}</div>)}
-                                {order.items.length > 3 && <div className="text-[10px] text-gray-400 italic">+{order.items.length - 3} items</div>}
-                            </div>
-                            <div className="mt-auto pt-2 border-t dark:border-gray-700 flex justify-between items-center">
-                                <div className="flex gap-1">
-                                    <button onClick={() => handleActivateOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="Move to Active"><Play size={14}/></button>
-                                    <button onClick={() => resumeOrder(order)} className="p-1.5 bg-gray-50 text-gray-600 rounded hover:bg-gray-100" title="Resume to Cart"><Edit size={14}/></button>
-                                    <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100" title="Quick Pay"><DollarSign size={14}/></button>
+                    ) : activeTab === 'HELD' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {heldOrders.map(order => (
+                                <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm flex flex-col group">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="font-bold dark:text-white text-lg">#{order.orderNumber}</h3>
+                                        <span className="text-[8px] font-black uppercase bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">On Hold</span>
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-4">HELD • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                                    <div className="space-y-1 mb-4 overflow-hidden">
+                                        {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] truncate opacity-70"> • {it.quantity}x {it.productName}</div>)}
+                                    </div>
+                                    <div className="mt-auto pt-2 border-t dark:border-gray-700 flex justify-between items-center">
+                                        <div className="flex gap-1">
+                                            <button onClick={() => handleActivateOrder(order)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"><Play size={14}/></button>
+                                            <button onClick={() => resumeOrder(order)} className="p-1.5 bg-gray-50 text-gray-600 rounded hover:bg-gray-100"><Edit size={14}/></button>
+                                            <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100"><DollarSign size={14}/></button>
+                                        </div>
+                                        <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
+                                    </div>
                                 </div>
-                                <span className="font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</span>
-                            </div>
+                            ))}
                         </div>
-                    ))}
-                    {heldOrders.length === 0 && (
-                        <div className="col-span-full py-20 text-center text-gray-400 italic border-2 border-dashed rounded-3xl opacity-50">
-                            <PauseCircle size={48} className="mx-auto mb-2" />
-                            <p>No orders currently on hold.</p>
+                    ) : (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-bold border-b border-gray-200 dark:border-gray-700 sticky top-0">
+                                    <tr><th className="p-3">Time</th><th className="p-3">Order #</th><th className="p-3">Customer</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Action</th></tr>
+                                </thead>
+                                <tbody className="divide-y dark:divide-gray-700">
+                                    {historyOrders.map(order => (
+                                        <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                            <td className="p-3 text-xs">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                                            <td className="p-3 font-mono font-bold text-blue-600">#{order.orderNumber}</td>
+                                            <td className="p-3 dark:text-gray-400 truncate max-w-[100px]">{order.customerName || `Table ${order.tableNumber || '-'}`}</td>
+                                            <td className="p-3 text-right font-bold">{store?.currency}{order.total.toFixed(2)}</td>
+                                            <td className="p-3 text-right">
+                                                <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600"><Printer size={14}/></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
-                </div>
-            ) : (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm overflow-x-auto">
-                    <table className="w-full text-left text-sm min-w-[500px]">
-                        <thead className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-bold border-b border-gray-200 dark:border-gray-700">
-                            <tr><th className="p-4">Time</th><th className="p-4">Order #</th><th className="p-4">Customer</th><th className="p-4 text-right">Amount</th><th className="p-4 text-right">Action</th></tr>
-                        </thead>
-                        <tbody className="divide-y dark:divide-gray-700">
-                            {historyOrders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                    <td className="p-4 dark:text-gray-300">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-                                    <td className="p-4 font-mono font-bold text-blue-600">#{order.orderNumber}</td>
-                                    <td className="p-4 dark:text-gray-400 truncate max-w-[120px]">{order.customerName || `Table ${order.tableNumber || '-'}`}</td>
-                                    <td className="p-4 text-right font-bold dark:text-white">{store?.currency}{order.total.toFixed(2)}</td>
-                                    <td className="p-4 text-right">
-                                        <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600"><Printer size={16}/></button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
                 </div>
             )}
         </div>
       </div>
 
-      <div className="hidden md:flex w-64 lg:w-80 xl:w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col shadow-xl">
-        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-            <div className="flex justify-between items-center mb-3">
+      {/* Cart Sidebar */}
+      <div className="w-64 lg:w-80 xl:w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col shadow-xl h-full">
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+            <div className="flex justify-between items-center mb-2">
                 <div className="flex flex-col">
-                    <h2 className="font-bold text-base dark:text-white">Current Order</h2>
-                    <div className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                    <h2 className="font-bold text-sm dark:text-white">Current Order</h2>
+                    <div className="flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-widest">
                         <Hash size={10} /> Predicted Order #{nextOrderNum}
                     </div>
                 </div>
                 {cart.length > 0 && (
-                    <button 
-                        onClick={clearCart}
-                        className="flex items-center gap-1 text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-colors"
-                    >
-                        <Trash2 size={12} /> Clear
-                    </button>
+                    <button onClick={clearCart} className="text-[9px] font-black uppercase text-red-500">Clear</button>
                 )}
             </div>
-            <div className="space-y-2">
-                <div className="flex gap-1 bg-white dark:bg-gray-700 p-1 rounded border border-gray-200 dark:border-gray-700">
+            <div className="space-y-1.5">
+                <div className="flex gap-1 bg-gray-50 dark:bg-gray-700 p-1 rounded-lg">
                     {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
-                        <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-1 text-[8px] xl:text-[10px] font-bold rounded uppercase transition-all ${orderType === t ? 'bg-blue-600 text-white shadow shadow-blue-500/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>{t.replace('_', ' ')}</button>
+                        <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-1 text-[8px] xl:text-[9px] font-black rounded-md uppercase transition-all ${orderType === t ? 'bg-blue-600 text-white shadow' : 'text-gray-500'}`}>{t.replace('_', ' ')}</button>
                     ))}
                 </div>
                 <div className="flex gap-1">
                     <div className="relative flex-1">
-                        <input type="text" placeholder="Customer..." className="w-full p-1.5 text-xs border border-gray-200 rounded bg-white dark:bg-gray-700 dark:text-white dark:border-gray-700 outline-none focus:ring-1 focus:ring-blue-500" value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} onFocus={() => setShowCustomerResults(true)} onClick={(e) => e.stopPropagation()} />
+                        <input type="text" placeholder="Customer..." className="w-full p-1.5 text-xs border rounded-lg bg-white dark:bg-gray-700 dark:text-white outline-none" value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} onFocus={() => setShowCustomerResults(true)} onClick={(e) => e.stopPropagation()} />
                         {selectedCustomer && <CheckCircle size={14} className="absolute right-2 top-2 text-blue-500" />}
                         {showCustomerResults && customerSearch && !selectedCustomer && (
                             <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl mt-1 z-50 max-h-48 overflow-y-auto">
@@ -939,95 +920,75 @@ export default function POS() {
                             </div>
                         )}
                     </div>
-                    <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="p-1.5 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100 transition-colors"><UserPlus size={16}/></button>
+                    <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-200"><UserPlus size={16}/></button>
                 </div>
                 {orderType === OrderType.DINE_IN && (
-                    store?.numberOfTables ? (
-                        <select className="w-full p-1.5 text-xs border border-gray-200 rounded bg-white dark:bg-gray-700 dark:text-white dark:border-gray-700" value={tableNumber} onChange={e => setTableNumber(e.target.value)}><option value="">Select Table</option>{Array.from({length: store.numberOfTables}, (_, i) => (i + 1).toString()).map(num => (<option key={num} value={num}>Table {num}</option>))}</select>
-                    ) : (<input placeholder="Table Number" className="w-full p-1.5 text-xs border border-gray-200 rounded bg-white dark:bg-gray-700 dark:text-white dark:border-gray-700" value={tableNumber} onChange={e => setTableNumber(e.target.value)} />)
+                    <select className="w-full p-1.5 text-xs border rounded-lg bg-white dark:bg-gray-700" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
+                        <option value="">Table</option>
+                        {Array.from({length: store?.numberOfTables || 0}, (_, i) => (i + 1).toString()).map(num => <option key={num} value={num}>Table {num}</option>)}
+                    </select>
                 )}
-                <div className="relative">
-                    <StickyNote size={12} className="absolute left-2 top-2 text-gray-400" />
-                    <textarea placeholder="Notes..." className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 rounded bg-white dark:bg-gray-700 dark:text-white dark:border-gray-700 outline-none focus:ring-1 focus:ring-blue-500 resize-none h-12" value={orderNote} onChange={e => setOrderNote(e.target.value)} />
-                </div>
             </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar bg-white dark:bg-gray-800">
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
             {cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-20"><ShoppingBag size={40} className="mb-1" /><p className="font-bold uppercase tracking-widest text-[10px]">Empty Cart</p></div>
             ) : cart.map(item => (
-                <div key={item.productId} className="flex items-center justify-between">
-                    <div className="flex-1 pr-2"><div className="text-xs font-bold dark:text-white truncate leading-tight">{item.productName}</div><div className="text-[10px] text-gray-500">{store?.currency}{item.price.toFixed(2)}</div></div>
+                <div key={item.productId} className="flex items-center justify-between animate-in slide-in-from-right-1 duration-150">
+                    <div className="flex-1 pr-2"><div className="text-[11px] font-bold dark:text-white truncate leading-tight">{item.productName}</div><div className="text-[9px] text-gray-500">{store?.currency}{item.price.toFixed(2)}</div></div>
                     <div className="flex items-center gap-1.5">
-                        <button onClick={() => updateQuantity(item.productId, -1)} className="w-5 h-5 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-200 transition-colors">-</button>
-                        <span className="text-xs font-black w-3 text-center dark:text-white">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.productId, 1)} className="w-5 h-5 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-200 transition-colors">+</button>
+                        <button onClick={() => updateQuantity(item.productId, -1)} className="w-5 h-5 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-gray-600 hover:bg-gray-200">-</button>
+                        <span className="text-[11px] font-black w-4 text-center">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.productId, 1)} className="w-5 h-5 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-gray-600 hover:bg-gray-200">+</button>
                     </div>
-                    <div className="w-14 text-right font-black text-xs dark:text-white ml-2">{store?.currency}{(item.price * item.quantity).toFixed(2)}</div>
+                    <div className="w-16 text-right font-black text-xs ml-2">{store?.currency}{(item.price * item.quantity).toFixed(2)}</div>
                 </div>
             ))}
         </div>
 
-        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    <Percent size={10} /> Discount
-                </span>
-                {discountPercent > 0 && (
-                    <button onClick={() => setDiscountPercent(0)} className="text-[8px] font-bold text-red-500 uppercase">Remove</button>
-                )}
+        <div className="shrink-0">
+            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Discount</span>
+                    <span className="text-[11px] font-black text-blue-600">{discountPercent}%</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                    {[5, 10, 15, 20].map(p => (
+                        <button 
+                            key={p} 
+                            onClick={() => setDiscountPercent(p)}
+                            className={`py-1 text-[9px] font-black rounded-lg border transition-all ${discountPercent === p ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}
+                        >
+                            {p}%
+                        </button>
+                    ))}
+                </div>
             </div>
-            <div className="grid grid-cols-4 gap-1 mb-2">
-                {[5, 10, 15, 20].map(p => (
-                    <button 
-                        key={p} 
-                        onClick={() => setDiscountPercent(p)}
-                        className={`py-1 text-[10px] font-black rounded border transition-all ${discountPercent === p ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500'}`}
-                    >
-                        {p}%
-                    </button>
-                ))}
-            </div>
-            <div className="relative">
-                <input 
-                    type="number" 
-                    placeholder="Custom %" 
-                    className="w-full pl-3 pr-8 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 dark:text-white outline-none focus:ring-1 focus:ring-blue-500 font-bold"
-                    value={discountPercent || ''}
-                    onChange={e => setDiscountPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                />
-                <span className="absolute right-3 top-1.5 text-xs font-bold text-gray-400">%</span>
-            </div>
-        </div>
 
-        <div className="p-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-            <div className="space-y-0.5 mb-3 text-[11px] dark:text-gray-300">
-                <div className="flex justify-between"><span>Subtotal</span><span>{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
-                {totals.discountAmount > 0 && (
-                    <div className="flex justify-between text-red-500 font-bold">
-                        <span>Discount (${discountPercent}%)</span>
-                        <span>-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
-                    </div>
-                )}
-                {totals.serviceCharge > 0 && <div className="flex justify-between"><span>Service Charge (${store?.serviceChargeRate}%)</span><span>{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>}
-                {totals.tax > 0 && <div className="flex justify-between"><span>Tax (${store?.taxRate}%)</span><span>{store?.currency}{totals.tax.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-black text-lg dark:text-white pt-1 border-t border-gray-100 dark:border-gray-700 mt-1"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-                <button onClick={handleHoldCart} disabled={cart.length === 0 || isSaving} className="py-2 bg-yellow-50 text-yellow-700 rounded-lg font-bold text-[10px] flex flex-col items-center justify-center border border-yellow-200 hover:bg-yellow-100 disabled:opacity-50 transition-all active:scale-95"><PauseCircle size={14} className="mb-0.5"/> Hold</button>
-                <button onClick={handleSendToKitchen} disabled={cart.length === 0 || isSaving} className="py-2 bg-orange-100 text-orange-700 rounded-lg font-bold text-[10px] flex flex-col items-center justify-center border border-orange-200 hover:bg-orange-200 disabled:opacity-50 transition-all active:scale-95"><ChefHat size={14} className="mb-0.5"/> Kitchen</button>
-                <button onClick={handleCheckout} disabled={cart.length === 0 || isSaving} className="py-2 bg-blue-600 text-white rounded-lg font-black text-[10px] flex flex-col items-center justify-center hover:bg-blue-700 disabled:opacity-50 shadow-lg active:scale-95"><DollarSign size={14} className="mb-0.5"/> Settle</button>
+            <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                <div className="space-y-0.5 mb-3 text-[11px]">
+                    <div className="flex justify-between"><span>Subtotal</span><span>{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
+                    {totals.discountAmount > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>-{store?.currency}{totals.discountAmount.toFixed(2)}</span></div>}
+                    <div className="flex justify-between font-black text-xl dark:text-white pt-2 border-t border-gray-100 dark:border-gray-700 mt-1"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                    <button onClick={handleHoldCart} disabled={cart.length === 0 || isSaving} className="py-2 bg-yellow-50 text-yellow-700 rounded-xl font-black text-[9px] flex flex-col items-center justify-center border border-yellow-200"><PauseCircle size={14}/> HOLD</button>
+                    <button onClick={handleSendToKitchen} disabled={cart.length === 0 || isSaving} className="py-2 bg-orange-50 text-orange-700 rounded-xl font-black text-[9px] flex flex-col items-center justify-center border border-orange-200"><ChefHat size={14}/> KITCHEN</button>
+                    <button onClick={handleCheckout} disabled={cart.length === 0 || isSaving} className="py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] flex flex-col items-center justify-center shadow-lg"><DollarSign size={14}/> SETTLE</button>
+                </div>
             </div>
         </div>
       </div>
 
+      {/* Modals remain same, using fixed/absolute positioning already */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
                   <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700"><h2 className="text-lg font-bold flex items-center gap-2 dark:text-white"><Printer size={20}/> Receipt: #{previewOrder.orderNumber}</h2><button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button></div>
                   <div className="flex-1 bg-gray-50 dark:bg-gray-900 p-4 md:p-8 overflow-auto flex justify-center"><div className="bg-white shadow-lg transition-all" style={{ width: getIframeWidth(), minHeight: '400px' }}><iframe srcDoc={previewHtml} className="w-full h-[600px] border-none" title="Print Preview" /></div></div>
                   <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-white dark:bg-gray-800">
-                    <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-gray-300">Close</button>
+                    <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-gray-300">Close</button>
                     <button onClick={handleSaveAsJpg} className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg font-bold hover:bg-blue-50 flex items-center gap-2 transition-colors"><FileImage size={18}/> Save as Image</button>
                     <button onClick={handlePrintFinal} className="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-sm hover:bg-blue-700 flex items-center gap-2"><Printer size={18}/> Print</button>
                   </div>
