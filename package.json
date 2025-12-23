@@ -9,7 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "deploy": "npm run build && npx wrangler pages deploy dist",
-    "wrangler:update": "npm install --save-dev wrangler@latest",
+    "wrangler:update": "npm install --save-dev wrangler@4",
     "db:setup": "wrangler d1 execute pos --remote --command='SELECT 1'"
   },
   "dependencies": {
