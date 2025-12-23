@@ -30,12 +30,13 @@ const setItem = <T>(key: string, value: T): void => {
 
 interface SyncTask {
     id: string;
-    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST' | 'GET_EXISTING_IDS' | 'FETCH_HYDRATION_DATA' | 'REMOTE_LOGIN';
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST' | 'GET_EXISTING_IDS' | 'FETCH_HYDRATION_DATA' | 'REMOTE_LOGIN' | 'HEARTBEAT' | 'LOGOUT';
     table?: string;
     data?: any;
     storeId?: string;
     username?: string;
     password?: string;
+    userId?: string;
     timestamp: number;
     attempts: number;
 }
@@ -309,6 +310,30 @@ export const db = {
         }
     },
 
+    serverHeartbeat: async (userId: string) => {
+        try {
+            await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'HEARTBEAT', userId })
+            });
+        } catch (e) {
+            console.warn("Server heartbeat failed", e);
+        }
+    },
+
+    serverLogout: async (userId: string) => {
+        try {
+            await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'LOGOUT', userId })
+            });
+        } catch (e) {
+            console.warn("Server logout notification failed", e);
+        }
+    },
+
     pullAllFromCloud: async (): Promise<boolean> => {
         try {
             currentSyncStatus = 'SYNCING';
@@ -496,11 +521,17 @@ export const db = {
         if (existingIdx >= 0) sessions[existingIdx] = session; else sessions.push(session);
         sessions = sessions.filter(s => now - s.lastActive < 300000);
         setItem('global_sessions', sessions);
+        
+        // Notify server to keep session alive globally
+        db.serverHeartbeat(userId);
     },
     removeSession: async (userId: string) => {
         let sessions = await db.getActiveSessions();
         sessions = sessions.filter(s => s.userId !== userId);
         setItem('global_sessions', sessions);
+        
+        // Notify server to release session lock
+        db.serverLogout(userId);
     },
     getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
     updateRolePermissions: async (config: RolePermissionConfig) => {

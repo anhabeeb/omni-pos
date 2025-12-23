@@ -1,3 +1,4 @@
+
 /**
  * OmniPOS Standard Cloudflare Worker
  * This script handles API requests and serves as the bridge to D1.
@@ -45,7 +46,7 @@ export default {
             return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
           }
 
-          const { action, table, data, storeId, username, password } = payload;
+          const { action, table, data, storeId, username, password, userId } = payload;
 
           if (action === 'PING') {
             await DB.prepare('SELECT 1').run();
@@ -54,14 +55,44 @@ export default {
 
           if (action === 'REMOTE_LOGIN') {
             if (!username || !password) return jsonResponse({ success: false, error: 'Missing credentials' }, 400);
+            
             const user = await DB.prepare('SELECT * FROM users WHERE username = ? AND password = ?').bind(username, password).first();
+            
             if (user) {
-                // Return user with storeIds parsed if it was stored as string
+                const now = Date.now();
+                // Session timeout threshold: 5 minutes
+                const SESSION_TIMEOUT = 300000; 
+
+                // Check for existing active session
+                const activeSession = await DB.prepare('SELECT lastActive FROM sessions WHERE userId = ?').bind(user.id).first();
+                
+                if (activeSession && (now - activeSession.lastActive < SESSION_TIMEOUT)) {
+                    return jsonResponse({ 
+                        success: false, 
+                        error: 'Already logged in from another device. Sign out and Login.' 
+                    }, 403);
+                }
+
+                // Create or update session lock
+                await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive) VALUES (?, ?)').bind(user.id, now).run();
+
                 const u = { ...user };
                 if (typeof u.storeIds === 'string') u.storeIds = JSON.parse(u.storeIds);
                 return jsonResponse({ success: true, user: u });
             }
             return jsonResponse({ success: false, error: 'Invalid credentials' }, 401);
+          }
+
+          if (action === 'HEARTBEAT') {
+            if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
+            await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive) VALUES (?, ?)').bind(userId, Date.now()).run();
+            return jsonResponse({ success: true });
+          }
+
+          if (action === 'LOGOUT') {
+             if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
+             await DB.prepare('DELETE FROM sessions WHERE userId = ?').bind(userId).run();
+             return jsonResponse({ success: true });
           }
 
           if (action === 'FETCH_HYDRATION_DATA') {
@@ -117,7 +148,8 @@ export default {
               "CREATE TABLE IF NOT EXISTS `quotations` (id TEXT PRIMARY KEY, quotationNumber TEXT, storeId TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy TEXT, createdAt INTEGER)",
               "CREATE TABLE IF NOT EXISTS `shifts` (id TEXT PRIMARY KEY, shiftNumber INTEGER, storeId TEXT, openedBy TEXT, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy TEXT, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
               "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
-              "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)"
+              "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
+              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER)"
             ];
             for (const q of schema) await DB.prepare(q).run();
             return jsonResponse({ success: true });
