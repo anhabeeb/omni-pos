@@ -45,11 +45,44 @@ export default {
             return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
           }
 
-          const { action, table, data, storeId } = payload;
+          const { action, table, data, storeId, username, password } = payload;
 
           if (action === 'PING') {
             await DB.prepare('SELECT 1').run();
             return jsonResponse({ success: true, message: 'pong' });
+          }
+
+          if (action === 'REMOTE_LOGIN') {
+            if (!username || !password) return jsonResponse({ success: false, error: 'Missing credentials' }, 400);
+            const user = await DB.prepare('SELECT * FROM users WHERE username = ? AND password = ?').bind(username, password).first();
+            if (user) {
+                // Return user with storeIds parsed if it was stored as string
+                const u = { ...user };
+                if (typeof u.storeIds === 'string') u.storeIds = JSON.parse(u.storeIds);
+                return jsonResponse({ success: true, user: u });
+            }
+            return jsonResponse({ success: false, error: 'Invalid credentials' }, 401);
+          }
+
+          if (action === 'FETCH_HYDRATION_DATA') {
+            const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory'];
+            const result: Record<string, any[]> = {};
+            
+            for (const t of tables) {
+                const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
+                // Post-process JSON fields
+                result[t] = results.map((row: any) => {
+                    const processed = { ...row };
+                    // Convert common JSON string fields back to objects
+                    ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
+                        if (processed[field] && typeof processed[field] === 'string') {
+                            try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
+                        }
+                    });
+                    return processed;
+                });
+            }
+            return jsonResponse({ success: true, data: result });
           }
 
           if (action === 'GET_EXISTING_IDS') {
@@ -63,7 +96,6 @@ export default {
             const { results } = await DB.prepare(query).bind(storeId || '').run();
             const ids = results.map((r: any) => r.id);
             
-            // Also fetch orderNumbers if syncing orders to check for sequential conflicts
             let orderNumbers: string[] = [];
             if (table === 'orders' && storeId) {
                 const ordRes = await DB.prepare(`SELECT orderNumber FROM orders WHERE storeId = ?`).bind(storeId).run();

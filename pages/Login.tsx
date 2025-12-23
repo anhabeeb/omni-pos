@@ -3,16 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { db } from '../services/db';
 import { User, Store, UserRole } from '../types';
-// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
-// Add AlertCircle to imports from lucide-react
-import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle, CloudDownload } from 'lucide-react';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [availableStores, setAvailableStores] = useState<Store[]>([]);
   const [tempUser, setTempUser] = useState<User | null>(null);
@@ -48,6 +47,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setIsLoggingIn(true);
+    setSyncStatus(null);
 
     try {
         const cleanUsername = username.trim();
@@ -55,12 +55,33 @@ export default function Login() {
 
         if (!cleanUsername || !cleanPassword) {
             setError('Please enter both username and password.');
+            setIsLoggingIn(false);
             return;
         }
 
+        // 1. Try Local Login first
         const users = await db.getUsers();
-        const foundUser = users.find(u => u.username === cleanUsername && u.password === cleanPassword);
+        let foundUser = users.find(u => u.username === cleanUsername && u.password === cleanPassword);
         
+        // 2. If Local fails, try Remote Login (New Device scenario)
+        if (!foundUser) {
+            setSyncStatus("Checking central database...");
+            const remoteResult = await db.remoteLogin(cleanUsername, cleanPassword);
+            
+            if (remoteResult.success && remoteResult.user) {
+                setSyncStatus("Device verified. Downloading account data...");
+                const hydrateSuccess = await db.pullAllFromCloud();
+                
+                if (hydrateSuccess) {
+                    foundUser = remoteResult.user;
+                } else {
+                    setError('Authenticated, but failed to download system data. Check your connection.');
+                }
+            } else {
+                setError(remoteResult.error || 'Invalid credentials.');
+            }
+        }
+
         if (foundUser) {
             if (foundUser.role === UserRole.SUPER_ADMIN || foundUser.role === UserRole.ADMIN) {
                 login(foundUser);
@@ -80,11 +101,9 @@ export default function Login() {
                     setIsStoreSelectorOpen(true);
                 }
             }
-        } else {
-            setError('Invalid credentials. Please check your username and password.');
         }
-    } catch (err) {
-        setError('A system error occurred during login.');
+    } catch (err: any) {
+        setError('A system error occurred: ' + err.message);
         console.error(err);
     } finally {
         setIsLoggingIn(false);
@@ -125,20 +144,57 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border">
-        <div className="text-center mb-8"><h1 className="text-3xl font-bold text-blue-600">OmniPOS</h1><p className="text-gray-500 mt-2">Sign in to your account</p></div>
-        {/* Fixed: AlertCircle is now imported */}
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-medium flex items-center gap-2 animate-in fade-in duration-300"><AlertCircle size={16}/> {error}</div>}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter username" /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter password" /></div>
+        <div className="text-center mb-8">
+            <h1 className="text-3xl font-black text-blue-600 italic">OmniPOS</h1>
+            <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">Multi-Device Restaurant System</p>
+        </div>
+        
+        {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-xl mb-4 text-xs font-bold flex items-center gap-2 border border-red-100 animate-in fade-in duration-300">
+                <AlertCircle size={16}/> {error}
+            </div>
+        )}
+
+        {syncStatus && !error && (
+            <div className="bg-blue-50 text-blue-600 p-3 rounded-xl mb-4 text-xs font-black uppercase tracking-tighter flex items-center gap-2 border border-blue-100 animate-pulse">
+                <CloudDownload size={16}/> {syncStatus}
+            </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Username</label>
+              <input 
+                type="text" 
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)} 
+                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" 
+                placeholder="Enter username" 
+              />
+          </div>
+          <div className="space-y-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Password</label>
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" 
+                placeholder="Enter password" 
+              />
+          </div>
+          
           <button 
             type="submit" 
             disabled={isLoggingIn}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
-            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Sign In'}
+            {isLoggingIn ? <Loader2 className="animate-spin" size={18}/> : 'Authorize Device'}
           </button>
         </form>
+
+        <div className="mt-8 text-center">
+            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Secured by Cloudflare D1</p>
+        </div>
       </div>
     </div>
   );

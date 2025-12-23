@@ -35,7 +35,8 @@ import {
   Unplug,
   ShieldCheck,
   UploadCloud,
-  ArrowUpRight
+  ArrowUpRight,
+  CloudDownload
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -73,7 +74,8 @@ const SyncIndicator = () => {
     const [isTesting, setIsTesting] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(false);
-    const [bootstrapStatus, setBootstrapStatus] = useState<string | null>(null);
+    const [isPulling, setIsPulling] = useState(false);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -117,26 +119,43 @@ const SyncIndicator = () => {
     };
 
     const handleBootstrap = async () => {
-        if (!confirm("This will scan ALL local data and push missing or conflicting records to the cloud. ID conflicts will be automatically resolved by re-indexing. Proceed?")) return;
+        if (!confirm("This will scan ALL local data and push missing or conflicting records to the cloud. ID conflicts will be automatically resolved. Proceed?")) return;
         setIsBootstrapping(true);
-        setBootstrapStatus("Verifying Cloud Connection...");
+        setSyncMessage("Resolving Conflicts...");
         try {
             const ok = await db.testConnection();
             if (!ok) {
                 alert("Sync failed: Cloud backend is offline.");
                 return;
             }
-            setBootstrapStatus("Detecting Conflicts & Re-indexing...");
             await db.syncAllLocalToCloud();
-            setBootstrapStatus("Queued for Sync");
+            setSyncMessage("Queued!");
             setTimeout(() => {
-                setBootstrapStatus(null);
+                setSyncMessage(null);
                 setIsBootstrapping(false);
             }, 2000);
         } catch (e: any) {
-            alert("Error during sync preparation: " + e.message);
+            alert("Error during sync: " + e.message);
             setIsBootstrapping(false);
-            setBootstrapStatus(null);
+            setSyncMessage(null);
+        }
+    };
+
+    const handlePull = async () => {
+        if (!confirm("This will download all data from the central server. Any unsynced local changes might be overwritten. Proceed?")) return;
+        setIsPulling(true);
+        setSyncMessage("Downloading Cloud Data...");
+        try {
+            const ok = await db.pullAllFromCloud();
+            if (ok) {
+                setSyncMessage("Hydration Complete!");
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                alert("Hydration failed. Check your connection.");
+            }
+        } finally {
+            setIsPulling(false);
+            setSyncMessage(null);
         }
     };
 
@@ -226,33 +245,42 @@ const SyncIndicator = () => {
                     {!db.isSyncEnabled() ? (
                         <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
                             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                                System is currently in <span className="font-bold">Local-First Mode</span>. All data is saved to your browser's persistent storage. Cloud synchronization is paused.
+                                System is in <span className="font-bold">Local-First Mode</span>. Changes only leave this device when Sync is active.
                             </p>
                         </div>
                     ) : (
                         <>
-                            {(status.status === 'CONNECTED' || status.status === 'OFFLINE') && (
-                                <div className="space-y-2">
-                                    <button 
-                                        onClick={handleBootstrap}
-                                        disabled={isBootstrapping}
-                                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70"
-                                    >
-                                        {isBootstrapping ? <Loader2 size={12} className="animate-spin" /> : <UploadCloud size={12} />}
-                                        {bootstrapStatus || "Sync All Local Data"}
-                                    </button>
-                                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase italic">Automatic conflict resolution enabled</p>
-                                </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                    onClick={handleBootstrap}
+                                    disabled={isBootstrapping || isPulling}
+                                    className="flex flex-col items-center justify-center gap-1 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70"
+                                >
+                                    {isBootstrapping ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                                    <span className="text-[9px] font-black uppercase">Push All</span>
+                                </button>
+                                <button 
+                                    onClick={handlePull}
+                                    disabled={isPulling || isBootstrapping}
+                                    className="flex flex-col items-center justify-center gap-1 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70"
+                                >
+                                    {isPulling ? <Loader2 size={16} className="animate-spin" /> : <CloudDownload size={16} />}
+                                    <span className="text-[9px] font-black uppercase">Pull All</span>
+                                </button>
+                            </div>
+                            
+                            {syncMessage && (
+                                <p className="text-[9px] text-center text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest italic animate-pulse">{syncMessage}</p>
                             )}
 
                             {status.status === 'MOCKED' && (
                                 <div className="p-3 bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-900/50 mb-2">
                                     <div className="flex items-center gap-2 mb-1 text-red-600">
                                         <AlertCircle size={16}/>
-                                        <p className="text-[11px] font-black uppercase">Backend Mismatch</p>
+                                        <p className="text-[11px] font-black uppercase">Sync Connection Error</p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight">
-                                        Your server is returning a default response. This usually means the API is not correctly mapped.
+                                        Server did not return a valid auth signature. Check your worker headers.
                                     </p>
                                 </div>
                             )}
@@ -279,21 +307,10 @@ const SyncIndicator = () => {
                                     <div className="flex items-center gap-2 mb-1">
                                         {diagResult.success ? <CheckCircle size={12} className="text-green-600"/> : (diagResult.is404 ? <Globe size={12} className="text-orange-600"/> : <AlertCircle size={12} className="text-red-600"/>)}
                                         <p className={`text-[10px] font-black uppercase ${diagResult.success ? 'text-green-600' : (diagResult.is404 ? 'text-orange-600' : 'text-red-600')}`}>
-                                            {diagResult.success ? 'Database Online' : (diagResult.is404 ? 'Backend Not Detected' : 'Write Access Denied')}
+                                            {diagResult.success ? 'Cloud Reachable' : (diagResult.is404 ? 'Backend Not Detected' : 'Access Error')}
                                         </p>
                                     </div>
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{diagResult.message}</p>
-                                    
-                                    {!diagResult.success && diagResult.message.includes("no such table") && (
-                                        <button 
-                                            onClick={handleRepairSchema}
-                                            disabled={isRepairing}
-                                            className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded hover:bg-blue-700 transition-colors"
-                                        >
-                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>}
-                                            Repair Cloud Schema
-                                        </button>
-                                    )}
                                 </div>
                             )}
 
@@ -302,7 +319,7 @@ const SyncIndicator = () => {
                                     onClick={(e) => { e.stopPropagation(); db.testConnection(); }}
                                     className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors"
                                 >
-                                    Retry Ping
+                                    Ping
                                 </button>
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); runDiagnostic(); }}
@@ -310,7 +327,7 @@ const SyncIndicator = () => {
                                     className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1"
                                 >
                                     {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>}
-                                    Run Diagnostic
+                                    Diagnostic
                                 </button>
                             </div>
                         </>

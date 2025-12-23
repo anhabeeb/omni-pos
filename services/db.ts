@@ -30,10 +30,12 @@ const setItem = <T>(key: string, value: T): void => {
 
 interface SyncTask {
     id: string;
-    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST' | 'GET_EXISTING_IDS';
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PING' | 'WRITE_TEST' | 'GET_EXISTING_IDS' | 'FETCH_HYDRATION_DATA' | 'REMOTE_LOGIN';
     table?: string;
     data?: any;
     storeId?: string;
+    username?: string;
+    password?: string;
     timestamp: number;
     attempts: number;
 }
@@ -70,7 +72,7 @@ const handleSyncResponse = async (response: Response) => {
     if (verification !== 'authorized') {
         if (text.toLowerCase().includes("hello world")) {
             currentSyncStatus = 'MOCKED';
-            throw new Error("Cloudflare 'Hello World' Worker detected. Your API is being intercepted.");
+            throw new Error("Cloudflare Worker detected, but it is not responding with the OmniPOS authorized headers.");
         }
         throw new Error("Backend mismatch: API route returned unexpected content.");
     }
@@ -174,10 +176,16 @@ const processSyncQueue = async () => {
     isProcessingSync = false;
 };
 
-window.addEventListener('online', () => {
+window.addEventListener('online', async () => {
     isDatabaseReachable = false;
     isBackendMissing = false;
-    processSyncQueue();
+    const ok = await db.testConnection();
+    if (ok) {
+        // Automatic full sync on reconnection
+        await db.syncAllLocalToCloud();
+        await db.pullAllFromCloud();
+        processSyncQueue();
+    }
 });
 
 export const db = {
@@ -221,7 +229,13 @@ export const db = {
         if (enabled) {
             isBackendMissing = false;
             db.testConnection().then(ok => {
-                if (ok) processSyncQueue();
+                if (ok) {
+                    db.syncAllLocalToCloud().then(() => {
+                        db.pullAllFromCloud().then(() => {
+                            processSyncQueue();
+                        });
+                    });
+                }
             });
         } else {
             broadcastSyncUpdate();
@@ -280,6 +294,67 @@ export const db = {
         }
     },
 
+    remoteLogin: async (username: string, password: string): Promise<{success: boolean, user?: User, error?: string}> => {
+        try {
+            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'REMOTE_LOGIN', username, password })
+            });
+            const result = await handleSyncResponse(response);
+            if (result.success) return { success: true, user: result.user };
+            return { success: false, error: result.error };
+        } catch (e: any) {
+            return { success: false, error: e.message };
+        }
+    },
+
+    pullAllFromCloud: async (): Promise<boolean> => {
+        try {
+            currentSyncStatus = 'SYNCING';
+            broadcastSyncUpdate();
+
+            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'FETCH_HYDRATION_DATA' })
+            });
+
+            const result = await handleSyncResponse(response);
+            if (!result.success) throw new Error(result.error);
+
+            const data = result.data;
+
+            // Hydrate Global Tables
+            setItem('global_users', data.users || []);
+            setItem('global_stores', data.stores || []);
+            setItem('global_employees', data.employees || []);
+            setItem('global_permissions', data.global_permissions || []);
+
+            // Hydrate Store-Specific Tables
+            const storeIds = (data.stores || []).map((s: any) => s.id);
+            for (const sid of storeIds) {
+                setItem(`store_${sid}_products`, (data.products || []).filter((p: any) => p.storeId === sid));
+                setItem(`store_${sid}_categories`, (data.categories || []).filter((c: any) => c.storeId === sid));
+                setItem(`store_${sid}_customers`, (data.customers || []).filter((c: any) => c.storeId === sid));
+                setItem(`store_${sid}_inventory`, (data.inventory || []).filter((i: any) => i.storeId === sid));
+                setItem(`store_${sid}_orders`, (data.orders || []).filter((o: any) => o.storeId === sid));
+                setItem(`store_${sid}_quotations`, (data.quotations || []).filter((q: any) => q.storeId === sid));
+                setItem(`store_${sid}_shifts`, (data.shifts || []).filter((s: any) => s.storeId === sid));
+            }
+
+            currentSyncStatus = 'CONNECTED';
+            broadcastSyncUpdate();
+            return true;
+        } catch (e: any) {
+            console.error("Hydration failed:", e);
+            lastSyncError = e.message;
+            currentSyncStatus = 'ERROR';
+            broadcastSyncUpdate();
+            return false;
+        }
+    },
+
     syncAllLocalToCloud: async () => {
         const tasks: { action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any }[] = [];
         
@@ -288,7 +363,7 @@ export const db = {
         const emps = await db.getEmployees();
         const perms = await db.getRolePermissions();
 
-        // Push Global Data (Using Replace logic by default)
+        // Push Global Data
         users.forEach(u => tasks.push({ action: 'INSERT', table: 'users', data: u }));
         stores.forEach(s => tasks.push({ action: 'INSERT', table: 'stores', data: s }));
         emps.forEach(e => tasks.push({ action: 'INSERT', table: 'employees', data: e }));
@@ -306,45 +381,31 @@ export const db = {
                 db.getRegisterShifts(store.id)
             ]);
 
-            // Fetch current state from server to avoid duplicates / sequential collisions
             const serverState = await db.getServerIds('orders', store.id);
             const serverOrderNumbers = new Set(serverState.orderNumbers || []);
             const serverIds = new Set(serverState.ids || []);
 
-            // 1. Process Orders first (Special sequential collision check)
             let updatedOrders = [...orders];
             let ordersChanged = false;
 
-            updatedOrders.forEach((o, idx) => {
+            updatedOrders.forEach((o) => {
                 let collision = false;
-                
-                // If ID exists on server, generate NEW ID (User requirement: no repeat, move to next)
-                if (serverIds.has(o.id)) {
-                    o.id = uuid();
-                    collision = true;
-                }
-
-                // If Order Number exists on server for this store, increment it
+                if (serverIds.has(o.id)) { o.id = uuid(); collision = true; }
                 while (serverOrderNumbers.has(o.orderNumber)) {
                     const currentNum = parseInt(o.orderNumber) || 0;
                     o.orderNumber = (currentNum + 1).toString().padStart(4, '0');
                     collision = true;
                 }
-
                 if (collision) {
                     serverIds.add(o.id);
                     serverOrderNumbers.add(o.orderNumber);
                     ordersChanged = true;
                 }
-                
                 tasks.push({ action: 'INSERT', table: 'orders', data: o });
             });
 
-            if (ordersChanged) {
-                setItem(`store_${store.id}_orders`, updatedOrders);
-            }
+            if (ordersChanged) setItem(`store_${store.id}_orders`, updatedOrders);
 
-            // 2. Process other records
             prods.forEach(p => tasks.push({ action: 'INSERT', table: 'products', data: p }));
             cats.forEach(c => tasks.push({ action: 'INSERT', table: 'categories', data: c }));
             custs.forEach(c => tasks.push({ action: 'INSERT', table: 'customers', data: c }));
@@ -353,13 +414,23 @@ export const db = {
             shifts.forEach(s => tasks.push({ action: 'INSERT', table: 'shifts', data: s }));
         }
 
-        if (tasks.length > 0) {
-            batchAddTasksToSyncQueue(tasks);
-        }
+        if (tasks.length > 0) batchAddTasksToSyncQueue(tasks);
         return true;
     },
 
     init: async () => {
+        // 1. Setup default local data structure
+        const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
+        if (perms.length === 0) {
+            const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
+                role,
+                permissions: role === UserRole.SUPER_ADMIN ? [] : []
+            }));
+            const cashier = defaultPerms.find(p => p.role === UserRole.CASHIER);
+            if (cashier) cashier.permissions = ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER'];
+            setItem('global_permissions', defaultPerms);
+        }
+
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
             const admin: User = {
@@ -373,21 +444,18 @@ export const db = {
             };
             setItem('global_users', [admin]);
         }
-        
-        const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
-        if (perms.length === 0) {
-            const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
-                role,
-                permissions: role === UserRole.SUPER_ADMIN ? [] : []
-            }));
-            const cashier = defaultPerms.find(p => p.role === UserRole.CASHIER);
-            if (cashier) cashier.permissions = ['POS_ACCESS', 'POS_CREATE_ORDER', 'POS_SETTLE', 'POS_OPEN_CLOSE_REGISTER'];
-            setItem('global_permissions', defaultPerms);
-        }
 
+        // 2. Automated Cloud Sync & Pull if online
         if (getItem<boolean>('sync_enabled', true)) {
-            await db.testConnection();
-            processSyncQueue();
+            const online = await db.testConnection();
+            if (online) {
+                // First push local changes (resolving ID conflicts)
+                await db.syncAllLocalToCloud();
+                // Then pull latest state from central DB
+                await db.pullAllFromCloud();
+                // Process any individual items in queue
+                processSyncQueue();
+            }
         }
     },
 
@@ -546,20 +614,8 @@ export const db = {
     getOrders: async (storeId: string) => getItem<Order[]>(`store_${storeId}_orders`, []),
     addOrder: async (storeId: string, o: Order) => {
         const orders = await db.getOrders(storeId);
-        
-        // Before adding, check for local duplicates if offline
-        const serverState = await db.getServerIds('orders', storeId);
-        const serverNums = new Set(serverState.orderNumbers || []);
-        
         const nextNum = await db.getNextOrderNumber(storeId);
-        let finalNum = o.orderNumber || nextNum;
-        
-        // User requested conflict resolution: increment if exists
-        while (serverNums.has(finalNum)) {
-            finalNum = (parseInt(finalNum) + 1).toString().padStart(4, '0');
-        }
-
-        const newOrder = { ...o, id: o.id || uuid(), orderNumber: finalNum, storeId };
+        const newOrder = { ...o, id: o.id || uuid(), orderNumber: o.orderNumber || nextNum, storeId };
         setItem(`store_${storeId}_orders`, [...orders, newOrder]);
         addToSyncQueue('INSERT', 'orders', newOrder);
         return newOrder;
