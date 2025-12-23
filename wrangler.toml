@@ -1,8 +1,14 @@
 name = "omni-pos"
-pages_build_output_dir = "dist"
+main = "worker.ts"
 compatibility_date = "2024-04-01"
+
+# Serve static assets from the 'dist' directory
+assets = { directory = "./dist", binding = "ASSETS" }
 
 [[d1_databases]]
 binding = "DB" 
 database_name = "pos"
 database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
+
+[vars]
+# Add environment variables here
