@@ -7,8 +7,9 @@ binding = "DB"
 database_name = "pos"
 database_id = "5657e25b-bcdb-4fb8-9a2b-4b1f80259e9f"
 
-[assets]
-directory = "./"
+[vars]
+# Environment variables accessible in your functions
+# e.g., SESSION_TIMEOUT = "3600"
 
-[observability]
-enabled = false
+[site]
+bucket = "./dist"
