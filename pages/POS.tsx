@@ -1110,18 +1110,22 @@ export default function POS() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2.5 mb-2.5">
-                    <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex items-center justify-center gap-2 py-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-all active:scale-95 disabled:opacity-30">
-                        <ChefHat size={16}/> Send to Kitchen
+                <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+                    <button 
+                        onClick={handleSendToKitchen} 
+                        disabled={cart.length === 0} 
+                        className="flex items-center justify-center gap-2 py-3.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-all active:scale-95 disabled:opacity-30"
+                    >
+                        <ChefHat size={16}/> KOT
+                    </button>
+                    <button 
+                        onClick={handleCheckout} 
+                        disabled={cart.length === 0} 
+                        className="flex items-center justify-center gap-2 py-3.5 bg-blue-600/30 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:bg-blue-600 hover:text-white transition-all active:scale-[0.98] disabled:opacity-30"
+                    >
+                        <DollarSign size={18}/> Pay
                     </button>
                 </div>
-                <button 
-                    onClick={handleCheckout} 
-                    disabled={cart.length === 0} 
-                    className="w-full py-4.5 bg-blue-600/30 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-xs uppercase tracking-[0.15em] shadow-sm hover:bg-blue-600 hover:text-white transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-30"
-                >
-                    <DollarSign size={18}/> Settle Payment
-                </button>
             </div>
         </aside>
       </div>
