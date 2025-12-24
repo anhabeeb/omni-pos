@@ -533,7 +533,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       {/* Secondary Action Bar (Contextual to selected store) */}
       {currentStoreId && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-2 flex items-center justify-center gap-1 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide">
+        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-6 py-2.5 flex items-center justify-start lg:justify-center gap-2 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide scroll-smooth">
           {storeActions.filter(a => {
               if (a.permission && !hasPermission(a.permission as Permission)) return false;
               return true;
@@ -543,9 +543,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <button
                 key={action.path}
                 onClick={() => navigate(action.path)}
-                className={`flex items-center gap-2 px-5 py-2 rounded-xl transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold'}`}
+                className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-all whitespace-nowrap group ${isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent font-bold'}`}
               >
-                <action.icon size={14} className={isActive ? 'text-white' : 'text-gray-400'} />
+                <action.icon size={16} className={isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-600 transition-colors'} />
                 <span className="text-xs font-black uppercase tracking-tight">{action.label}</span>
               </button>
             );
