@@ -36,13 +36,14 @@ let currentSyncStatus: SyncStatus = 'CONNECTED';
 let lastSyncError: string | null = null;
 let isDatabaseReachable = false;
 let isBackendMissing = false;
+let autoSyncInterval: any = null;
 
 const broadcastSyncUpdate = () => {
     const queue = getItem<any[]>('sync_queue', []);
     const isEnabled = getItem<boolean>('sync_enabled', true);
     window.dispatchEvent(new CustomEvent('db_sync_update', { 
         detail: { 
-            status: isEnabled ? currentSyncStatus : 'DISABLED', 
+            status: isEnabled ? (navigator.onLine ? currentSyncStatus : 'OFFLINE') : 'DISABLED', 
             pendingCount: queue.length,
             error: lastSyncError,
             isBackendMissing
@@ -70,7 +71,7 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
 
 let isProcessingSync = false;
 const processSyncQueue = async () => {
-    if (isProcessingSync) return;
+    if (isProcessingSync || !navigator.onLine) return;
     isProcessingSync = true;
 
     let queue = getItem<any[]>('sync_queue', []);
@@ -105,6 +106,23 @@ const processSyncQueue = async () => {
     }
     isProcessingSync = false;
     broadcastSyncUpdate();
+};
+
+// Periodic polling to keep terminals in sync automatically
+const startBackgroundPolling = () => {
+    if (autoSyncInterval) clearInterval(autoSyncInterval);
+    
+    autoSyncInterval = setInterval(async () => {
+        if (getItem<boolean>('sync_enabled', true) && navigator.onLine) {
+            const queue = getItem<any[]>('sync_queue', []);
+            // Only pull if we don't have pending outgoing changes to avoid complicated conflicts
+            if (queue.length === 0) {
+                await db.pullAllFromCloud();
+            }
+            // Also try to process queue in case it got stuck
+            processSyncQueue();
+        }
+    }, 30000); // Sync every 30 seconds
 };
 
 export const db = {
@@ -157,8 +175,20 @@ export const db = {
             addToSyncQueue('INSERT', 'employees', adminEmp);
         }
 
+        // Auto-resume sync when internet returns
+        window.addEventListener('online', () => {
+            currentSyncStatus = 'CONNECTED';
+            processSyncQueue();
+            broadcastSyncUpdate();
+        });
+
+        window.addEventListener('offline', () => {
+            broadcastSyncUpdate();
+        });
+
         if (getItem<boolean>('sync_enabled', true)) {
             processSyncQueue();
+            startBackgroundPolling();
         }
     },
 
@@ -198,7 +228,7 @@ export const db = {
     getSyncStatus: (): { status: SyncStatus, pendingCount: number, error: string | null, isBackendMissing: boolean } => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         return { 
-            status: isEnabled ? currentSyncStatus : 'DISABLED', 
+            status: isEnabled ? (navigator.onLine ? currentSyncStatus : 'OFFLINE') : 'DISABLED', 
             pendingCount: getItem<any[]>('sync_queue', []).length, 
             error: lastSyncError, 
             isBackendMissing 
@@ -215,7 +245,12 @@ export const db = {
     },
     setSyncEnabled: (e: boolean) => {
         setItem('sync_enabled', e);
-        if (e) processSyncQueue();
+        if (e) {
+            processSyncQueue();
+            startBackgroundPolling();
+        } else {
+            if (autoSyncInterval) clearInterval(autoSyncInterval);
+        }
     },
     isSyncEnabled: () => getItem<boolean>('sync_enabled', true),
 
@@ -225,6 +260,7 @@ export const db = {
     },
 
     pullAllFromCloud: async () => {
+        if (!navigator.onLine) return false;
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
@@ -238,6 +274,7 @@ export const db = {
                 if (data.stores) setItem('global_stores', data.stores);
                 if (data.employees) setItem('global_employees', data.employees);
                 if (data.global_permissions) setItem('global_permissions', data.global_permissions);
+                if (data.system_activities) setItem('global_activities', data.system_activities);
                 
                 // Hydrate store-specific data
                 const stores = data.stores || [];
@@ -248,6 +285,8 @@ export const db = {
                     if (data.customers) setItem(`store_${id}_customers`, data.customers.filter((c:any) => c.storeId === id));
                     if (data.orders) setItem(`store_${id}_orders`, data.orders.filter((o:any) => o.storeId === id));
                     if (data.shifts) setItem(`store_${id}_shifts`, data.shifts.filter((sh:any) => sh.storeId === id));
+                    if (data.inventory) setItem(`store_${id}_inventory`, data.inventory.filter((i:any) => i.storeId === id));
+                    if (data.quotations) setItem(`store_${id}_quotations`, data.quotations.filter((q:any) => q.storeId === id));
                 }
                 return true;
             }
@@ -262,7 +301,8 @@ export const db = {
             { name: 'users', key: 'global_users' },
             { name: 'stores', key: 'global_stores' },
             { name: 'employees', key: 'global_employees' },
-            { name: 'global_permissions', key: 'global_permissions' }
+            { name: 'global_permissions', key: 'global_permissions' },
+            { name: 'system_activities', key: 'global_activities' }
         ];
 
         tables.forEach(t => {
@@ -277,7 +317,9 @@ export const db = {
                 { name: 'categories', key: `store_${s.id}_categories` },
                 { name: 'customers', key: `store_${s.id}_customers` },
                 { name: 'orders', key: `store_${s.id}_orders` },
-                { name: 'shifts', key: `store_${s.id}_shifts` }
+                { name: 'shifts', key: `store_${s.id}_shifts` },
+                { name: 'inventory', key: `store_${s.id}_inventory` },
+                { name: 'quotations', key: `store_${s.id}_quotations` }
             ];
             storeTables.forEach(t => {
                 const data = getItem<any[]>(t.key, []);
