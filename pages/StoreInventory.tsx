@@ -26,26 +26,22 @@ export default function StoreInventory() {
     }
   }, [storeId]);
 
-  // Fixed: Made loadData async and cast storeId to number
+  // Fixed: Made loadData async and awaited DB calls
   const loadData = async () => {
     if (!storeId) return;
-    const numericStoreId = Number(storeId);
     const stores = await db.getStores();
-    setStore(stores.find(s => s.id === numericStoreId) || null);
-    setItems(await db.getInventory(numericStoreId));
+    setStore(stores.find(s => s.id === storeId) || null);
+    setItems(await db.getInventory(storeId));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeId || !editingItem.name) return;
-    const numericStoreId = Number(storeId);
 
     if (editingItem.id) {
-      // Fix: Now uses updateInventoryItem added to db.ts
-      await db.updateInventoryItem(numericStoreId, editingItem as InventoryItem);
+      db.updateInventoryItem(storeId, editingItem as InventoryItem);
     } else {
-      // Fix: id should be 0 for auto-increment in addInventoryItem
-      await db.addInventoryItem(numericStoreId, { ...editingItem, id: 0 } as InventoryItem);
+      db.addInventoryItem(storeId, editingItem as InventoryItem);
     }
     setIsModalOpen(false);
     setEditingItem({ name: '', quantity: 0, unit: 'kg', minLevel: 0 });
@@ -56,13 +52,9 @@ export default function StoreInventory() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = (id: string) => {
     if (confirm('Delete this inventory item?')) {
-      if (storeId) {
-        const numericStoreId = Number(storeId);
-        // Fix: Now uses deleteInventoryItem added to db.ts
-        await db.deleteInventoryItem(numericStoreId, id);
-      }
+      if (storeId) db.deleteInventoryItem(storeId, id);
     }
   };
 

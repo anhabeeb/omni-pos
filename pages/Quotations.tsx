@@ -12,8 +12,7 @@ export default function Quotations() {
   const { storeId: urlStoreId } = useParams<{ storeId: string }>();
   const { user, currentStoreId, switchStore } = useAuth();
   
-  // Fix: useParams returns string, currentStoreId is number. Ensure activeStoreId is number.
-  const activeStoreId = urlStoreId ? Number(urlStoreId) : currentStoreId;
+  const activeStoreId = urlStoreId || currentStoreId;
 
   const [activeTab, setActiveTab] = useState<'LIST' | 'NEW'>('LIST');
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -33,8 +32,8 @@ export default function Quotations() {
 
   useEffect(() => {
     if (activeStoreId) {
-      if (urlStoreId && Number(urlStoreId) !== currentStoreId) {
-          switchStore(Number(urlStoreId));
+      if (urlStoreId && urlStoreId !== currentStoreId) {
+          switchStore(urlStoreId);
       }
       loadData();
       window.addEventListener(`db_change_store_${activeStoreId}_quotations`, loadQuotations);
@@ -89,7 +88,7 @@ export default function Quotations() {
       });
   };
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const updateQuantity = (productId: string, delta: number) => {
       setCart(prev => prev.map(item => {
           if (item.productId === productId) {
               const newQty = Math.max(1, item.quantity + delta);
@@ -99,7 +98,7 @@ export default function Quotations() {
       }));
   };
 
-  const removeFromCart = (productId: number) => {
+  const removeFromCart = (productId: string) => {
       setCart(prev => prev.filter(item => item.productId !== productId));
   };
 
@@ -352,7 +351,7 @@ export default function Quotations() {
               <div className="w-full md:w-96 bg-white dark:bg-gray-800 rounded-2xl border flex flex-col shadow-xl overflow-hidden">
                   <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Recipient Customer</label>
-                      <select className="w-full p-2.5 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 font-bold outline-none" value={selectedCustomer?.id || ''} onChange={e => setSelectedCustomer(customers.find(c => c.id === Number(e.target.value)) || null)}>
+                      <select className="w-full p-2.5 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 font-bold outline-none" value={selectedCustomer?.id || ''} onChange={e => setSelectedCustomer(customers.find(c => c.id === e.target.value) || null)}>
                           <option value="">Select Customer...</option>
                           {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>

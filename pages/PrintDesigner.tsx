@@ -61,12 +61,12 @@ export default function PrintDesigner() {
   const [documentType, setDocumentType] = useState<'RECEIPT' | 'QUOTATION' | 'EOD'>('RECEIPT');
   const [settings, setSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
 
-  // Fixed: Await db.getStores in effect and use Number for ID comparison
+  // Fixed: Await db.getStores in effect
   useEffect(() => {
     const loadStore = async () => {
         if (storeId) {
           const stores = await db.getStores();
-          const current = stores.find(s => s.id === Number(storeId));
+          const current = stores.find(s => s.id === storeId);
           if (current) {
             setStore(current);
             loadSettingsForType(current, 'RECEIPT');

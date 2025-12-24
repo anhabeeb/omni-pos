@@ -32,26 +32,24 @@ export default function StaffManagement() {
     }
   }, [storeId]);
 
-  // Fixed: Made loadData async and awaited DB calls with Number casting
+  // Fixed: Made loadData async and awaited DB calls
   const loadData = async () => {
     if (!storeId) return;
-    const numericStoreId = Number(storeId);
     
     // Get Store Details
     const stores = await db.getStores();
-    const currentStore = stores.find(s => s.id === numericStoreId);
+    const currentStore = stores.find(s => s.id === storeId);
     setStore(currentStore || null);
 
     // Get Staff for this store (check if storeId is in their storeIds array)
     const allUsers = await db.getUsers();
-    const storeStaff = allUsers.filter(u => u.storeIds && u.storeIds.includes(numericStoreId));
+    const storeStaff = allUsers.filter(u => u.storeIds && u.storeIds.includes(storeId));
     setStaff(storeStaff);
   };
 
-  // Fixed: Made handleRemoveFromStore async and awaited DB call with Number casting
-  const handleRemoveFromStore = async (userId: number) => {
+  // Fixed: Made handleRemoveFromStore async and awaited DB call
+  const handleRemoveFromStore = async (userId: string) => {
       if (!storeId) return;
-      const numericStoreId = Number(storeId);
       if (userId === currentUser?.id) {
           alert("You cannot remove yourself.");
           return;
@@ -62,10 +60,9 @@ export default function StaffManagement() {
           const targetUser = allUsers.find(u => u.id === userId);
           if (targetUser) {
               // Filter out this store ID
-              targetUser.storeIds = targetUser.storeIds.filter(id => id !== numericStoreId);
+              targetUser.storeIds = targetUser.storeIds.filter(id => id !== storeId);
               // Update user in DB
-              await db.updateUser(targetUser);
-              await loadData();
+              db.updateUser(targetUser);
           }
       }
   };

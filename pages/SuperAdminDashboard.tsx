@@ -13,8 +13,7 @@ export default function SuperAdminDashboard() {
   const [stores, setStores] = useState<Store[]>([]);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   
-  // Fix: changed storeId to number in allOrders state
-  const [allOrders, setAllOrders] = useState<{storeId: number, order: Order}[]>([]);
+  const [allOrders, setAllOrders] = useState<{storeId: string, order: Order}[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,8 +62,7 @@ export default function SuperAdminDashboard() {
     const activeSessions = await db.getActiveSessions();
     setSessions(activeSessions);
 
-    // Fix: Using number for storeId in orders map
-    const orders: {storeId: number, order: Order}[] = [];
+    const orders: {storeId: string, order: Order}[] = [];
     for (const store of loadedStores) {
         const storeOrders = await db.getOrders(store.id);
         storeOrders.forEach(o => orders.push({ storeId: store.id, order: o }));
@@ -92,8 +90,7 @@ export default function SuperAdminDashboard() {
           if (storeData.id) {
             await db.updateStore(storeData as Store);
           } else {
-            // Fix: id should be 0 for auto-increment in addStore
-            await db.addStore({ ...storeData, id: 0, isActive: true } as Store);
+            await db.addStore({ ...storeData, isActive: true } as Store);
           }
           setIsModalOpen(false);
           resetForm();
@@ -157,8 +154,7 @@ export default function SuperAdminDashboard() {
     setIsModalOpen(true);
   };
 
-  // Fix: changed storeId to number in getStoreStats
-  const getStoreStats = (storeId: number) => {
+  const getStoreStats = (storeId: string) => {
       const currentStore = stores.find(s => s.id === storeId);
       const currency = currentStore?.currency || '$';
       const today = new Date();
@@ -320,7 +316,6 @@ export default function SuperAdminDashboard() {
 
       <div className="space-y-8">
         {stores.map((store) => {
-            // Fix: passing number ID to getStoreStats
             const stats = getStoreStats(store.id);
             return (
                 <div key={store.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">

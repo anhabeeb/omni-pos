@@ -13,8 +13,7 @@ import {
   Percent,
   MapPin,
   Loader2,
-  Activity,
-  Tag
+  Activity
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -76,8 +75,7 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Fix: handle number storeId in storage keys
-  const getStorageKeys = (storeId: number) => ({
+  const getStorageKeys = (storeId: string) => ({
     cart: `pos_cart_${storeId}`,
     type: `pos_type_${storeId}`,
     customer: `pos_customer_${storeId}`,
@@ -89,7 +87,6 @@ export default function POS() {
   useEffect(() => {
     if (currentStoreId) {
       loadData();
-      // Fix: passed currentStoreId as number
       loadFromPersistence(currentStoreId);
       const handleDbChange = () => loadData();
       window.addEventListener('db_change_any', handleDbChange);
@@ -126,7 +123,7 @@ export default function POS() {
       setToast({ message, type });
   };
 
-  const loadFromPersistence = (storeId: number) => {
+  const loadFromPersistence = (storeId: string) => {
       const keys = getStorageKeys(storeId);
       const savedCart = localStorage.getItem(keys.cart);
       const savedType = localStorage.getItem(keys.type);
@@ -199,7 +196,7 @@ export default function POS() {
       });
   };
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const updateQuantity = (productId: string, delta: number) => {
       setCart(prev => prev.map(item => {
           if (item.productId === productId) {
               const newQty = Math.max(0, item.quantity + delta);
@@ -246,7 +243,7 @@ export default function POS() {
     if (currentStoreId) {
         await db.deleteOrder(currentStoreId, order.id);
         db.logActivity({
-            storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
+            storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
             action: 'ORDER_CREATE',
             description: `Order #${order.orderNumber} resumed from memory/hold`
         });
@@ -260,7 +257,7 @@ export default function POS() {
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.ON_HOLD);
     db.logActivity({
-        storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
+        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
         action: 'ORDER_UPDATE',
         description: `Order #${order.orderNumber} placed on hold`
     });
@@ -272,9 +269,8 @@ export default function POS() {
     if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
     
     setIsSaving(true);
-    // Fix: cast id to 0 for auto-increment and shiftId to number
     const newOrder: Order = {
-        id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
+        id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
         items: [...cart], subtotal: totals.subtotal, 
         discountPercent: discountPercent, 
         discountAmount: totals.discountAmount,
@@ -315,7 +311,7 @@ export default function POS() {
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.PENDING);
     db.logActivity({
-        storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
+        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
         action: 'ORDER_UPDATE',
         description: `Order #${order.orderNumber} reactivated`
     });
@@ -328,9 +324,8 @@ export default function POS() {
       if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
       
       setIsSaving(true);
-      // Fix: cast id to 0 for auto-increment and shiftId to number
       const newOrderData: Order = {
-          id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
+          id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
           items: [...cart], subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
@@ -439,9 +434,8 @@ export default function POS() {
                 description: `Active order #${finalOrder.orderNumber} settled via ${paymentMethod}`
               });
           } else {
-              // Fix: cast id to 0 and shiftId to number
               finalOrder = { 
-                id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
+                id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
                 items: localCart, 
                 subtotal: localTotals.subtotal, 
                 discountPercent: localDisc,
@@ -671,11 +665,10 @@ export default function POS() {
       if (!currentStoreId || !newCustData.name || isSaving) return;
       setIsSaving(true);
       try {
-          // Fix: cast id to 0 for auto-increment and added storeId
-          const newCust: Customer = { ...newCustData, id: 0, storeId: currentStoreId } as Customer;
-          const added = await db.addCustomer(currentStoreId, newCust); 
-          setSelectedCustomer(added); 
-          setCustomerSearch(added.name); 
+          const newCust: Customer = { ...newCustData, id: uuid() } as Customer;
+          await db.addCustomer(currentStoreId, newCust); 
+          setSelectedCustomer(newCust); 
+          setCustomerSearch(newCust.name); 
           setIsCustomerModalOpen(false); 
           resetNewCustForm();
           showToast("Customer Added", "SUCCESS");
@@ -748,41 +741,6 @@ export default function POS() {
     }
   };
 
-  // Helper for grouped product display
-  const renderProductGrid = (productList: Product[]) => (
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
-          {productList.map(product => (
-              <button 
-                  key={product.id} 
-                  onClick={() => addToCart(product)} 
-                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
-              >
-                  <div 
-                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
-                      style={{ height: `${3.5 * menuScale}rem` }}
-                  >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={18 * menuScale}/>}
-                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
-                      </div>
-                  </div>
-                  <h3 
-                      className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-1 leading-tight h-8"
-                      style={{ fontSize: `${9 * menuScale}px` }}
-                  >
-                      {product.name}
-                  </h3>
-                  <div 
-                      className="mt-auto font-black text-blue-600"
-                      style={{ fontSize: `${11 * menuScale}px` }}
-                  >
-                      {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
-                  </div>
-              </button>
-          ))}
-      </div>
-  );
-
   return (
     <div className="flex h-full bg-gray-50 dark:bg-gray-900 overflow-hidden text-gray-800 dark:text-gray-200">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -821,65 +779,59 @@ export default function POS() {
         <div className="flex-1 overflow-hidden flex flex-col p-3">
             {activeTab === 'MENU' ? (
                 <>
-                    <div className="flex flex-wrap gap-2 mb-4 shrink-0 overflow-y-auto max-h-32 custom-scrollbar pr-2">
+                    <div className="flex gap-2 overflow-x-auto pb-3 mb-2 shrink-0 custom-scrollbar-hide whitespace-nowrap">
                         <button 
                             onClick={() => setSelectedCategoryId('ALL')}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === 'ALL' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                            className={`px-3 py-1.5 rounded-full text-[10px] md:text-xs font-black uppercase transition-all border ${selectedCategoryId === 'ALL' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}
                         >
-                            <Activity size={12}/> All Items
+                            All Items
                         </button>
                         {categories.map(cat => (
                             <button 
                                 key={cat.id}
-                                // Fix: Convert cat.id to string for selectedCategoryId
-                                onClick={() => setSelectedCategoryId(cat.id.toString())}
-                                className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === cat.id.toString() ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                                onClick={() => setSelectedCategoryId(cat.id)}
+                                className={`px-3 py-1.5 rounded-full text-[10px] md:text-xs font-black uppercase transition-all border ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}
                             >
-                                <Tag size={12}/> {cat.name}
+                                {cat.name}
                             </button>
                         ))}
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        {selectedCategoryId === 'ALL' ? (
-                            <div className="space-y-8 pb-20">
-                                {categories.map(cat => {
-                                    const catProducts = products.filter(p => p.categoryId === cat.id && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-                                    if (catProducts.length === 0) return null;
-                                    return (
-                                        <div key={cat.id} className="space-y-3">
-                                            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 flex items-center gap-2 border-b dark:border-gray-800 pb-2">
-                                                <Tag size={12} className="text-blue-500" /> {cat.name}
-                                            </h2>
-                                            {renderProductGrid(catProducts)}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
+                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)).map(product => (
+                                <button 
+                                    key={product.id} 
+                                    onClick={() => addToCart(product)} 
+                                    className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
+                                >
+                                    <div 
+                                        className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
+                                        style={{ height: `${3.5 * menuScale}rem` }}
+                                    >
+                                        {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={18 * menuScale}/>}
+                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
                                         </div>
-                                    );
-                                })}
-                                {/* Handling uncategorized if any */}
-                                {(() => {
-                                    const uncategorized = products.filter(p => !categories.some(c => c.id === p.categoryId) && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-                                    if (uncategorized.length > 0) {
-                                        return (
-                                            <div className="space-y-3">
-                                                <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 flex items-center gap-2 border-b dark:border-gray-800 pb-2">
-                                                    <Tag size={12} className="text-gray-400" /> Others
-                                                </h2>
-                                                {renderProductGrid(uncategorized)}
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-                            </div>
-                        ) : (
-                            <div className="pb-20">
-                                {/* Fix: Convert p.categoryId to string for comparison with selectedCategoryId */}
-                                {renderProductGrid(products.filter(p => p.categoryId.toString() === selectedCategoryId && p.name.toLowerCase().includes(searchTerm.toLowerCase())))}
-                            </div>
-                        )}
+                                    </div>
+                                    <h3 
+                                        className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-1 leading-tight h-8"
+                                        style={{ fontSize: `${9 * menuScale}px` }}
+                                    >
+                                        {product.name}
+                                    </h3>
+                                    <div 
+                                        className="mt-auto font-black text-blue-600"
+                                        style={{ fontSize: `${11 * menuScale}px` }}
+                                    >
+                                        {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="absolute bottom-6 left-6 z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
+                    <div className="absolute bottom-6 right-6 z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
                         <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                             <Maximize2 size={16} />
                         </div>
@@ -1066,7 +1018,7 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modals remain same, using fixed/absolute positioning already */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
@@ -1083,7 +1035,7 @@ export default function POS() {
 
       {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-lg p-6 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[95vh]">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[95vh]">
                   <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold dark:text-white">Payment</h2><button onClick={() => { setIsPaymentModalOpen(false); setOrderToSettle(null); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button></div>
                   <div className="text-center mb-6 bg-blue-50 dark:bg-blue-900/20 py-6 rounded-2xl border border-blue-100 dark:border-blue-800">
                       <div className="text-gray-500 uppercase text-[10px] font-black tracking-widest mb-1">Payable</div>

@@ -63,8 +63,7 @@ export default function SystemLogs() {
       );
   });
 
-  // Fix: Changed storeId parameter to number | null to match Store interface
-  const getStoreActivities = (storeId: number | null) => {
+  const getStoreActivities = (storeId: string | null) => {
       return filteredActivities.filter(a => a.storeId === storeId).slice(0, 50);
   };
 
@@ -156,14 +155,12 @@ export default function SystemLogs() {
                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">STORE</span>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
-                      {/* Fix: Passed store.id (number) to getStoreActivities */}
                       {getStoreActivities(store.id).length === 0 ? (
                           <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 space-y-2">
                               <Activity size={32} />
                               <p className="text-xs font-bold uppercase tracking-widest">No activities logged</p>
                           </div>
                       ) : (
-                          // Fix: Passed store.id (number) to getStoreActivities
                           getStoreActivities(store.id).map(act => (
                               <div key={act.id} className="p-3 border-b dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group">
                                   <div className="flex justify-between items-start mb-1">

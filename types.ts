@@ -21,9 +21,9 @@ export type ActivityAction =
   | 'PERMISSION_UPDATE';
 
 export interface SystemActivity {
-  id: number;
-  storeId: number | null; 
-  userId: number;
+  id: string;
+  storeId: string | null; // null for global system actions
+  userId: string;
   userName: string;
   action: ActivityAction;
   description: string;
@@ -58,25 +58,25 @@ export interface RolePermissionConfig {
 }
 
 export interface User {
-  id: number;
+  id: string;
   userNumber?: number; 
   name: string;
   username: string;
   password?: string;
   role: UserRole;
-  storeIds: number[];
+  storeIds: string[];
 }
 
 export interface ActiveSession {
-  userId: number;
+  userId: string;
   userName: string;
   role: UserRole;
-  storeId: number | null;
+  storeId: string | null;
   lastActive: number;
 }
 
 export interface Employee {
-  id: number;
+  id: string;
   empId: string;
   fullName: string;
   dob: string;
@@ -119,7 +119,7 @@ export interface PrintSettings {
 }
 
 export interface Store {
-  id: number;
+  id: string;
   name: string;
   currency: string; 
   address: string;
@@ -141,46 +141,44 @@ export interface Store {
 }
 
 export interface Category {
-  id: number;
+  id: string;
   name: string;
-  storeId: number;
   orderId?: number;
 }
 
 export interface RecipeItem {
-  inventoryItemId: number;
+  inventoryItemId: string;
   quantity: number;
 }
 
 export interface Product {
-  id: number;
+  id: string;
   name: string;
   price: number;
   cost?: number;
-  categoryId: number;
+  categoryId: string;
   isAvailable: boolean;
   imageUrl?: string;
-  storeId?: number;
+  storeId?: string;
   recipe?: RecipeItem[]; 
 }
 
 export interface InventoryItem {
-  id: number;
+  id: string;
   name: string;
   quantity: number;
   unit: string;
   minLevel: number;
-  storeId: number;
+  storeId?: string;
 }
 
 export type CustomerType = 'INDIVIDUAL' | 'COMPANY';
 
 export interface Customer {
-  id: number;
+  id: string;
   name: string;
   phone: string;
   type: CustomerType;
-  storeId: number;
   companyName?: string;
   tin?: string;
   houseName?: string;
@@ -211,29 +209,29 @@ export enum OrderStatus {
 export type KitchenStatus = 'PENDING' | 'PREPARING' | 'READY' | 'SERVED';
 
 export interface OrderItem {
-  productId: number;
+  productId: string;
   productName: string;
   price: number;
   quantity: number;
 }
 
 export interface Transaction {
-  id: string; 
+  id: string;
   type: 'PAYMENT' | 'REFUND' | 'REVERSAL' | 'CANCELLATION';
   amount: number;
   method?: 'CASH' | 'CARD' | 'TRANSFER';
   timestamp: number;
-  performedBy: number;
+  performedBy: string;
   note?: string;
   tenderedAmount?: number;
   changeAmount?: number;
 }
 
 export interface Order {
-  id: number;
+  id: string;
   orderNumber: string; 
-  storeId: number;
-  shiftId?: number; 
+  storeId: string;
+  shiftId?: string; 
   items: OrderItem[];
   subtotal: number;
   discountPercent?: number;
@@ -253,14 +251,14 @@ export interface Order {
   customerAddress?: string;
   note?: string;
   cancellationReason?: string;
-  createdBy: number;
+  createdBy: string;
   createdAt: number;
 }
 
 export interface Quotation {
-  id: number;
+  id: string;
   quotationNumber: string;
-  storeId: number;
+  storeId: string;
   customerName: string;
   customerPhone?: string;
   customerTin?: string;
@@ -272,21 +270,21 @@ export interface Quotation {
   tax: number;
   total: number;
   validUntil?: number;
-  createdBy: number;
+  createdBy: string;
   createdAt: number;
 }
 
 export interface RegisterShift {
-  id: number;
+  id: string;
   shiftNumber?: number; 
-  storeId: number;
-  openedBy: number;
+  storeId: string;
+  openedBy: string;
   openedAt: number;
   startingCash: number;
   openingDenominations?: Record<number, number>; 
   status: 'OPEN' | 'CLOSED';
   closedAt?: number;
-  closedBy?: number;
+  closedBy?: string;
   expectedCash?: number;
   actualCash?: number;
   closingDenominations?: Record<number, number>; 
