@@ -123,7 +123,10 @@ export default function POS() {
   }, [cart, orderType, selectedCustomer, tableNumber, orderNote, discountPercent, currentStoreId]);
 
   useEffect(() => {
-      const handleClickOutside = () => setShowCustomerResults(false);
+      const handleClickOutside = () => {
+          setShowCustomerResults(false);
+          setShowDiscountPresets(false);
+      };
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
   }, []);
@@ -295,9 +298,13 @@ export default function POS() {
     showToast(`Order #${order.orderNumber} moved to Active`, "SUCCESS");
   };
 
-  const validateCustomer = () => {
+  const validateOrderRequirements = () => {
     if ((orderType === OrderType.TAKEAWAY || orderType === OrderType.DELIVERY) && !selectedCustomer) {
-        showToast(`Customer details required for ${orderType.replace('_', ' ').toLowerCase()}`, "ERROR");
+        showToast(`Customer required for ${orderType === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}`, "ERROR");
+        return false;
+    }
+    if (orderType === OrderType.DINE_IN && !tableNumber) {
+        showToast("Table number required for Dine-in", "ERROR");
         return false;
     }
     return true;
@@ -305,8 +312,7 @@ export default function POS() {
 
   const handleSendToKitchen = async () => {
       if (!currentStoreId || !user || !shift || cart.length === 0 || isSaving) return;
-      if (!validateCustomer()) return;
-      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
+      if (!validateOrderRequirements()) return;
       
       setIsSaving(true);
       const newOrderData: Order = {
@@ -369,12 +375,9 @@ export default function POS() {
 
   const handleCheckout = () => {
       if (cart.length === 0) return;
-      if (!validateCustomer()) return;
-      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
-      setOrderToSettle(null); 
-      setPaymentMethod('CASH'); 
-      setAmountTendered(''); 
-      setPaymentError(''); 
+      if (!validateOrderRequirements()) return;
+
+      setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitMode(false);
       setSplitPayment1({ method: 'CASH', amount: '' });
       setSplitPayment2({ method: 'CARD', amount: '' });
@@ -383,10 +386,7 @@ export default function POS() {
 
   const handleQuickSettle = (order: Order, e?: React.MouseEvent) => {
       if (e) e.stopPropagation();
-      setOrderToSettle(order); 
-      setPaymentMethod('CASH'); 
-      setAmountTendered(''); 
-      setPaymentError(''); 
+      setOrderToSettle(order); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitMode(false);
       setSplitPayment1({ method: 'CASH', amount: '' });
       setSplitPayment2({ method: 'CARD', amount: '' });
@@ -403,7 +403,7 @@ export default function POS() {
           const a1 = parseFloat(splitPayment1.amount) || 0;
           const a2 = parseFloat(splitPayment2.amount) || 0;
           if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Total split must equal ${store?.currency}${payableTotal.toFixed(2)}`);
+              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
               return;
           }
           transactions.push({
@@ -788,7 +788,7 @@ export default function POS() {
           </div>
       )}
 
-      {/* POS Context Bar - Tabs & Shift Button repositioned */}
+      {/* POS Context Bar */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
           <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
               {[
@@ -1049,46 +1049,58 @@ export default function POS() {
 
             <div className="p-6 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shrink-0">
                 <div className="space-y-2 mb-6">
-                    <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                         <span>Subtotal</span>
                         <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.subtotal.toFixed(2)}</span>
                     </div>
                     
-                    {/* Discount Control */}
+                    {/* Discount Row with Right-Aligned Button */}
                     <div className="relative">
                         <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                            <button 
-                                onClick={() => setShowDiscountPresets(!showDiscountPresets)}
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${discountPercent > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' : 'hover:bg-gray-50'}`}
-                            >
-                                <Percent size={12}/> Discount {discountPercent > 0 ? `(${discountPercent}%)` : ''}
-                            </button>
-                            {totals.discountAmount > 0 && (
-                                <span className="text-red-500 font-black">-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
-                            )}
+                            <span>Discount</span>
+                            <div className="flex items-center gap-3">
+                                {totals.discountAmount > 0 && (
+                                    <span className="text-red-500 font-black">-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
+                                )}
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setShowDiscountPresets(!showDiscountPresets); }}
+                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${discountPercent > 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                                >
+                                    <Percent size={11}/>
+                                    <span className="text-[10px] font-black">{discountPercent}%</span>
+                                </button>
+                            </div>
                         </div>
                         {showDiscountPresets && (
-                            <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl p-3 z-30 animate-in slide-in-from-bottom-2 duration-200">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Preset Discount</p>
-                                <div className="grid grid-cols-4 gap-2 mb-3">
+                            <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-2xl p-4 z-30 animate-in slide-in-from-bottom-2 duration-200">
+                                <div className="flex justify-between items-center mb-3">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Quick Presets</p>
+                                    <button onClick={() => { setDiscountPercent(0); setShowDiscountPresets(false); }} className="text-[9px] font-black text-red-500 uppercase hover:underline">Clear All</button>
+                                </div>
+                                <div className="grid grid-cols-4 gap-2 mb-4">
                                     {DISCOUNT_PRESETS.map(p => (
-                                        <button key={p} onClick={() => { setDiscountPercent(p); setShowDiscountPresets(false); }} className={`py-1.5 rounded-lg text-xs font-black border transition-all ${discountPercent === p ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-50'}`}>{p}%</button>
+                                        <button key={p} onClick={() => { setDiscountPercent(p); setShowDiscountPresets(false); }} className={`py-2 rounded-xl text-xs font-black border transition-all ${discountPercent === p ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:border-blue-300'}`}>{p}%</button>
                                     ))}
                                 </div>
-                                <div className="flex gap-2 items-center">
-                                    <input 
-                                        type="number" placeholder="Custom %" 
-                                        className="flex-1 p-2 bg-gray-50 dark:bg-gray-900 border-none rounded-lg text-xs font-bold outline-none"
-                                        value={discountPercent}
-                                        onChange={e => setDiscountPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                                    />
-                                    <button onClick={() => { setDiscountPercent(0); setShowDiscountPresets(false); }} className="text-[9px] font-black text-red-500 uppercase">Clear</button>
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Amount</p>
+                                    <div className="relative">
+                                        <input 
+                                            autoFocus
+                                            type="number" placeholder="Enter %" 
+                                            className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-sm font-black outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            value={discountPercent || ''}
+                                            onChange={e => setDiscountPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                                            onClick={e => e.stopPropagation()}
+                                        />
+                                        <div className="absolute right-3 top-2.5 text-gray-400 font-black text-sm">%</div>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                         <span>Tax ({store?.taxRate}%)</span>
                         <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.tax.toFixed(2)}</span>
                     </div>
@@ -1121,7 +1133,7 @@ export default function POS() {
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
                       <div>
                         <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter">Settlement Center</h2>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Ticket: {orderToSettle ? `#${orderToSettle.orderNumber}` : `New Terminal Sale`}</p>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Ticket: {orderToSettle ? `#${orderToSettle.orderNumber}` : `New Terminal Sale`}</p>
                       </div>
                       <button onClick={() => setIsPaymentModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                         <X size={24} className="text-gray-400" />
