@@ -80,7 +80,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
         "CREATE TABLE IF NOT EXISTS `categories` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, orderId INTEGER)",
         "CREATE TABLE IF NOT EXISTS `customers` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, phone TEXT, type TEXT, companyName TEXT, tin TEXT, houseName TEXT, streetName TEXT, buildingName TEXT, street TEXT, island TEXT, country TEXT, address TEXT)",
-        "CREATE TABLE IF NOT EXISTS `orders` (id INTEGER PRIMARY KEY, orderNumber TEXT, storeId INTEGER, shiftId INTEGER, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy INTEGER, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
+        "CREATE TABLE IF NOT EXISTS `orders` (id INTEGER PRIMARY KEY, orderNumber TEXT, storeId INTEGER, shiftId INTEGER, items TEXT, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy INTEGER, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
         "CREATE TABLE IF NOT EXISTS `quotations` (id INTEGER PRIMARY KEY, quotationNumber TEXT, storeId INTEGER, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy INTEGER, createdAt INTEGER)",
         "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
         "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
@@ -97,7 +97,8 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "ALTER TABLE `stores` ADD COLUMN `province` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT",
         "ALTER TABLE `users` ADD COLUMN `phoneNumber` TEXT",
-        "ALTER TABLE `users` ADD COLUMN `email` TEXT"
+        "ALTER TABLE `users` ADD COLUMN `email` TEXT",
+        "ALTER TABLE `orders` ADD COLUMN `items` TEXT"
       ];
       for (const m of migrations) {
         try { await DB.prepare(m).run(); } catch (e) { /* already exists */ }
@@ -115,7 +116,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
               result[t] = results.map((row: any) => {
                 const processed = { ...row };
                 ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
-                    if (processed[field] && typeof processed[field] === 'string') {
+                    if (processed[field] && processed[field] !== null && typeof processed[field] === 'string') {
                         try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
                     }
                 });
