@@ -775,7 +775,7 @@ export default function POS() {
   );
 
   return (
-    <div className="flex flex-col gap-4 h-[calc(100vh-13rem)] overflow-hidden relative">
+    <div className="flex flex-col gap-4 h-[calc(100vh-10.5rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
       
       {/* Toast Notification */}
@@ -956,43 +956,43 @@ export default function POS() {
 
         {/* Sidebar Context */}
         <aside className="w-full lg:w-[380px] bg-white dark:bg-gray-900 border lg:border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl overflow-hidden h-full rounded-none">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 space-y-5 shrink-0">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 space-y-3 shrink-0">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="font-black text-2xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 uppercase tracking-widest mt-1.5">
-                            <Hash size={12} /> Predicted Ticket {nextOrderNum}
+                        <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1.5">
+                            <Hash size={11} /> Predicted Ticket {nextOrderNum}
                         </div>
                     </div>
                     {cart.length > 0 && (
                         <button onClick={clearCart} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                            <Trash2 size={20} />
+                            <Trash2 size={18} />
                         </button>
                     )}
                 </div>
 
-                <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-full border dark:border-gray-700">
+                <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1 rounded-full border dark:border-gray-700">
                     {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
-                        <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
+                        <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
                             {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}
                         </button>
                     ))}
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                     <div className="relative group">
-                        <div className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors">
-                            <Search size={18} />
+                        <div className="absolute left-3.5 top-2.5 text-gray-400 group-focus-within:text-blue-600 transition-colors">
+                            <Search size={16} />
                         </div>
                         <input 
                             type="text" placeholder="Find Customer..." 
-                            className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-[1.5rem] text-[12px] font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/30 transition-all shadow-sm" 
+                            className="w-full pl-10 pr-12 py-2.5 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-[1.2rem] text-[11px] font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/30 transition-all shadow-sm" 
                             value={customerSearch} 
                             onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
                             onFocus={() => setShowCustomerResults(true)} 
                         />
-                        <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-1.5 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
-                            <UserPlus size={16}/>
+                        <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-1.5 p-1.5 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
+                            <UserPlus size={14}/>
                         </button>
                         
                         {showCustomerResults && customerSearch && !selectedCustomer && (
@@ -1008,11 +1008,11 @@ export default function POS() {
                     </div>
 
                     {orderType === OrderType.DINE_IN && (
-                        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1.5 px-4 rounded-[1.5rem] shadow-sm">
+                        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1 px-4 rounded-[1.2rem] shadow-sm">
                             <div className="text-gray-400">
-                                <Tag size={16}/>
+                                <Tag size={14}/>
                             </div>
-                            <select className="flex-1 bg-transparent text-[11px] font-black uppercase tracking-widest outline-none dark:text-white py-1.5" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
+                            <select className="flex-1 bg-transparent text-[10px] font-black uppercase tracking-widest outline-none dark:text-white py-1.5" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
                                 <option value="">Table #</option>
                                 {Array.from({length: store?.numberOfTables || 0}, (_, i) => (i + 1).toString()).map(num => <option key={num} value={num}>Table {num}</option>)}
                             </select>
@@ -1021,25 +1021,25 @@ export default function POS() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                 {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-200 dark:text-gray-800 opacity-80 py-10">
-                        <ShoppingBag size={64} strokeWidth={1} className="opacity-20" />
-                        <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4 text-gray-300 dark:text-gray-700">Empty Order</p>
+                        <ShoppingBag size={56} strokeWidth={1} className="opacity-20" />
+                        <p className="font-black uppercase tracking-[0.3em] text-[9px] mt-4 text-gray-300 dark:text-gray-700">Empty Order</p>
                     </div>
                 ) : cart.map(item => (
                     <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-2 duration-200 bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-50 dark:border-gray-700 shadow-sm">
                         <div className="flex-1 pr-3">
-                            <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-tight mb-0.5 truncate max-w-[150px]">{item.productName}</div>
-                            <div className="text-[9px] font-black text-blue-600 tracking-tighter">{store?.currency}{item.price.toFixed(2)}</div>
+                            <div className="text-[10px] font-black dark:text-white uppercase tracking-tight leading-tight mb-0.5 truncate max-w-[150px]">{item.productName}</div>
+                            <div className="text-[8px] font-black text-blue-600 tracking-tighter">{store?.currency}{item.price.toFixed(2)}</div>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-900 p-0.5 rounded-lg border dark:border-gray-700">
-                                <button onClick={() => updateQuantity(item.productId, -1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded text-gray-600 hover:text-red-500 shadow-sm transition-all text-[10px] font-bold">-</button>
-                                <span className="text-[11px] font-black dark:text-white w-3 text-center">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.productId, 1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded text-gray-600 hover:text-blue-500 shadow-sm transition-all text-[10px] font-bold">+</button>
+                                <button onClick={() => updateQuantity(item.productId, -1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded text-gray-600 hover:text-red-500 shadow-sm transition-all text-[9px] font-bold">-</button>
+                                <span className="text-[10px] font-black dark:text-white w-3 text-center">{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item.productId, 1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded text-gray-600 hover:text-blue-500 shadow-sm transition-all text-[9px] font-bold">+</button>
                             </div>
-                            <div className="w-14 text-right font-black text-[11px] dark:text-white tracking-tighter">
+                            <div className="w-14 text-right font-black text-[10px] dark:text-white tracking-tighter">
                                 {store?.currency}{(item.price * item.quantity).toFixed(2)}
                             </div>
                         </div>
@@ -1047,16 +1047,16 @@ export default function POS() {
                 ))}
             </div>
 
-            <div className="p-6 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shrink-0">
-                <div className="space-y-2 mb-6">
-                    <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+            <div className="p-5 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shrink-0">
+                <div className="space-y-1.5 mb-5">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         <span>Subtotal</span>
                         <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.subtotal.toFixed(2)}</span>
                     </div>
                     
                     {/* Discount Row with Right-Aligned Button */}
                     <div className="relative">
-                        <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                             <span>Discount</span>
                             <div className="flex items-center gap-3">
                                 {totals.discountAmount > 0 && (
@@ -1064,10 +1064,10 @@ export default function POS() {
                                 )}
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setShowDiscountPresets(!showDiscountPresets); }}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${discountPercent > 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                                    className={`flex items-center gap-1.5 px-3 py-0.5 rounded-full border transition-all ${discountPercent > 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
                                 >
-                                    <Percent size={11}/>
-                                    <span className="text-[10px] font-black">{discountPercent}%</span>
+                                    <Percent size={10}/>
+                                    <span className="text-[9px] font-black">{discountPercent}%</span>
                                 </button>
                             </div>
                         </div>
@@ -1100,27 +1100,27 @@ export default function POS() {
                         )}
                     </div>
 
-                    <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         <span>Tax ({store?.taxRate}%)</span>
                         <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.tax.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-4 mt-2 border-t border-gray-100 dark:border-gray-800">
-                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tighter">Due</span>
-                        <span className="text-4xl font-black text-blue-600 tracking-tighter">{store?.currency}{totals.total.toFixed(2)}</span>
+                    <div className="flex justify-between items-center pt-3 mt-1.5 border-t border-gray-100 dark:border-gray-800">
+                        <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tighter">Due</span>
+                        <span className="text-3xl font-black text-blue-600 tracking-tighter">{store?.currency}{totals.total.toFixed(2)}</span>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 mb-3">
-                    <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex items-center justify-center gap-2 py-3.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-all active:scale-95 disabled:opacity-30">
-                        <ChefHat size={18}/> Send to Kitchen
+                <div className="grid grid-cols-1 gap-2.5 mb-2.5">
+                    <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex items-center justify-center gap-2 py-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-all active:scale-95 disabled:opacity-30">
+                        <ChefHat size={16}/> Send to Kitchen
                     </button>
                 </div>
                 <button 
                     onClick={handleCheckout} 
                     disabled={cart.length === 0} 
-                    className="w-full py-5 bg-blue-600/30 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-sm uppercase tracking-[0.15em] shadow-sm hover:bg-blue-600 hover:text-white transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-30"
+                    className="w-full py-4.5 bg-blue-600/30 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-xs uppercase tracking-[0.15em] shadow-sm hover:bg-blue-600 hover:text-white transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-30"
                 >
-                    <DollarSign size={20}/> Settle Payment
+                    <DollarSign size={18}/> Settle Payment
                 </button>
             </div>
         </aside>
