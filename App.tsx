@@ -116,7 +116,7 @@ const SyncIndicator = () => {
             });
             const result = await response.json();
             if (result.success) {
-                alert("Database schema initialized! Please refresh the page.");
+                alert("Database schema initialized and migrated! Please refresh the page to restart sync.");
                 window.location.reload();
             } else {
                 alert("Repair failed: " + result.error);
@@ -233,6 +233,11 @@ const SyncIndicator = () => {
     const config = getStatusConfig();
     const Icon = config.icon;
 
+    const isSchemaError = status.error?.toLowerCase().includes("sql") || 
+                        status.error?.toLowerCase().includes("column") || 
+                        status.error?.toLowerCase().includes("table") ||
+                        status.error?.toLowerCase().includes("500");
+
     return (
         <div 
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-transparent transition-all group relative cursor-help ${config.bg}`}
@@ -272,12 +277,12 @@ const SyncIndicator = () => {
                             {syncMessage && <p className="text-[9px] text-center text-blue-600 font-black uppercase italic animate-pulse">{syncMessage}</p>}
 
                             {status.error && (
-                                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30">
-                                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Status:</p>
-                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight">{status.error}</p>
-                                    {status.error.includes("no such table") && (
+                                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30 overflow-hidden">
+                                    <p className="text-[10px] font-black text-red-500 uppercase mb-1">Last Error:</p>
+                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium leading-tight break-words">{status.error}</p>
+                                    {isSchemaError && (
                                         <button onClick={handleRepairSchema} disabled={isRepairing} className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors">
-                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>} Repair
+                                            {isRepairing ? <Loader2 size={12} className="animate-spin"/> : <Terminal size={12}/>} Repair DB Schema
                                         </button>
                                     )}
                                 </div>
@@ -662,35 +667,51 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export default function App() {
+// Main App component with routing and auth provider
+const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentStoreId, setCurrentStoreId] = useState<number | null>(null);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    const savedStoreId = localStorage.getItem('currentStoreId');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      if (savedStoreId) setCurrentStoreId(parseInt(savedStoreId));
-    }
-    
-    const loadPermissions = async () => {
-        const perms = await db.getRolePermissions();
-        setRolePermissions(perms);
-    };
-    loadPermissions();
-    window.addEventListener('db_change_global_permissions', loadPermissions);
-    return () => window.removeEventListener('db_change_global_permissions', loadPermissions);
-  }, []);
-
-  useEffect(() => {
-      if (user) {
-          db.updateHeartbeat(user.id, currentStoreId);
-          const interval = setInterval(() => db.updateHeartbeat(user.id!, currentStoreId), 60000);
-          return () => clearInterval(interval);
+    const initAuth = async () => {
+      const savedUser = localStorage.getItem('user');
+      const savedStoreId = localStorage.getItem('currentStoreId');
+      
+      if (savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          
+          if (savedStoreId) {
+            setCurrentStoreId(Number(savedStoreId));
+          }
+          
+          // Verify session heartbeat
+          db.updateHeartbeat(parsedUser.id, savedStoreId ? Number(savedStoreId) : null);
+        } catch (e) {
+          console.error("Failed to restore session", e);
+          localStorage.removeItem('user');
+          localStorage.removeItem('currentStoreId');
+        }
       }
-  }, [user, currentStoreId]);
+      
+      const perms = await db.getRolePermissions();
+      setRolePermissions(perms);
+      setIsLoading(false);
+    };
+
+    initAuth();
+    
+    const handlePermChange = async () => {
+      const perms = await db.getRolePermissions();
+      setRolePermissions(perms);
+    };
+    
+    window.addEventListener('db_change_global_permissions', handlePermChange);
+    return () => window.removeEventListener('db_change_global_permissions', handlePermChange);
+  }, []);
 
   const login = (u: User, storeId?: number) => {
     setUser(u);
@@ -699,15 +720,12 @@ export default function App() {
       setCurrentStoreId(storeId);
       localStorage.setItem('currentStoreId', storeId.toString());
     }
+    db.updateHeartbeat(u.id, storeId || null);
   };
 
   const logout = async () => {
     if (user) {
-      try {
-        await db.removeSession(user.id);
-      } catch (e) {
-        console.warn("Server logout cleanup failed", e);
-      }
+      await db.removeSession(user.id);
     }
     setUser(null);
     setCurrentStoreId(null);
@@ -718,50 +736,78 @@ export default function App() {
   const switchStore = (storeId: number) => {
     setCurrentStoreId(storeId);
     localStorage.setItem('currentStoreId', storeId.toString());
+    if (user) {
+      db.updateHeartbeat(user.id, storeId);
+    }
   };
 
-  const hasPermission = (permission: Permission): boolean => {
-      if (!user) return false;
-      if (user.role === UserRole.SUPER_ADMIN) return true;
-      const config = rolePermissions.find(p => p.role === user.role);
-      return config ? config.permissions.includes(permission) : false;
+  const hasPermission = (permission: Permission) => {
+    if (!user) return false;
+    if (user.role === UserRole.SUPER_ADMIN) return true;
+    const config = rolePermissions.find(rp => rp.role === user.role);
+    return config?.permissions.includes(permission) || false;
   };
 
   const openProfile = () => {
+    // LayoutWrapper handles its own modal state internally
+  };
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 size={40} className="text-blue-600 animate-spin mb-4" />
+        <p className="text-gray-500 font-bold animate-pulse uppercase tracking-widest text-[10px]">Initializing System...</p>
+      </div>
+    );
+  }
+
+  const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: UserRole[] }) => {
+    if (!user) {
+      return <Navigate to="/login" replace />;
+    }
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+      return <Navigate to="/" replace />;
+    }
+    return <LayoutWrapper>{children}</LayoutWrapper>;
   };
 
   return (
     <AuthContext.Provider value={{ user, currentStoreId, login, logout, switchStore, hasPermission, openProfile }}>
       <HashRouter>
         <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          <Route path="/" element={user ? (
-              <LayoutWrapper>
-                  {user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN || user.role === UserRole.MANAGER || user.role === UserRole.ACCOUNTANT ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/pos" />
-                  )}
-              </LayoutWrapper>
-            ) : <Navigate to="/login" />} 
-          />
-          <Route path="/dashboard" element={user ? <LayoutWrapper><SuperAdminDashboard /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/logs" element={user ? <LayoutWrapper><SystemLogs /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/users" element={user ? <LayoutWrapper><GlobalUsers /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/employees" element={user ? <LayoutWrapper><EmployeeManagement /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/pos" element={user ? <LayoutWrapper><POS /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/kot" element={user ? <LayoutWrapper><KOT /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/history" element={user ? <LayoutWrapper><StoreHistory /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/quotations" element={user ? <LayoutWrapper><Quotations /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/reports" element={user ? <LayoutWrapper><StoreReports /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/store/:storeId/staff" element={user ? <LayoutWrapper><StaffManagement /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/store/:storeId/menu" element={user ? <LayoutWrapper><StoreMenu /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/store/:storeId/inventory" element={user ? <LayoutWrapper><StoreInventory /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/store/:storeId/customers" element={user ? <LayoutWrapper><StoreCustomers /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="/print-designer/:storeId" element={user ? <LayoutWrapper><PrintDesigner /></LayoutWrapper> : <Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+          
+          <Route path="/" element={
+            <ProtectedRoute>
+              {user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <Navigate to="/pos" replace />
+              )}
+            </ProtectedRoute>
+          } />
+
+          <Route path="/dashboard" element={<ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT]}><SuperAdminDashboard /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN]}><GlobalUsers /></ProtectedRoute>} />
+          <Route path="/employees" element={<ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN]}><EmployeeManagement /></ProtectedRoute>} />
+          <Route path="/logs" element={<ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN]}><SystemLogs /></ProtectedRoute>} />
+          
+          <Route path="/store/:storeId/staff" element={<ProtectedRoute><StaffManagement /></ProtectedRoute>} />
+          <Route path="/store/:storeId/menu" element={<ProtectedRoute><StoreMenu /></ProtectedRoute>} />
+          <Route path="/store/:storeId/customers" element={<ProtectedRoute><StoreCustomers /></ProtectedRoute>} />
+          
+          <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+          <Route path="/kot" element={<ProtectedRoute><KOT /></ProtectedRoute>} />
+          <Route path="/history" element={<ProtectedRoute><StoreHistory /></ProtectedRoute>} />
+          <Route path="/quotations" element={<ProtectedRoute><Quotations /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><StoreReports /></ProtectedRoute>} />
+          <Route path="/print-designer/:storeId" element={<ProtectedRoute><PrintDesigner /></ProtectedRoute>} />
+          
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
     </AuthContext.Provider>
   );
-}
+};
+
+export default App;

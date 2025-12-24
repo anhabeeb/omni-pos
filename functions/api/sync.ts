@@ -100,7 +100,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "ALTER TABLE `users` ADD COLUMN `email` TEXT"
       ];
       for (const m of migrations) {
-        try { await DB.prepare(m).run(); } catch (e) { /* column exists */ }
+        try { await DB.prepare(m).run(); } catch (e) { /* already exists */ }
       }
 
       return jsonResponse({ success: true });
@@ -142,7 +142,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         const res = await DB.prepare(query).bind(...params).run();
         return jsonResponse({ success: true, meta: res.meta });
       } catch (err: any) {
-        return jsonResponse({ success: false, error: `SQL Error in ${table}: ${err.message}` }, 500);
+        return jsonResponse({ success: false, error: `SQL Write Error in ${table}: ${err.message}` }, 500);
       }
     }
     
@@ -151,13 +151,17 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       const pk = (table.includes('permission')) ? 'role' : 'id';
       if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
       
-      await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
-      return jsonResponse({ success: true });
+      try {
+        await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
+        return jsonResponse({ success: true });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: `SQL Delete Error in ${table}: ${err.message}` }, 500);
+      }
     }
 
     return jsonResponse({ success: false, error: 'Unknown action' }, 400);
 
   } catch (err: any) {
-    return jsonResponse({ success: false, error: err.message }, 500);
+    return jsonResponse({ success: false, error: `API Server Error: ${err.message}` }, 500);
   }
 };

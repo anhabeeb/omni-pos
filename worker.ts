@@ -60,7 +60,7 @@ export default {
               await DB.prepare(q).run();
             }
             
-            // Migration for existing databases to prevent "no column" errors
+            // Migration for existing databases
             const migrations = [
               "ALTER TABLE `stores` ADD COLUMN `buildingName` TEXT",
               "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
@@ -71,7 +71,7 @@ export default {
               "ALTER TABLE `users` ADD COLUMN `email` TEXT"
             ];
             for (const m of migrations) {
-              try { await DB.prepare(m).run(); } catch (e) { /* ignore if column exists */ }
+              try { await DB.prepare(m).run(); } catch (e) { /* ignore column exists error */ }
             }
 
             return jsonResponse({ success: true });
@@ -125,6 +125,7 @@ export default {
               const res = await DB.prepare(query).bind(...params).run();
               return jsonResponse({ success: true, meta: res.meta });
             } catch (err: any) {
+              // Return detailed error so the frontend can display it
               return jsonResponse({ success: false, error: `SQL Error in ${table}: ${err.message}` }, 500);
             }
           }
@@ -134,11 +135,17 @@ export default {
             const pk = table === 'global_permissions' ? 'role' : 'id';
             if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
             
-            await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
-            return jsonResponse({ success: true });
+            try {
+              await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
+              return jsonResponse({ success: true });
+            } catch (err: any) {
+              return jsonResponse({ success: false, error: `SQL Delete Error in ${table}: ${err.message}` }, 500);
+            }
           }
         }
-      } catch (err: any) { return jsonResponse({ success: false, error: err.message }, 500); }
+      } catch (err: any) { 
+          return jsonResponse({ success: false, error: `System Error: ${err.message}` }, 500); 
+      }
     }
     return new Response(null, { status: 404 });
   }
