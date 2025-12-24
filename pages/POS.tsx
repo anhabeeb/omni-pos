@@ -739,7 +739,7 @@ export default function POS() {
   };
 
   const renderProductGrid = (productList: Product[]) => (
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 content-start">
           {productList.map(product => (
               <button 
                   key={product.id} 
@@ -765,88 +765,60 @@ export default function POS() {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden font-sans">
+    <div className="flex flex-col gap-6 relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
       
-      {/* High-Fidelity Integrated Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shrink-0 z-50">
-        <div className="px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex flex-col cursor-pointer" onClick={() => navigate('/dashboard')}>
-              <h1 className="text-xl font-black text-blue-600 italic tracking-tighter leading-none">OmniPOS</h1>
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Terminal</span>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-3 pl-8 border-l border-gray-100 dark:border-gray-800">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Store</label>
-              <select 
-                value={currentStoreId || ''} 
-                onChange={(e) => switchStore(Number(e.target.value))}
-                className="bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-xs font-bold py-1 px-3 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-              >
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
+      {/* Toast Notification */}
+      {toast && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top-2">
+              <div className={`px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-3 text-white text-xs font-black uppercase tracking-widest border-2 ${toast.type === 'SUCCESS' ? 'bg-emerald-600 border-emerald-400' : toast.type === 'ERROR' ? 'bg-red-600 border-red-400' : 'bg-blue-600 border-blue-400'}`}>
+                  {toast.type === 'SUCCESS' ? <CheckCircle size={16}/> : toast.type === 'ERROR' ? <AlertCircle size={16}/> : <Info size={16}/>}
+                  {toast.message}
+              </div>
           </div>
+      )}
 
-          <div className="flex items-center gap-4">
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-                {['MENU', 'ORDERS', 'HELD', 'HISTORY'].map(tab => (
-                    <button 
-                        key={tab}
-                        onClick={() => setActiveTab(tab as any)}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </div>
-            
-            <div className="h-8 w-px bg-gray-100 dark:bg-gray-800" />
-            
-            {shift ? (
-                <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-100 transition-all hover:bg-red-100">
-                    <Lock size={14}/> Close Shift #{shift.shiftNumber}
-                </button>
-            ) : (
-                <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-100 transition-all hover:bg-emerald-100">
-                    <Unlock size={14}/> Start Shift
-                </button>
-            )}
-
-            <button onClick={() => navigate('/dashboard')} className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
-                <LayoutDashboard size={20} />
-            </button>
+      {/* POS Context Bar (Inside Page Content) */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shrink-0">
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
+              {['MENU', 'ORDERS', 'HELD', 'HISTORY'].map(tab => (
+                  <button 
+                      key={tab}
+                      onClick={() => setActiveTab(tab as any)}
+                      className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                      {tab}
+                  </button>
+              ))}
           </div>
-        </div>
-      </header>
+          
+          <div className="flex items-center gap-3">
+              {shift ? (
+                  <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 transition-all hover:bg-red-100">
+                      <Lock size={16}/> End Shift #{shift.shiftNumber}
+                  </button>
+              ) : (
+                  <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 transition-all hover:bg-emerald-100">
+                      <Unlock size={16}/> Open Register
+                  </button>
+              )}
+          </div>
+      </div>
 
-      {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 overflow-hidden min-h-[600px]">
         {/* Left Side: Product/Tabs Area */}
-        <div className="flex-1 flex flex-col min-w-0 p-6 relative">
-            {toast && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-2">
-                    <div className={`px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-3 text-white text-xs font-black uppercase tracking-widest border-2 ${toast.type === 'SUCCESS' ? 'bg-emerald-600 border-emerald-400' : toast.type === 'ERROR' ? 'bg-red-600 border-red-400' : 'bg-blue-600 border-blue-400'}`}>
-                        {toast.type === 'SUCCESS' ? <CheckCircle size={16}/> : toast.type === 'ERROR' ? <AlertCircle size={16}/> : <Info size={16}/>}
-                        {toast.message}
-                    </div>
-                </div>
-            )}
-
+        <div className="flex-1 flex flex-col min-w-0 relative">
             {activeTab === 'MENU' ? (
                 <>
                     <div className="flex flex-col gap-6 h-full">
-                        <div className="flex items-center gap-4">
-                            <div className="relative flex-1 group">
-                                <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18}/>
-                                <input 
-                                    className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold dark:text-white shadow-sm transition-all" 
-                                    placeholder="Search menu items by name or code..." 
-                                    value={searchTerm} 
-                                    onChange={e => setSearchTerm(e.target.value)} 
-                                />
-                            </div>
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18}/>
+                            <input 
+                                className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold dark:text-white shadow-sm transition-all" 
+                                placeholder="Search menu items..." 
+                                value={searchTerm} 
+                                onChange={e => setSearchTerm(e.target.value)} 
+                            />
                         </div>
 
                         <div className="flex items-center gap-2 overflow-x-auto shrink-0 pb-1 custom-scrollbar-hide">
@@ -867,12 +839,12 @@ export default function POS() {
                             ))}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                        <div className="flex-1 pr-2">
                             {renderProductGrid(products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
                         </div>
                     </div>
 
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-4 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-3xl shadow-2xl">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-4 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-3xl shadow-2xl">
                         <Maximize2 size={16} className="text-gray-400"/>
                         <input
                             type="range" min="0.8" max="1.5" step="0.05"
@@ -884,7 +856,7 @@ export default function POS() {
                     </div>
                 </>
             ) : (
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="flex-1">
                     {activeTab === 'ORDERS' ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                             {activeOrders.map(order => (
@@ -899,7 +871,6 @@ export default function POS() {
                                     <div className="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
                                     <div className="space-y-2 mb-6 flex-1">
                                         {order.items.slice(0, 4).map((it, idx) => <div key={idx} className="text-xs font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
-                                        {order.items.length > 4 && <div className="text-[10px] text-gray-400 italic">+{order.items.length - 4} more...</div>}
                                     </div>
                                     <div className="pt-4 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
                                         <div className="flex gap-2">
@@ -957,21 +928,20 @@ export default function POS() {
                                     ))}
                                 </tbody>
                             </table>
-                            {historyOrders.length === 0 && <div className="py-20 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No shift history</div>}
                         </div>
                     )}
                 </div>
             )}
         </div>
 
-        {/* Right Side: High-Fidelity Sidebar */}
-        <aside className="w-[420px] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl relative">
+        {/* Right Side: Sidebar */}
+        <aside className="w-full lg:w-[420px] bg-white dark:bg-gray-900 border lg:border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl rounded-[2.5rem] lg:rounded-none lg:rounded-r-[2.5rem] overflow-hidden">
             <div className="p-6 border-b border-gray-100 dark:border-gray-800 space-y-6">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase">Current Order</h2>
+                        <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
                         <div className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">
-                            <Hash size={12} /> Ticket {nextOrderNum}
+                            <Hash size={12} /> Predicted Ticket {nextOrderNum}
                         </div>
                     </div>
                     {cart.length > 0 && (
@@ -984,7 +954,6 @@ export default function POS() {
                 <div className="grid grid-cols-3 gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl">
                     {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
                         <button key={t} onClick={() => setOrderType(t)} className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-xl' : 'text-gray-400'}`}>
-                            {t === OrderType.DINE_IN ? <Utensils size={14} className="mx-auto mb-1" /> : t === OrderType.TAKEAWAY ? <ShoppingBag size={14} className="mx-auto mb-1" /> : <Activity size={14} className="mx-auto mb-1" />}
                             {t.split('_')[0]}
                         </button>
                     ))}
@@ -1030,9 +999,9 @@ export default function POS() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar min-h-[200px]">
                 {cart.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-20">
+                    <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-20 py-10">
                         <ShoppingBag size={80} strokeWidth={1} />
                         <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4">Order is Empty</p>
                     </div>
@@ -1097,7 +1066,7 @@ export default function POS() {
         </aside>
       </div>
 
-      {/* Modern High-Fidelity Settlement Modal */}
+      {/* Modern Settlement Modal */}
       {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 flex flex-col">
@@ -1258,8 +1227,8 @@ export default function POS() {
 
       {/* Shift Control Modal */}
       {isShiftModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-400 border border-gray-100 dark:border-gray-700">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-400 border border-gray-100 dark:border-gray-700 flex flex-col">
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
                       <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">
                           {shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>}
@@ -1268,7 +1237,7 @@ export default function POS() {
                       <button onClick={() => setIsShiftModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
                   </div>
 
-                  <div className="p-10 space-y-8">
+                  <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
                       <div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-800">
                           <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">{shift ? 'Closing Cash Count' : 'Starting Float Count'}</p>
                           <div className="grid grid-cols-3 gap-3">
@@ -1294,11 +1263,11 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
-                              <button onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
+                              <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (
-                              <button onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all active:scale-[0.98]">Open Terminal</button>
+                              <button type="button" onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all active:scale-[0.98]">Open Terminal</button>
                           )}
                       </div>
                   </div>
