@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -20,7 +19,9 @@ import {
   LayoutDashboard,
   ChevronDown,
   ArrowRight,
-  Split
+  Split,
+  User as UserIcon,
+  Building2
 } from 'lucide-react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
@@ -53,7 +54,7 @@ export default function POS() {
   const [isSaving, setIsSaving] = useState(false);
   
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
-    name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: ''
+    name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
   });
 
   const [cart, setCart] = useState<OrderItem[]>([]);
@@ -90,6 +91,15 @@ export default function POS() {
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
 
   const exportRef = useRef<HTMLDivElement>(null);
+
+  // Fix: Added missing formatAddress helper function
+  const formatAddress = (c: Customer) => {
+    if (c.type === 'INDIVIDUAL') {
+        return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
+    } else {
+        return [c.buildingName, c.street, c.island, c.country, c.address].filter(Boolean).join(', ');
+    }
+  };
 
   const getStorageKeys = (storeId: number) => ({
     cart: `pos_cart_${storeId}`,
@@ -197,14 +207,6 @@ export default function POS() {
         : allOrders.filter(o => o.status === OrderStatus.COMPLETED).slice(-20);
       
       setHistoryOrders(history.sort((a,b) => b.createdAt - a.createdAt));
-  };
-
-  const formatAddress = (c: Customer) => {
-    if (c.type === 'INDIVIDUAL') {
-        return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
-    } else {
-        return [c.buildingName, c.street, c.island, c.country, c.address].filter(Boolean).join(', ');
-    }
   };
 
   const addToCart = (product: Product) => {
@@ -669,8 +671,20 @@ export default function POS() {
       if (!currentStoreId || !newCustData.name || isSaving) return;
       setIsSaving(true);
       try {
-          const newCust: Customer = { ...newCustData, id: 0, storeId: currentStoreId } as Customer;
-          const added = await db.addCustomer(currentStoreId, newCust); 
+          const finalData = { ...newCustData };
+          if (finalData.type === 'INDIVIDUAL') {
+              finalData.companyName = undefined;
+              finalData.tin = undefined;
+              finalData.buildingName = undefined;
+              finalData.street = undefined;
+              finalData.island = undefined;
+              finalData.country = undefined;
+          } else {
+              finalData.houseName = undefined;
+              finalData.streetName = undefined;
+          }
+
+          const added = await db.addCustomer(currentStoreId, { ...finalData, id: 0, storeId: currentStoreId } as Customer); 
           setSelectedCustomer(added); 
           setCustomerSearch(added.name); 
           setIsCustomerModalOpen(false); 
@@ -683,7 +697,7 @@ export default function POS() {
 
   const resetNewCustForm = () => {
     setNewCustData({
-      name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: ''
+      name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
     });
   };
 
@@ -1293,32 +1307,155 @@ export default function POS() {
           </div>
       )}
 
-      {/* Customer Quick Modal */}
+      {/* Customer Full Modal (Updated to match StoreCustomers UI) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
-                      <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">
-                        <UserSquare className="text-blue-600"/> Add Quick Customer
+                  <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30">
+                      <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <UserIcon className="text-blue-600" /> Add New Customer
                       </h2>
-                      <button onClick={() => setIsCustomerModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full"><X size={24}/></button>
+                      <button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button>
                   </div>
-                  <form onSubmit={handleQuickAddCustomer} className="p-10 space-y-8">
-                      <div className="flex gap-2 p-1.5 bg-gray-100 dark:bg-gray-900 rounded-2xl">
-                          <button type="button" onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${newCustData.type === 'INDIVIDUAL' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400'}`}>Individual</button>
-                          <button type="button" onClick={() => setNewCustData({...newCustData, type: 'COMPANY'})} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${newCustData.type === 'COMPANY' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400'}`}>Company</button>
+                  <form onSubmit={handleQuickAddCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                      <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})}
+                            className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${newCustData.type === 'INDIVIDUAL' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                              Individual
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewCustData({...newCustData, type: 'COMPANY'})}
+                            className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${newCustData.type === 'COMPANY' ? 'bg-white dark:bg-gray-600 shadow text-purple-600 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                              Company
+                          </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Contact Name *</label>
-                              <input required className="w-full p-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold dark:text-white" value={newCustData.name} onChange={e => setNewCustData({...newCustData, name: e.target.value})}/>
+
+                      {newCustData.type === 'COMPANY' && (
+                          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl space-y-4 border border-purple-100 dark:border-purple-800 animate-in slide-in-from-top-2">
+                              <div>
+                                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Company Entity Name *</label>
+                                <input 
+                                    placeholder="e.g. Acme Corp" 
+                                    className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                                    value={newCustData.companyName}
+                                    onChange={e => setNewCustData({...newCustData, companyName: e.target.value})}
+                                    required={newCustData.type === 'COMPANY'}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN)</label>
+                                <input 
+                                    placeholder="e.g. 123-456-789" 
+                                    className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
+                                    value={newCustData.tin}
+                                    onChange={e => setNewCustData({...newCustData, tin: e.target.value})}
+                                />
+                              </div>
                           </div>
-                          <div className="space-y-2">
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Number *</label>
-                              <input required className="w-full p-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold dark:text-white font-mono" value={newCustData.phone} onChange={e => setNewCustData({...newCustData, phone: e.target.value})}/>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name *</label>
+                            <input 
+                                placeholder="Full Name" 
+                                className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                value={newCustData.name}
+                                onChange={e => setNewCustData({...newCustData, name: e.target.value})}
+                                required
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Phone Number *</label>
+                            <input 
+                                placeholder="Phone Number" 
+                                className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                value={newCustData.phone}
+                                onChange={e => setNewCustData({...newCustData, phone: e.target.value})}
+                                required
+                            />
                           </div>
                       </div>
-                      <div className="flex gap-4 pt-4">
+
+                      <div className="border-t dark:border-gray-700 pt-6">
+                          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                              <MapPin size={14} /> Address Information
+                          </h3>
+                          
+                          {newCustData.type === 'INDIVIDUAL' ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">House Name / Building</label>
+                                    <input 
+                                        placeholder="e.g. Rose Villa" 
+                                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={newCustData.houseName}
+                                        onChange={e => setNewCustData({...newCustData, houseName: e.target.value})}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name</label>
+                                    <input 
+                                        placeholder="e.g. Orchid Magu" 
+                                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={newCustData.streetName}
+                                        onChange={e => setNewCustData({...newCustData, streetName: e.target.value})}
+                                    />
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="space-y-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / Floor</label>
+                                        <input 
+                                            placeholder="e.g. Trade Centre, 4th Floor" 
+                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newCustData.buildingName}
+                                            onChange={e => setNewCustData({...newCustData, buildingName: e.target.value})}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street</label>
+                                        <input 
+                                            placeholder="e.g. Main Street" 
+                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newCustData.street}
+                                            onChange={e => setNewCustData({...newCustData, street: e.target.value})}
+                                        />
+                                      </div>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll</label>
+                                        <input 
+                                            placeholder="e.g. Male'" 
+                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newCustData.island}
+                                            onChange={e => setNewCustData({...newCustData, island: e.target.value})}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Country</label>
+                                        <input 
+                                            placeholder="e.g. Maldives" 
+                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newCustData.country}
+                                            onChange={e => setNewCustData({...newCustData, country: e.target.value})}
+                                        />
+                                      </div>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="flex gap-4 pt-4 border-t dark:border-gray-700">
                           <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-gray-400">Discard</button>
                           <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/40 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
                               {isSaving ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>} Save Record
