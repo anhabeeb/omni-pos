@@ -1,7 +1,7 @@
 
 /**
  * OmniPOS Standard Cloudflare Worker
- * Updated for Numerical ID Schema
+ * Updated for Numerical ID Schema and Robust Error Handling
  */
 
 interface Env {
@@ -37,7 +37,7 @@ export default {
           let payload: any;
           try { payload = await request.json(); } catch (e) { return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400); }
 
-          const { action, table, data, storeId, username, password, userId } = payload;
+          const { action, table, data, username, password } = payload;
 
           if (action === 'INIT_SCHEMA') {
             const schema = [
@@ -55,9 +55,12 @@ export default {
               "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
               "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
             ];
-            for (const q of schema) await DB.prepare(q).run();
             
-            // Migration for existing databases
+            for (const q of schema) {
+              await DB.prepare(q).run();
+            }
+            
+            // Migration for existing databases to prevent "no column" errors
             const migrations = [
               "ALTER TABLE `stores` ADD COLUMN `buildingName` TEXT",
               "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
@@ -66,10 +69,22 @@ export default {
               "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT"
             ];
             for (const m of migrations) {
-              try { await DB.prepare(m).run(); } catch (e) { /* column exists */ }
+              try { await DB.prepare(m).run(); } catch (e) { /* ignore if column exists */ }
             }
 
             return jsonResponse({ success: true });
+          }
+
+          if (action === 'REMOTE_LOGIN') {
+            const { results } = await DB.prepare("SELECT * FROM `users` WHERE `username` = ? AND `password` = ?").bind(username, password).run();
+            if (results && results.length > 0) {
+              const user = results[0];
+              if (typeof user.storeIds === 'string') {
+                try { user.storeIds = JSON.parse(user.storeIds); } catch(e) { user.storeIds = []; }
+              }
+              return jsonResponse({ success: true, user });
+            }
+            return jsonResponse({ success: false, error: "Invalid Credentials" });
           }
 
           if (action === 'FETCH_HYDRATION_DATA') {
@@ -91,17 +106,32 @@ export default {
           }
 
           if (action === 'INSERT' || action === 'UPDATE') {
+            if (!data) return jsonResponse({ success: false, error: 'No data provided' }, 400);
             const keys = Object.keys(data);
             const cols = keys.map(k => `\`${k}\``).join(',');
             const vals = keys.map(() => '?').join(',');
             const query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
-            const params = keys.map(k => typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
-            const res = await DB.prepare(query).bind(...params).run();
-            return jsonResponse({ success: true, meta: res.meta });
+            
+            const params = keys.map(k => {
+                const val = data[k];
+                if (val === undefined) return null;
+                if (val !== null && typeof val === 'object') return JSON.stringify(val);
+                return val;
+            });
+            
+            try {
+              const res = await DB.prepare(query).bind(...params).run();
+              return jsonResponse({ success: true, meta: res.meta });
+            } catch (err: any) {
+              return jsonResponse({ success: false, error: `SQL Error in ${table}: ${err.message}` }, 500);
+            }
           }
           
           if (action === 'DELETE') {
+            if (!data) return jsonResponse({ success: false, error: 'No data provided for deletion' }, 400);
             const pk = table === 'global_permissions' ? 'role' : 'id';
+            if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
+            
             await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
             return jsonResponse({ success: true });
           }

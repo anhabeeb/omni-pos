@@ -64,7 +64,9 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         const { results } = await DB.prepare("SELECT * FROM `users` WHERE `username` = ? AND `password` = ?").bind(username, password).run();
         if (results && results.length > 0) {
             const user = results[0];
-            if (typeof user.storeIds === 'string') user.storeIds = JSON.parse(user.storeIds);
+            if (typeof user.storeIds === 'string') {
+              try { user.storeIds = JSON.parse(user.storeIds); } catch(e) { user.storeIds = []; }
+            }
             return jsonResponse({ success: true, user });
         }
         return jsonResponse({ success: false, error: "Invalid Credentials" });
@@ -88,7 +90,6 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       ];
       for (const q of schema) await DB.prepare(q).run();
       
-      // Migration logic for existing databases
       const migrations = [
         "ALTER TABLE `stores` ADD COLUMN `buildingName` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
@@ -104,27 +105,50 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     }
 
     if (action === 'FETCH_HYDRATION_DATA') {
-        const tables = ['stores', 'users', 'customers', 'products', 'categories', 'global_permissions'];
+        const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
         const result: any = {};
         for (const t of tables) {
             const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
-            result[t] = results;
+            result[t] = results.map((row: any) => {
+              const processed = { ...row };
+              ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
+                  if (processed[field] && typeof processed[field] === 'string') {
+                      try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
+                  }
+              });
+              return processed;
+          });
         }
         return jsonResponse({ success: true, data: result });
     }
 
     if (action === 'INSERT' || action === 'UPDATE') {
+      if (!data) return jsonResponse({ success: false, error: 'No data provided' }, 400);
       const keys = Object.keys(data);
       const cols = keys.map(k => `\`${k}\``).join(',');
       const vals = keys.map(() => '?').join(',');
       const query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
-      const params = keys.map(k => typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
-      const res = await DB.prepare(query).bind(...params).run();
-      return jsonResponse({ success: true, meta: res.meta });
+      
+      const params = keys.map(k => {
+          const val = data[k];
+          if (val === undefined) return null;
+          if (val !== null && typeof val === 'object') return JSON.stringify(val);
+          return val;
+      });
+      
+      try {
+        const res = await DB.prepare(query).bind(...params).run();
+        return jsonResponse({ success: true, meta: res.meta });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: `SQL Error in ${table}: ${err.message}` }, 500);
+      }
     }
     
     if (action === 'DELETE') {
+      if (!data) return jsonResponse({ success: false, error: 'No data provided for deletion' }, 400);
       const pk = (table.includes('permission')) ? 'role' : 'id';
+      if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
+      
       await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
       return jsonResponse({ success: true });
     }
