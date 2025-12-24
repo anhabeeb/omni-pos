@@ -53,8 +53,9 @@ const broadcastSyncUpdate = () => {
 
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
     const queue = getItem<any[]>('sync_queue', []);
-    // Ensure all numeric IDs are numbers before queuing
     const cleanData = { ...data };
+    
+    // Type normalization for IDs
     if (cleanData.id) cleanData.id = Number(cleanData.id);
     if (cleanData.storeId) cleanData.storeId = Number(cleanData.storeId);
     if (cleanData.createdAt) cleanData.createdAt = Number(cleanData.createdAt);
@@ -74,41 +75,50 @@ const processSyncQueue = async () => {
     if (isProcessingSync || !navigator.onLine) return;
     isProcessingSync = true;
 
-    let queue = getItem<any[]>('sync_queue', []);
-    while (queue.length > 0) {
-        const task = queue[0];
-        try {
-            currentSyncStatus = 'SYNCING';
-            broadcastSyncUpdate();
+    try {
+        // Continuous loop to handle bulk additions during network requests
+        while (true) {
+            const currentQueue = getItem<any[]>('sync_queue', []);
+            if (currentQueue.length === 0) break;
 
-            const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(task)
-            });
+            const task = currentQueue[0];
+            try {
+                currentSyncStatus = 'SYNCING';
+                broadcastSyncUpdate();
 
-            const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
-            
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || `Sync failed with status ${response.status}`);
+                const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(task)
+                });
+
+                const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
+                
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || `Sync failed with status ${response.status}`);
+                }
+
+                // CRITICAL FIX: Re-read queue before saving back to prevent overwriting 
+                // items added during the 'await fetch' above.
+                const latestQueue = getItem<any[]>('sync_queue', []);
+                const updatedQueue = latestQueue.filter(t => t.id !== task.id);
+                setItem('sync_queue', updatedQueue);
+                
+                lastSyncError = null;
+                currentSyncStatus = updatedQueue.length > 0 ? 'SYNCING' : 'CONNECTED';
+            } catch (e: any) {
+                lastSyncError = e.message;
+                currentSyncStatus = 'ERROR';
+                broadcastSyncUpdate();
+                break; // Halt and wait for retry or manual skip
             }
-
-            queue = queue.slice(1);
-            setItem('sync_queue', queue);
-            lastSyncError = null;
-            currentSyncStatus = queue.length > 0 ? 'SYNCING' : 'CONNECTED';
-        } catch (e: any) {
-            lastSyncError = e.message;
-            currentSyncStatus = 'ERROR';
-            broadcastSyncUpdate();
-            break; 
         }
+    } finally {
+        isProcessingSync = false;
+        broadcastSyncUpdate();
     }
-    isProcessingSync = false;
-    broadcastSyncUpdate();
 };
 
-// Automatic background polling to keep terminals in sync without manual clicks
 const startBackgroundPolling = () => {
     if (autoSyncInterval) clearInterval(autoSyncInterval);
     
@@ -116,19 +126,18 @@ const startBackgroundPolling = () => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         if (isEnabled && navigator.onLine) {
             const queue = getItem<any[]>('sync_queue', []);
-            // Only pull if we don't have pending changes to avoid conflict noise in local state
+            // Pull only if no local changes are waiting to prevent conflicts
             if (queue.length === 0) {
                 await db.pullAllFromCloud();
             }
-            // Always try to flush queue in case a previous attempt failed silently
+            // Ensure processor is running
             processSyncQueue();
         }
-    }, 30000); // Check every 30 seconds
+    }, 30000); 
 };
 
 export const db = {
     init: async () => {
-        // Init Permissions
         const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
             const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
@@ -138,7 +147,6 @@ export const db = {
             setItem('global_permissions', defaultPerms);
         }
 
-        // Init Users
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
             const rootAdmin: User = { 
@@ -156,7 +164,6 @@ export const db = {
             addToSyncQueue('INSERT', 'users', rootAdmin);
         }
 
-        // Ensure sys.admin has an employee profile
         const employees = getItem<Employee[]>('global_employees', []);
         if (!employees.some(e => e.empId === 'SYSADMIN')) {
             const adminEmp: Employee = {
@@ -176,7 +183,6 @@ export const db = {
             addToSyncQueue('INSERT', 'employees', adminEmp);
         }
 
-        // Auto-resume sync when internet returns
         window.addEventListener('online', () => {
             currentSyncStatus = 'CONNECTED';
             processSyncQueue();
@@ -277,7 +283,6 @@ export const db = {
                 if (data.global_permissions) setItem('global_permissions', data.global_permissions);
                 if (data.system_activities) setItem('global_activities', data.system_activities);
                 
-                // Hydrate store-specific data
                 const stores = data.stores || [];
                 for (const s of stores) {
                     const id = s.id;
