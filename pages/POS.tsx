@@ -76,7 +76,8 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
-  const getStorageKeys = (storeId: string) => ({
+  // Fix: handle number storeId in storage keys
+  const getStorageKeys = (storeId: number) => ({
     cart: `pos_cart_${storeId}`,
     type: `pos_type_${storeId}`,
     customer: `pos_customer_${storeId}`,
@@ -88,6 +89,7 @@ export default function POS() {
   useEffect(() => {
     if (currentStoreId) {
       loadData();
+      // Fix: passed currentStoreId as number
       loadFromPersistence(currentStoreId);
       const handleDbChange = () => loadData();
       window.addEventListener('db_change_any', handleDbChange);
@@ -124,7 +126,7 @@ export default function POS() {
       setToast({ message, type });
   };
 
-  const loadFromPersistence = (storeId: string) => {
+  const loadFromPersistence = (storeId: number) => {
       const keys = getStorageKeys(storeId);
       const savedCart = localStorage.getItem(keys.cart);
       const savedType = localStorage.getItem(keys.type);
@@ -197,7 +199,7 @@ export default function POS() {
       });
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (productId: number, delta: number) => {
       setCart(prev => prev.map(item => {
           if (item.productId === productId) {
               const newQty = Math.max(0, item.quantity + delta);
@@ -244,7 +246,7 @@ export default function POS() {
     if (currentStoreId) {
         await db.deleteOrder(currentStoreId, order.id);
         db.logActivity({
-            storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+            storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
             action: 'ORDER_CREATE',
             description: `Order #${order.orderNumber} resumed from memory/hold`
         });
@@ -258,7 +260,7 @@ export default function POS() {
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.ON_HOLD);
     db.logActivity({
-        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+        storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
         action: 'ORDER_UPDATE',
         description: `Order #${order.orderNumber} placed on hold`
     });
@@ -270,8 +272,9 @@ export default function POS() {
     if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
     
     setIsSaving(true);
+    // Fix: cast id to 0 for auto-increment and shiftId to number
     const newOrder: Order = {
-        id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
+        id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
         items: [...cart], subtotal: totals.subtotal, 
         discountPercent: discountPercent, 
         discountAmount: totals.discountAmount,
@@ -312,7 +315,7 @@ export default function POS() {
     if (!currentStoreId) return;
     await db.updateOrderStatus(currentStoreId, order.id, OrderStatus.PENDING);
     db.logActivity({
-        storeId: currentStoreId, userId: user?.id || '', userName: user?.name || '',
+        storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
         action: 'ORDER_UPDATE',
         description: `Order #${order.orderNumber} reactivated`
     });
@@ -325,8 +328,9 @@ export default function POS() {
       if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
       
       setIsSaving(true);
+      // Fix: cast id to 0 for auto-increment and shiftId to number
       const newOrderData: Order = {
-          id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
+          id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
           items: [...cart], subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
@@ -435,8 +439,9 @@ export default function POS() {
                 description: `Active order #${finalOrder.orderNumber} settled via ${paymentMethod}`
               });
           } else {
+              // Fix: cast id to 0 and shiftId to number
               finalOrder = { 
-                id: uuid(), orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
+                id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
                 items: localCart, 
                 subtotal: localTotals.subtotal, 
                 discountPercent: localDisc,
@@ -666,10 +671,11 @@ export default function POS() {
       if (!currentStoreId || !newCustData.name || isSaving) return;
       setIsSaving(true);
       try {
-          const newCust: Customer = { ...newCustData, id: uuid() } as Customer;
-          await db.addCustomer(currentStoreId, newCust); 
-          setSelectedCustomer(newCust); 
-          setCustomerSearch(newCust.name); 
+          // Fix: cast id to 0 for auto-increment and added storeId
+          const newCust: Customer = { ...newCustData, id: 0, storeId: currentStoreId } as Customer;
+          const added = await db.addCustomer(currentStoreId, newCust); 
+          setSelectedCustomer(added); 
+          setCustomerSearch(added.name); 
           setIsCustomerModalOpen(false); 
           resetNewCustForm();
           showToast("Customer Added", "SUCCESS");
@@ -825,8 +831,9 @@ export default function POS() {
                         {categories.map(cat => (
                             <button 
                                 key={cat.id}
-                                onClick={() => setSelectedCategoryId(cat.id)}
-                                className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                                // Fix: Convert cat.id to string for selectedCategoryId
+                                onClick={() => setSelectedCategoryId(cat.id.toString())}
+                                className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === cat.id.toString() ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
                             >
                                 <Tag size={12}/> {cat.name}
                             </button>
@@ -866,7 +873,8 @@ export default function POS() {
                             </div>
                         ) : (
                             <div className="pb-20">
-                                {renderProductGrid(products.filter(p => p.categoryId === selectedCategoryId && p.name.toLowerCase().includes(searchTerm.toLowerCase())))}
+                                {/* Fix: Convert p.categoryId to string for comparison with selectedCategoryId */}
+                                {renderProductGrid(products.filter(p => p.categoryId.toString() === selectedCategoryId && p.name.toLowerCase().includes(searchTerm.toLowerCase())))}
                             </div>
                         )}
                     </div>
@@ -1075,7 +1083,7 @@ export default function POS() {
 
       {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[95vh]">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-lg p-6 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[95vh]">
                   <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold dark:text-white">Payment</h2><button onClick={() => { setIsPaymentModalOpen(false); setOrderToSettle(null); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button></div>
                   <div className="text-center mb-6 bg-blue-50 dark:bg-blue-900/20 py-6 rounded-2xl border border-blue-100 dark:border-blue-800">
                       <div className="text-gray-500 uppercase text-[10px] font-black tracking-widest mb-1">Payable</div>

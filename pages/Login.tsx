@@ -110,6 +110,7 @@ export default function Login() {
                 if (stores.length === 0) {
                     setError('Account not assigned to any active stores.');
                 } else if (stores.length === 1) {
+                    // Fix: stores[0].id is number
                     login(foundUser, stores[0].id);
                     navigate(getRedirectPath(foundUser.role));
                 } else {
@@ -127,7 +128,8 @@ export default function Login() {
     }
   };
 
-  const handleStoreSelect = (storeId: string) => {
+  // Fix: storeId should be number
+  const handleStoreSelect = (storeId: number) => {
     if (tempUser) {
         login(tempUser, storeId);
         navigate(getRedirectPath(tempUser.role));

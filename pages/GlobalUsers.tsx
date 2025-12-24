@@ -38,14 +38,15 @@ export default function GlobalUsers() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  // Fix: selectedEmployeeId should handle numerical ID if needed, but registry uses number IDs
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
   const [formData, setFormData] = useState<{
-    id?: string;
+    id?: number;
     name: string;
     username: string;
     password: string;
     role: UserRole;
-    storeIds: string[];
+    storeIds: number[];
   }>({
     name: '',
     username: '',
@@ -58,6 +59,7 @@ export default function GlobalUsers() {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Fix: Check originalUser role correctly using numerical ID
   const isEditingSuperAdmin = formData.id ? users.find(u => u.id === formData.id)?.role === UserRole.SUPER_ADMIN : false;
 
   useEffect(() => {
@@ -143,8 +145,9 @@ export default function GlobalUsers() {
 
         setIsSaving(true);
         try {
+            // Fix: pass id as 0 for auto-increment in db.ts
             await db.addUser({
-                id: '', 
+                id: 0, 
                 name: employee.fullName,
                 username: employee.empId,
                 password: '123', 
@@ -188,7 +191,7 @@ export default function GlobalUsers() {
       setIsModalOpen(true);
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = async (userId: number) => {
     const canDelete = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
     if (!canDelete) {
         alert("Permission Denied: Only Super Admins and Admins can delete user accounts.");
@@ -225,7 +228,7 @@ export default function GlobalUsers() {
     }
   };
 
-  const toggleStoreSelection = (storeId: string) => {
+  const toggleStoreSelection = (storeId: number) => {
       setFormData(prev => ({
           ...prev,
           storeIds: prev.storeIds.includes(storeId) 
@@ -441,7 +444,7 @@ export default function GlobalUsers() {
                                     required
                                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold appearance-none outline-none focus:ring-2 focus:ring-blue-500"
                                     value={selectedEmployeeId}
-                                    onChange={e => setSelectedEmployeeId(e.target.value)}
+                                    onChange={e => setSelectedEmployeeId(Number(e.target.value))}
                                 >
                                     <option value="">Choose Staff Member...</option>
                                     {availableEmployees.map(emp => (
@@ -451,7 +454,7 @@ export default function GlobalUsers() {
                             </div>
                         </div>
 
-                        {selectedEmployeeId && (
+                        {selectedEmployeeId !== '' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                                     <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Auto-Generated Username</p>

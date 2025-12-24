@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
@@ -38,14 +39,16 @@ export default function StoreCustomers() {
 
   const loadData = async () => {
     if (!storeId) return;
+    const numericStoreId = Number(storeId);
     const stores = await db.getStores();
-    setStore(stores.find(s => s.id === storeId) || null);
-    setCustomers(await db.getCustomers(storeId));
+    setStore(stores.find(s => s.id === numericStoreId) || null);
+    setCustomers(await db.getCustomers(numericStoreId));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeId || !editingCustomer.name || isSaving) return;
+    const numericStoreId = Number(storeId);
 
     const finalCustomer = { ...editingCustomer };
     if (finalCustomer.type === 'INDIVIDUAL') {
@@ -63,9 +66,10 @@ export default function StoreCustomers() {
     setIsSaving(true);
     try {
         if (finalCustomer.id) {
-          await db.updateCustomer(storeId, finalCustomer as Customer);
+          await db.updateCustomer(numericStoreId, finalCustomer as Customer);
         } else {
-          await db.addCustomer(storeId, finalCustomer as Customer);
+          // Fix: id should be 0 for auto-increment
+          await db.addCustomer(numericStoreId, { ...finalCustomer, id: 0 } as Customer);
         }
         setIsModalOpen(false);
         resetForm();
@@ -95,9 +99,9 @@ export default function StoreCustomers() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     if (confirm('Delete this customer?')) {
-      if (storeId) db.deleteCustomer(storeId, id);
+      if (storeId) db.deleteCustomer(Number(storeId), id);
     }
   };
 

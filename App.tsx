@@ -64,10 +64,10 @@ import SystemLogs from './pages/SystemLogs';
 
 interface AuthContextType {
   user: User | null;
-  currentStoreId: string | null; 
-  login: (u: User, storeId?: string) => void;
+  currentStoreId: number | null; 
+  login: (u: User, storeId?: number) => void;
   logout: () => Promise<void>;
-  switchStore: (storeId: string) => void;
+  switchStore: (storeId: number) => void;
   hasPermission: (permission: Permission) => boolean;
   openProfile: () => void;
 }
@@ -86,8 +86,9 @@ const SyncIndicator = () => {
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
     useEffect(() => {
+        // Fix: Explicitly cast CustomEvent detail to resolve SyncStatus type mismatch
         const handleSyncUpdate = (e: any) => {
-            setStatus(e.detail);
+            setStatus(e.detail as { status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean });
         };
         window.addEventListener('db_sync_update', handleSyncUpdate);
         return () => window.removeEventListener('db_sync_update', handleSyncUpdate);
@@ -127,7 +128,7 @@ const SyncIndicator = () => {
     };
 
     const handleBootstrap = async () => {
-        if (!confirm("This will scan ALL local data and push missing or conflicting records to the cloud. ID conflicts will be automatically resolved. Proceed?")) return;
+        if (!confirm("This will scan ALL local data and push missing or conflicting records to the cloud. Numerical IDs will be synchronized. Proceed?")) return;
         setIsBootstrapping(true);
         setSyncMessage("Resolving Conflicts...");
         try {
@@ -284,7 +285,6 @@ const SyncIndicator = () => {
                             <div className="flex gap-2 border-t dark:border-gray-700 pt-3">
                                 <button onClick={(e) => { e.stopPropagation(); db.testConnection(); }} className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-[9px] font-black uppercase rounded hover:bg-gray-200 transition-colors">Ping</button>
                                 <button onClick={(e) => { e.stopPropagation(); runDiagnostic(); }} disabled={isTesting} className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded hover:bg-blue-700 flex items-center justify-center gap-1">
-                                    {/* Fix: changed size(10) to size={10} */}
                                     {isTesting ? <Loader2 size={10} className="animate-spin"/> : <Settings2 size={10}/>} Diag
                                 </button>
                             </div>
@@ -336,7 +336,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
       };
 
       await db.updateUser(updatedUser);
-      login(updatedUser); // Update local session state
+      login(updatedUser); 
       setSuccess('Profile updated successfully!');
       setTimeout(() => {
         onClose();
@@ -491,7 +491,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
     { icon: ShieldCheck, label: 'User & Access Management', path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
 
-  const getStoreActions = (storeId: string) => [
+  const getStoreActions = (storeId: number) => [
     { icon: ShoppingCart, label: 'POS', path: '/pos', permission: 'POS_ACCESS' },
     { icon: ChefHat, label: 'Kitchen', path: '/kot', permission: 'VIEW_KOT' },
     { icon: History, label: 'History', path: '/history', permission: 'VIEW_HISTORY' },
@@ -510,7 +510,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
       
-      {/* Primary Top Bar */}
       <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
         <div className="flex items-center gap-8">
           <div className="flex flex-col cursor-pointer" onClick={() => navigate('/')}>
@@ -537,7 +536,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
           <div className="h-8 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
 
-          {/* Store Switcher Dropdown */}
           <div className="relative" ref={storeMenuRef}>
             <button
               onClick={() => setIsStoreMenuOpen(!isStoreMenuOpen)}
@@ -601,7 +599,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
       </header>
 
-      {/* Secondary Action Bar (Contextual to selected store) */}
       {currentStoreId && (
         <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-2 flex items-center justify-center gap-1 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide">
           {storeActions.filter(a => {
@@ -620,7 +617,6 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-hidden p-6">
         <div className="h-full max-w-[1600px] mx-auto overflow-y-auto custom-scrollbar pr-2">
             {children}
@@ -632,7 +628,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
+  const [currentStoreId, setCurrentStoreId] = useState<number | null>(null);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionConfig[]>([]);
 
   useEffect(() => {
@@ -640,7 +636,7 @@ export default function App() {
     const savedStoreId = localStorage.getItem('currentStoreId');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
-      if (savedStoreId) setCurrentStoreId(savedStoreId);
+      if (savedStoreId) setCurrentStoreId(parseInt(savedStoreId));
     }
     
     const loadPermissions = async () => {
@@ -655,23 +651,22 @@ export default function App() {
   useEffect(() => {
       if (user) {
           db.updateHeartbeat(user.id, currentStoreId);
-          const interval = setInterval(() => db.updateHeartbeat(user.id, currentStoreId), 60000);
+          const interval = setInterval(() => db.updateHeartbeat(user.id!, currentStoreId), 60000);
           return () => clearInterval(interval);
       }
   }, [user, currentStoreId]);
 
-  const login = (u: User, storeId?: string) => {
+  const login = (u: User, storeId?: number) => {
     setUser(u);
     localStorage.setItem('user', JSON.stringify(u));
     if (storeId) {
       setCurrentStoreId(storeId);
-      localStorage.setItem('currentStoreId', storeId);
+      localStorage.setItem('currentStoreId', storeId.toString());
     }
   };
 
   const logout = async () => {
     if (user) {
-      // Robustly await server-side logout to release the device lock immediately
       try {
         await db.removeSession(user.id);
       } catch (e) {
@@ -684,9 +679,9 @@ export default function App() {
     localStorage.removeItem('currentStoreId');
   };
 
-  const switchStore = (storeId: string) => {
+  const switchStore = (storeId: number) => {
     setCurrentStoreId(storeId);
-    localStorage.setItem('currentStoreId', storeId);
+    localStorage.setItem('currentStoreId', storeId.toString());
   };
 
   const hasPermission = (permission: Permission): boolean => {
@@ -697,7 +692,6 @@ export default function App() {
   };
 
   const openProfile = () => {
-    // Handled in LayoutWrapper state
   };
 
   return (
