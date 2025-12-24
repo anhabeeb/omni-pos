@@ -302,7 +302,17 @@ export default function POS() {
 
   const handleSendToKitchen = async () => {
       if (!currentStoreId || !user || !shift || cart.length === 0 || isSaving) return;
-      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
+      
+      // Validations
+      if (orderType === OrderType.DINE_IN && !tableNumber) { 
+        showToast("Please select a table number.", "ERROR"); 
+        return; 
+      }
+      
+      if ((orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer) {
+          showToast(`Customer details required for ${orderType === OrderType.DINE_IN ? 'Dine-in' : 'Takeaway'}`, "ERROR");
+          return;
+      }
       
       setIsSaving(true);
       const newOrderData: Order = {
@@ -365,7 +375,18 @@ export default function POS() {
 
   const handleCheckout = () => {
       if (cart.length === 0) return;
-      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
+      
+      // Validations
+      if (orderType === OrderType.DINE_IN && !tableNumber) { 
+        showToast("Please select a table number.", "ERROR"); 
+        return; 
+      }
+
+      if ((orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer) {
+        showToast(`Customer details required for ${orderType === OrderType.DINE_IN ? 'Dine-in' : 'Takeaway'}`, "ERROR");
+        return;
+      }
+
       setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitPayment(false); setSplitAmount1(''); setSplitAmount2('');
       setIsPaymentModalOpen(true);
@@ -756,6 +777,9 @@ export default function POS() {
       </div>
   );
 
+  // Requirement Check Helper
+  const isCustomerMissing = (orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer;
+
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-13rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -957,10 +981,10 @@ export default function POS() {
 
                 <div className="space-y-2">
                     <div className="relative group">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                        <Search className={`absolute left-3 top-2.5 transition-colors ${isCustomerMissing ? 'text-red-400' : 'text-gray-400'}`} size={14} />
                         <input 
-                            type="text" placeholder="Find Customer..." 
-                            className="w-full pl-9 pr-9 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+                            type="text" placeholder={isCustomerMissing ? "Customer Required *" : "Find Customer..."}
+                            className={`w-full pl-9 pr-9 py-2 border-none rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-2 ${isCustomerMissing ? 'bg-red-50 dark:bg-red-900/20 focus:ring-red-500 placeholder-red-400' : 'bg-gray-50 dark:bg-gray-800 focus:ring-blue-500'}`} 
                             value={customerSearch} 
                             onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
                             onFocus={() => setShowCustomerResults(true)} 
