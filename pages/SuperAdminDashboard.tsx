@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { Store, UserRole, Order, OrderStatus, ActiveSession } from '../types';
-import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2, Database } from 'lucide-react';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
@@ -13,7 +13,6 @@ export default function SuperAdminDashboard() {
   const [stores, setStores] = useState<Store[]>([]);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   
-  // Fix: changed storeId to number in allOrders state
   const [allOrders, setAllOrders] = useState<{storeId: number, order: Order}[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,6 +21,9 @@ export default function SuperAdminDashboard() {
   const [storeToDelete, setStoreToDelete] = useState<Store | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
+
+  // Factory Reset Logic
+  const [resetConfirmation, setResetConfirmation] = useState(0);
 
   const [editingStore, setEditingStore] = useState<Partial<Store>>({
     name: '',
@@ -63,7 +65,6 @@ export default function SuperAdminDashboard() {
     const activeSessions = await db.getActiveSessions();
     setSessions(activeSessions);
 
-    // Fix: Using number for storeId in orders map
     const orders: {storeId: number, order: Order}[] = [];
     for (const store of loadedStores) {
         const storeOrders = await db.getOrders(store.id);
@@ -92,7 +93,6 @@ export default function SuperAdminDashboard() {
           if (storeData.id) {
             await db.updateStore(storeData as Store);
           } else {
-            // Fix: id should be 0 for auto-increment in addStore
             await db.addStore({ ...storeData, id: 0, isActive: true } as Store);
           }
           setIsModalOpen(false);
@@ -105,6 +105,7 @@ export default function SuperAdminDashboard() {
   };
 
   const isSuperOrAdmin = [UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(user?.role as UserRole);
+  const isRootAdmin = user?.username === 'sys.admin';
 
   const handleDeleteStore = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -112,7 +113,6 @@ export default function SuperAdminDashboard() {
 
       if (!user || !storeToDelete || isSaving) return;
 
-      // Double check permission inside handler
       if (!isSuperOrAdmin) {
           setDeleteError('Permission Denied: Only Administrators can delete stores.');
           return;
@@ -157,7 +157,6 @@ export default function SuperAdminDashboard() {
     setIsModalOpen(true);
   };
 
-  // Fix: changed storeId to number in getStoreStats
   const getStoreStats = (storeId: number) => {
       const currentStore = stores.find(s => s.id === storeId);
       const currency = currentStore?.currency || '$';
@@ -227,6 +226,20 @@ export default function SuperAdminDashboard() {
       }
   };
 
+  const handleSystemReset = () => {
+    if (resetConfirmation === 0) {
+      setResetConfirmation(1);
+      setTimeout(() => setResetConfirmation(0), 5000); // Reset button if not clicked again within 5s
+      return;
+    }
+    
+    if (resetConfirmation === 1) {
+      if (confirm("FINAL WARNING: This will permanently wipe all local database records including users, stores, products and sales history. This device will be signed out. Continue?")) {
+          db.resetSystem();
+      }
+    }
+  };
+
   const hasAccess = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER].includes(user?.role as UserRole);
   
   if (!hasAccess) {
@@ -243,15 +256,26 @@ export default function SuperAdminDashboard() {
           <p className="text-gray-500 dark:text-gray-400">Overview of performance by location.</p>
         </div>
         
-        {isSuperOrAdmin && (
-            <button 
-            onClick={openCreateModal}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-bold"
-            >
-            <Plus size={18} />
-            Add New Store
-            </button>
-        )}
+        <div className="flex gap-3">
+            {isRootAdmin && (
+                <button 
+                  onClick={handleSystemReset}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shadow-sm font-black text-xs uppercase tracking-widest ${resetConfirmation === 1 ? 'bg-red-700 text-white animate-pulse' : 'bg-white dark:bg-gray-800 text-red-600 border border-red-100 dark:border-red-900/30 hover:bg-red-50'}`}
+                >
+                  <Database size={16} />
+                  {resetConfirmation === 1 ? 'Confirm Reset' : 'Clear Local DB'}
+                </button>
+            )}
+            {isSuperOrAdmin && (
+                <button 
+                onClick={openCreateModal}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-bold"
+                >
+                <Plus size={18} />
+                Add New Store
+                </button>
+            )}
+        </div>
       </div>
 
       {hasPermission('VIEW_LIVE_ACTIVITY') && (
@@ -320,7 +344,6 @@ export default function SuperAdminDashboard() {
 
       <div className="space-y-8">
         {stores.map((store) => {
-            // Fix: passing number ID to getStoreStats
             const stats = getStoreStats(store.id);
             return (
                 <div key={store.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">

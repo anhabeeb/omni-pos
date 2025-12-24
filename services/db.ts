@@ -80,10 +80,11 @@ const processSyncQueue = async () => {
                 body: JSON.stringify(task)
             });
 
-            if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+            const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
             
-            const result = await response.json();
-            if (!result.success) throw new Error(result.error || "Sync task failed");
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `Sync failed with status ${response.status}`);
+            }
 
             queue = queue.slice(1);
             setItem('sync_queue', queue);
@@ -102,6 +103,7 @@ const processSyncQueue = async () => {
 
 export const db = {
     init: async () => {
+        // Init Permissions
         const perms = getItem<RolePermissionConfig[]>('global_permissions', []);
         if (perms.length === 0) {
             const defaultPerms: RolePermissionConfig[] = Object.values(UserRole).map(role => ({
@@ -110,6 +112,8 @@ export const db = {
             }));
             setItem('global_permissions', defaultPerms);
         }
+
+        // Init Users
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
             setItem('global_users', [{ 
@@ -124,9 +128,44 @@ export const db = {
                 email: ''
             }]);
         }
+
+        // Ensure sys.admin has an employee profile
+        const employees = getItem<Employee[]>('global_employees', []);
+        if (!employees.some(e => e.empId === 'SYSADMIN')) {
+            const adminEmp: Employee = {
+                id: 1,
+                empId: 'SYSADMIN',
+                fullName: 'System Administrator',
+                dob: '1970-01-01',
+                nationality: 'Internal',
+                idNumber: 'SYSTEM_ROOT',
+                phoneNumber: 'N/A',
+                emergencyContactNumber: 'N/A',
+                emergencyContactPerson: 'N/A',
+                emergencyRelation: 'N/A',
+                createdAt: Date.now()
+            };
+            setItem('global_employees', [adminEmp, ...employees]);
+        }
+
         if (getItem<boolean>('sync_enabled', true)) {
             processSyncQueue();
         }
+    },
+
+    resetSystem: async () => {
+        // DANGEROUS: Wipes all keys starting with prefix
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(DB_PREFIX)) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentStoreId');
+        window.location.reload();
     },
 
     getSyncStatus: (): { status: SyncStatus, pendingCount: number, error: string | null, isBackendMissing: boolean } => {
