@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -14,7 +13,9 @@ import {
   MapPin,
   Loader2,
   Activity,
-  Tag
+  Tag,
+  // Fix: Added missing UserSquare icon import
+  UserSquare
 } from 'lucide-react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +24,7 @@ import { toJpeg } from 'html-to-image';
 const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2, 1];
 
 export default function POS() {
-  const { user, currentStoreId } = useAuth();
+  const { user, currentStoreId, hasPermission } = useAuth();
   const navigate = useNavigate();
 
   const [store, setStore] = useState<Store | null>(null);
@@ -77,7 +78,6 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Fix: handle number storeId in storage keys
   const getStorageKeys = (storeId: number) => ({
     cart: `pos_cart_${storeId}`,
     type: `pos_type_${storeId}`,
@@ -90,7 +90,6 @@ export default function POS() {
   useEffect(() => {
     if (currentStoreId) {
       loadData();
-      // Fix: passed currentStoreId as number
       loadFromPersistence(currentStoreId);
       const handleDbChange = () => loadData();
       window.addEventListener('db_change_any', handleDbChange);
@@ -143,7 +142,7 @@ export default function POS() {
               const cust = JSON.parse(savedCust);
               setSelectedCustomer(cust);
               if (cust) setCustomerSearch(cust.name);
-          } catch(e) { /* ignore parse error */ }
+          } catch(e) { /* ignore */ }
       }
       if (savedTable) setTableNumber(savedTable);
       if (savedNote) setOrderNote(savedNote);
@@ -273,7 +272,6 @@ export default function POS() {
     if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
     
     setIsSaving(true);
-    // Fix: cast id to 0 for auto-increment and shiftId to number
     const newOrder: Order = {
         id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
         items: [...cart], subtotal: totals.subtotal, 
@@ -329,7 +327,6 @@ export default function POS() {
       if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
       
       setIsSaving(true);
-      // Fix: cast id to 0 for auto-increment and shiftId to number
       const newOrderData: Order = {
           id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
           items: [...cart], subtotal: totals.subtotal, 
@@ -440,7 +437,6 @@ export default function POS() {
                 description: `Active order #${finalOrder.orderNumber} settled via ${paymentMethod}`
               });
           } else {
-              // Fix: cast id to 0 and shiftId to number
               finalOrder = { 
                 id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
                 items: localCart, 
@@ -662,7 +658,16 @@ export default function POS() {
   };
 
   const previewHtml = useMemo(() => { if (previewOrder) return generateReceiptHtml(previewOrder, false); return ''; }, [previewOrder, store, users]);
-  const getIframeWidth = () => { const paperSize = store?.printSettings?.paperSize || 'thermal'; switch(paperSize) { case 'a4': return '550px'; case 'a5': return '400px'; case 'letter': return '550px'; default: return '300px'; } };
+  
+  // Fix: Added getIframeWidth helper for print preview modal sizing
+  const getIframeWidth = () => {
+    if (!store) return '400px';
+    const settings = store.printSettings || { paperSize: 'thermal' };
+    const paperSize = settings.paperSize || 'thermal';
+    if (paperSize === 'a4' || paperSize === 'letter') return '650px';
+    if (paperSize === 'a5') return '500px';
+    return '320px'; // thermal width
+  };
 
   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
   const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name); setShowCustomerResults(false); };
@@ -672,7 +677,6 @@ export default function POS() {
       if (!currentStoreId || !newCustData.name || isSaving) return;
       setIsSaving(true);
       try {
-          // Fix: cast id to 0 for auto-increment and added storeId
           const newCust: Customer = { ...newCustData, id: 0, storeId: currentStoreId } as Customer;
           const added = await db.addCustomer(currentStoreId, newCust); 
           setSelectedCustomer(added); 
@@ -749,7 +753,6 @@ export default function POS() {
     }
   };
 
-  // Helper for grouped product display
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
           {productList.map(product => (
@@ -767,4 +770,565 @@ export default function POS() {
                           <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
                       </div>
                   </div>
-                  <h3 
+                  <h3 className="text-xs font-bold truncate dark:text-white">{product.name}</h3>
+                  <p className="text-blue-600 dark:text-blue-400 font-black text-xs">{store?.currency}{product.price.toFixed(2)}</p>
+              </button>
+          ))}
+      </div>
+  );
+
+  return (
+    <div className="h-full flex flex-col gap-4 overflow-hidden relative">
+      <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
+      
+      {/* Toast Notification */}
+      {toast && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] animate-in slide-in-from-top-4 duration-300">
+              <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${toast.type === 'SUCCESS' ? 'bg-emerald-600 border-emerald-500 text-white' : toast.type === 'ERROR' ? 'bg-red-600 border-red-500 text-white' : 'bg-blue-600 border-blue-500 text-white'}`}>
+                  {toast.type === 'SUCCESS' ? <CheckCircle size={20}/> : toast.type === 'ERROR' ? <AlertCircle size={20}/> : <Info size={20}/>}
+                  <span className="text-sm font-black uppercase tracking-widest">{toast.message}</span>
+              </div>
+          </div>
+      )}
+
+      {/* Primary POS Toolbar */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex items-center justify-between shrink-0 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-1">
+            <button onClick={() => setActiveTab('MENU')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all ${activeTab === 'MENU' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 font-black' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 font-bold'}`}>
+                <Utensils size={18}/> <span className="text-xs uppercase tracking-tight">Terminal</span>
+            </button>
+            <button onClick={() => setActiveTab('ORDERS')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all relative ${activeTab === 'ORDERS' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 font-black' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 font-bold'}`}>
+                <Activity size={18}/> <span className="text-xs uppercase tracking-tight">Active</span>
+                {activeOrders.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">{activeOrders.length}</span>}
+            </button>
+            <button onClick={() => setActiveTab('HELD')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all relative ${activeTab === 'HELD' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 font-black' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 font-bold'}`}>
+                <PauseCircle size={18}/> <span className="text-xs uppercase tracking-tight">Held</span>
+                {heldOrders.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">{heldOrders.length}</span>}
+            </button>
+            <button onClick={() => setActiveTab('HISTORY')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 font-black' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 font-bold'}`}>
+                <RefreshCcw size={18}/> <span className="text-xs uppercase tracking-tight">History</span>
+            </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+            {shift ? (
+                <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex flex-col text-right pr-3 border-r dark:border-gray-800">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Register Open</span>
+                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">Shift #{shift.shiftNumber}</span>
+                    </div>
+                    <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-colors">
+                        <Lock size={16}/> End Shift
+                    </button>
+                </div>
+            ) : (
+                <button onClick={() => setIsShiftModalOpen(true)} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95">
+                    <Unlock size={18}/> Open Register
+                </button>
+            )}
+        </div>
+      </div>
+
+      <div className="flex-1 flex gap-6 overflow-hidden">
+          {/* Main Area */}
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+              {activeTab === 'MENU' ? (
+                  <>
+                    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm shrink-0">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-2.5 text-gray-400" size={18}/>
+                            <input 
+                                placeholder="Search menu (Shortcut: F1)" 
+                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
+                            <Maximize2 size={16} className="text-gray-400"/>
+                            <input 
+                                type="range" min="0.8" max="1.5" step="0.1" 
+                                value={menuScale} 
+                                onChange={e => setMenuScale(parseFloat(e.target.value))} 
+                                className="w-20"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto shrink-0 pb-1 custom-scrollbar-hide">
+                        <button 
+                            onClick={() => setSelectedCategoryId('ALL')}
+                            className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all border whitespace-nowrap ${selectedCategoryId === 'ALL' ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
+                        >
+                            All Items
+                        </button>
+                        {categories.map(cat => (
+                            <button 
+                                key={cat.id}
+                                onClick={() => setSelectedCategoryId(cat.id.toString())}
+                                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all border whitespace-nowrap ${selectedCategoryId === cat.id.toString() ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                        {renderProductGrid(products.filter(p => {
+                            const matchCat = selectedCategoryId === 'ALL' || p.categoryId === parseInt(selectedCategoryId);
+                            const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+                            return matchCat && matchSearch;
+                        }))}
+                    </div>
+                  </>
+              ) : activeTab === 'ORDERS' ? (
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 content-start">
+                    {activeOrders.map(order => (
+                        <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-500 cursor-pointer group transition-all">
+                            <div className="flex justify-between items-start mb-3 border-b dark:border-gray-700 pb-2">
+                                <div>
+                                    <h3 className="font-black text-blue-600 dark:text-blue-400">#{order.orderNumber}</h3>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${order.status === OrderStatus.READY ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.status}</span>
+                                    {order.tableNumber && <p className="text-xs font-black text-gray-800 dark:text-gray-200 mt-1">Table {order.tableNumber}</p>}
+                                </div>
+                            </div>
+                            <div className="space-y-1 mb-4">
+                                {order.items.slice(0, 3).map((item, i) => (
+                                    <div key={i} className="flex justify-between text-xs dark:text-gray-400">
+                                        <span className="truncate">{item.productName}</span>
+                                        <span className="font-bold">x{item.quantity}</span>
+                                    </div>
+                                ))}
+                                {order.items.length > 3 && <p className="text-[10px] text-gray-400 font-bold italic">+ {order.items.length - 3} more items</p>}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={(e) => handleQuickSettle(order, e)} className="flex-1 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg shadow-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity">Settle Payment</button>
+                                <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-2 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:text-orange-500 rounded-lg"><PauseCircle size={16}/></button>
+                            </div>
+                        </div>
+                    ))}
+                    {activeOrders.length === 0 && <div className="col-span-full py-20 text-center text-gray-400 italic">No active orders found.</div>}
+                </div>
+              ) : activeTab === 'HELD' ? (
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 content-start">
+                    {heldOrders.map(order => (
+                        <div key={order.id} onClick={() => resumeOrder(order)} className="bg-orange-50/50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-800 shadow-sm hover:border-blue-500 cursor-pointer group transition-all">
+                             <div className="flex justify-between items-start mb-3 border-b border-orange-100 dark:border-orange-800 pb-2">
+                                <div>
+                                    <h3 className="font-black text-orange-600">#{order.orderNumber}</h3>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                                </div>
+                                <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full uppercase">HELD</span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-4">{order.customerName || 'No customer'}</p>
+                            <button onClick={(e) => handleActivateOrder(order, e)} className="w-full py-2 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 text-orange-600 text-[10px] font-black uppercase rounded-lg shadow-sm group-hover:bg-orange-600 group-hover:text-white group-hover:border-orange-600 transition-all flex items-center justify-center gap-2">
+                                <Play size={14}/> Resume Order
+                            </button>
+                        </div>
+                    ))}
+                    {heldOrders.length === 0 && <div className="col-span-full py-20 text-center text-gray-400 italic">No held orders found.</div>}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                    {historyOrders.map(order => (
+                        <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-xl ${order.status === OrderStatus.COMPLETED ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                    <CheckCircle size={20}/>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-black dark:text-white">#{order.orderNumber}</p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(order.createdAt).toLocaleTimeString()} • {order.paymentMethod || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-lg font-black dark:text-white">{store?.currency}{order.total.toFixed(2)}</p>
+                                <button onClick={() => { setPreviewOrder(order); setPrintModalOpen(true); }} className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-1 hover:underline ml-auto">
+                                    <Printer size={12}/> View Receipt
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    {historyOrders.length === 0 && <div className="py-20 text-center text-gray-400 italic">No completed orders in this shift.</div>}
+                </div>
+              )}
+          </div>
+
+          {/* Cart Sidebar */}
+          <div className="w-[380px] bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col overflow-hidden shrink-0">
+                <div className="p-5 border-b dark:border-gray-800 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <div className="flex flex-col">
+                            <h2 className="text-lg font-black dark:text-white leading-none">Order Details</h2>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Ticket #{nextOrderNum}</p>
+                        </div>
+                        <button onClick={clearCart} disabled={cart.length === 0} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"><Trash2 size={20}/></button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                        {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
+                            <button key={t} onClick={() => setOrderType(t)} className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all border ${orderType === t ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:border-gray-700 hover:bg-gray-100'}`}>{t.replace('_', ' ')}</button>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <div className="relative flex-1 group">
+                            <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                            <input 
+                                placeholder="Customer Name..." 
+                                className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-xs dark:text-white"
+                                value={customerSearch}
+                                onChange={e => { setCustomerSearch(e.target.value); setShowCustomerResults(true); }}
+                                onFocus={() => setShowCustomerResults(true)}
+                            />
+                            {selectedCustomer && <button onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }} className="absolute right-2 top-2 p-0.5 text-gray-400 hover:text-red-500"><X size={14}/></button>}
+                            
+                            {showCustomerResults && customerSearch.length > 0 && !selectedCustomer && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto p-1 animate-in fade-in slide-in-from-top-1">
+                                    {filteredCustomers.map(c => (
+                                        <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><UserSquare size={14}/></div>
+                                                <div><p className="text-xs font-bold dark:text-white">{c.name}</p><p className="text-[9px] text-gray-400">{c.phone}</p></div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {filteredCustomers.length === 0 && <div className="p-4 text-center text-xs text-gray-400">No customers found.</div>}
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={() => setIsCustomerModalOpen(true)} className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 rounded-xl hover:bg-blue-100 transition-colors"><UserPlus size={20}/></button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
+                            <Hash className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                            <input 
+                                placeholder="Table #" 
+                                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-xs dark:text-white"
+                                value={tableNumber}
+                                onChange={e => setTableNumber(e.target.value)}
+                            />
+                        </div>
+                        <div className="relative">
+                            <StickyNote className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                            <input 
+                                placeholder="Order Note..." 
+                                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-xs dark:text-white"
+                                value={orderNote}
+                                onChange={e => setOrderNote(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+                    {cart.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-40">
+                            <ShoppingBag size={48} className="mb-2" />
+                            <p className="font-black text-xs uppercase tracking-widest">Cart is empty</p>
+                        </div>
+                    ) : cart.map(item => (
+                        <div key={item.productId} className="flex justify-between items-center group">
+                            <div className="flex-1 pr-2">
+                                <div className="text-sm font-bold truncate dark:text-white leading-tight">{item.productName}</div>
+                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-black">{store?.currency}{item.price.toFixed(2)}</div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <button onClick={() => updateQuantity(item.productId, -1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-700 dark:text-white rounded-lg shadow-sm active:scale-90 transition-all"><Minus size={12}/></button>
+                                    <span className="w-5 text-center text-xs font-black dark:text-white">{item.quantity}</span>
+                                    <button onClick={() => updateQuantity(item.productId, 1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-700 dark:text-white rounded-lg shadow-sm active:scale-90 transition-all"><Plus size={12}/></button>
+                                </div>
+                                <button onClick={() => updateQuantity(item.productId, -item.quantity)} className="text-gray-300 hover:text-red-500 transition-colors"><X size={18}/></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-6 border-t dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                    <div className="space-y-2 mb-6">
+                        <div className="flex justify-between text-xs text-gray-400 font-bold uppercase tracking-widest"><span>Subtotal</span><span className="text-gray-700 dark:text-gray-200">{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
+                        <div className="flex justify-between items-center text-xs text-gray-400 font-bold uppercase tracking-widest">
+                            <div className="flex items-center gap-1 group cursor-pointer">
+                                <span>Discount</span>
+                                <input type="number" step="0.1" value={discountPercent} onChange={e => setDiscountPercent(parseFloat(e.target.value) || 0)} className="w-10 bg-transparent border-b border-dashed border-gray-300 dark:border-gray-600 text-center outline-none focus:border-blue-500 dark:text-gray-200"/>
+                                <span className="text-[9px]">%</span>
+                            </div>
+                            <span className="text-red-500">-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
+                        </div>
+                        {orderType === OrderType.DINE_IN && store?.serviceChargeRate && (
+                            <div className="flex justify-between text-xs text-gray-400 font-bold uppercase tracking-widest"><span>Service Charge ({store.serviceChargeRate}%)</span><span className="text-gray-700 dark:text-gray-200">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
+                        )}
+                        <div className="flex justify-between text-xs text-gray-400 font-bold uppercase tracking-widest"><span>GST ({store?.taxRate}%)</span><span className="text-gray-700 dark:text-gray-200">{store?.currency}{totals.tax.toFixed(2)}</span></div>
+                        <div className="flex justify-between items-center pt-4 mt-4 border-t dark:border-gray-800">
+                            <span className="text-sm font-black dark:text-white uppercase tracking-tighter">Net Payable</span>
+                            <span className="text-3xl font-black text-blue-600 tracking-tighter">{store?.currency}{totals.total.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={handleHoldCart}
+                            disabled={cart.length === 0}
+                            className="flex flex-col items-center justify-center gap-1 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-600 dark:text-gray-300 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95 disabled:opacity-30"
+                        >
+                            <PauseCircle size={18}/> Hold Order
+                        </button>
+                        <button 
+                            onClick={handleSendToKitchen}
+                            disabled={cart.length === 0}
+                            className="flex flex-col items-center justify-center gap-1 py-3 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-30"
+                        >
+                            <ChefHat size={18}/> Kitchen Ticket
+                        </button>
+                        <button 
+                            onClick={handleCheckout}
+                            disabled={cart.length === 0}
+                            className="col-span-2 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-30"
+                        >
+                            <DollarSign size={20}/> Pay Now
+                        </button>
+                    </div>
+                </div>
+          </div>
+      </div>
+
+      {/* Payment Settlement Modal */}
+      {isPaymentModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
+                      <div>
+                        <h2 className="text-xl font-black dark:text-white uppercase tracking-tight">Finalize Settlement</h2>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Order Reference: {orderToSettle ? `#${orderToSettle.orderNumber}` : `New Sale`}</p>
+                      </div>
+                      <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+                  </div>
+                  
+                  <div className="flex flex-col md:flex-row h-[500px]">
+                      <div className="flex-1 p-8 flex flex-col justify-center items-center bg-blue-50/20 dark:bg-blue-900/5">
+                          <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2">Amount Due</p>
+                          <h1 className="text-6xl font-black text-blue-600 dark:text-blue-400 tracking-tighter mb-8">
+                              {store?.currency}{(orderToSettle ? orderToSettle.total : totals.total).toFixed(2)}
+                          </h1>
+                          
+                          <div className="grid grid-cols-1 w-full gap-2">
+                                <button onClick={() => setPaymentMethod('CASH')} className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all ${paymentMethod === 'CASH' ? 'bg-blue-600 border-blue-600 text-white shadow-xl' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-500 hover:bg-gray-50'}`}>
+                                    <Banknote size={24}/>
+                                    <div className="text-left"><p className="text-xs font-black uppercase tracking-widest">Cash Payment</p><p className="text-[10px] opacity-70">Pay via register drawer</p></div>
+                                </button>
+                                <button onClick={() => setPaymentMethod('CARD')} className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all ${paymentMethod === 'CARD' ? 'bg-blue-600 border-blue-600 text-white shadow-xl' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-500 hover:bg-gray-50'}`}>
+                                    <CreditCard size={24}/>
+                                    <div className="text-left"><p className="text-xs font-black uppercase tracking-widest">Debit/Credit Card</p><p className="text-[10px] opacity-70">External machine swipe</p></div>
+                                </button>
+                                <button onClick={() => setPaymentMethod('TRANSFER')} className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all ${paymentMethod === 'TRANSFER' ? 'bg-blue-600 border-blue-600 text-white shadow-xl' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-500 hover:bg-gray-50'}`}>
+                                    <RefreshCcw size={24}/>
+                                    <div className="text-left"><p className="text-xs font-black uppercase tracking-widest">Online Transfer</p><p className="text-[10px] opacity-70">Direct bank account credit</p></div>
+                                </button>
+                          </div>
+                      </div>
+
+                      <div className="w-full md:w-80 p-8 border-l dark:border-gray-700 flex flex-col justify-between">
+                          <div className="space-y-6">
+                              {paymentMethod === 'CASH' ? (
+                                  <>
+                                      <div className="space-y-2">
+                                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cash Tendered</label>
+                                          <div className="relative">
+                                              <DollarSign className="absolute left-3 top-3.5 text-gray-400" size={18}/>
+                                              <input 
+                                                autoFocus
+                                                type="number" step="0.01" 
+                                                placeholder="0.00"
+                                                className="w-full pl-9 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-black dark:text-white"
+                                                value={amountTendered}
+                                                onChange={e => { setAmountTendered(e.target.value); setPaymentError(''); }}
+                                              />
+                                          </div>
+                                          {paymentError && <p className="text-red-500 text-[10px] font-black uppercase italic ml-1 animate-pulse">{paymentError}</p>}
+                                      </div>
+                                      
+                                      <div className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-2xl border border-dashed dark:border-gray-700">
+                                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Change Due</p>
+                                          <p className="text-2xl font-black text-gray-800 dark:text-gray-200">
+                                              {store?.currency}{Math.max(0, (parseFloat(amountTendered) || 0) - (orderToSettle ? orderToSettle.total : totals.total)).toFixed(2)}
+                                          </p>
+                                      </div>
+                                  </>
+                              ) : (
+                                  <div className="p-6 text-center space-y-4">
+                                      <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-600 mx-auto">
+                                          <Activity className="animate-pulse" size={32}/>
+                                      </div>
+                                      <p className="text-xs font-bold text-gray-500 leading-relaxed uppercase tracking-widest">Please verify {paymentMethod.toLowerCase()} transaction on external terminal before confirming.</p>
+                                  </div>
+                              )}
+                          </div>
+
+                          <button 
+                            onClick={finalizePayment} 
+                            disabled={isSaving || (paymentMethod === 'CASH' && (!amountTendered || parseFloat(amountTendered) < (orderToSettle?.total || totals.total)))}
+                            className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/30 hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-30"
+                          >
+                            Complete Settlement
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Register/Shift Management Modal */}
+      {isShiftModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
+                      <h2 className="text-xl font-black dark:text-white flex items-center gap-3 uppercase tracking-tighter">
+                          {shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>}
+                          Register Control
+                      </h2>
+                      <button onClick={() => setIsShiftModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+                  </div>
+
+                  <div className="p-8 space-y-6">
+                      <div className="bg-blue-50/30 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">{shift ? 'Close Drawer Count' : 'Starting Float Count'}</p>
+                          <div className="grid grid-cols-3 gap-2">
+                              {DENOMINATIONS.slice(0, 6).map(d => (
+                                  <div key={d} className="flex flex-col gap-1">
+                                      <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 ml-1">{store?.currency}{d}</span>
+                                      <input 
+                                          type="number" min="0" placeholder="0"
+                                          className="w-full p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl text-xs font-bold dark:text-white text-center outline-none focus:ring-2 focus:ring-blue-500"
+                                          value={denominations[d] || ''}
+                                          onChange={e => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}
+                                      />
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+
+                      <div className="flex justify-between items-center py-4 border-t dark:border-gray-700">
+                          <div className="text-right flex-1 pr-6">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Counted</p>
+                              <p className="text-3xl font-black dark:text-white tracking-tighter">{store?.currency}{calculateDenomTotal().toFixed(2)}</p>
+                          </div>
+                          <div className="flex-1 space-y-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Notes</label>
+                              <textarea 
+                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border-0 rounded-xl text-xs font-bold outline-none dark:text-white"
+                                value={shiftNote} onChange={e => setShiftNote(e.target.value)} rows={2} placeholder="Shift summary notes..."
+                              />
+                          </div>
+                      </div>
+                      
+                      {shiftError && <p className="text-red-500 text-xs font-bold text-center animate-bounce">{shiftError}</p>}
+
+                      <div className="flex gap-3">
+                          <button onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl transition-all">Cancel</button>
+                          {shift ? (
+                              <button onClick={initiateCloseShift} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 transition-all active:scale-[0.98]">Close Register</button>
+                          ) : (
+                              <button onClick={handleOpenShift} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-[0.98]">Begin Session</button>
+                          )}
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Close Shift Confirmation */}
+      {isShiftConfirmOpen && shift && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl w-full max-md shadow-2xl border border-red-100 dark:border-red-900/30 animate-in zoom-in-95 duration-200">
+                  <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center text-red-600 mx-auto mb-6">
+                      <Lock size={40}/>
+                  </div>
+                  <h2 className="text-2xl font-black text-center dark:text-white mb-2 uppercase tracking-tighter">Finalize Shift End</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-center text-sm mb-8 leading-relaxed">Closing the register will finalize all tallies and generate the end-of-shift report. Ensure all cash is counted correctly.</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                      <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700 text-center">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Expected Cash</p>
+                          <p className="text-xl font-black dark:text-white">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700 text-center">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Actual Cash</p>
+                          <p className="text-xl font-black dark:text-white">{store?.currency}{calculateDenomTotal().toFixed(2)}</p>
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                      <button onClick={executeCloseShift} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-700 active:scale-[0.98] transition-all">Yes, Close Shift Now</button>
+                      <button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-500 dark:text-gray-400 font-bold text-sm hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl">Return to POS</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Quick Add Customer Modal */}
+      {isCustomerModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
+                      <h2 className="text-xl font-black dark:text-white flex items-center gap-3 uppercase tracking-tighter"><UserPlus className="text-blue-600"/> Add Quick Customer</h2>
+                      <button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+                  </div>
+                  <form onSubmit={handleQuickAddCustomer} className="p-8 space-y-6">
+                      <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl">
+                          <button type="button" onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${newCustData.type === 'INDIVIDUAL' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-400'}`}>Individual</button>
+                          <button type="button" onClick={() => setNewCustData({...newCustData, type: 'COMPANY'})} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${newCustData.type === 'COMPANY' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-400'}`}>Company</button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Contact Name *</label>
+                              <input required className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" value={newCustData.name} onChange={e => setNewCustData({...newCustData, name: e.target.value})}/>
+                          </div>
+                          <div className="space-y-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Number *</label>
+                              <input required className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white font-mono" value={newCustData.phone} onChange={e => setNewCustData({...newCustData, phone: e.target.value})}/>
+                          </div>
+                      </div>
+                      <div className="flex gap-3 pt-4">
+                          <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-2xl transition-all">Cancel</button>
+                          <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                              {isSaving ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>} Save Record
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {printModalOpen && previewOrder && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                  <div className="p-5 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
+                      <h2 className="text-lg font-black dark:text-white flex items-center gap-3 uppercase tracking-tighter"><Printer size={22} className="text-blue-600"/> Receipt Preview</h2>
+                      <button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+                  </div>
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-4 md:p-8 flex justify-center overflow-auto custom-scrollbar">
+                      <div className="bg-white shadow-2xl h-fit p-1 rounded" style={{width: getIframeWidth()}}>
+                          <iframe srcDoc={previewHtml} className="w-full h-[1000px] border-none" title="Receipt Preview" />
+                      </div>
+                  </div>
+                  <div className="p-5 border-t dark:border-gray-700 flex flex-wrap justify-end gap-3 bg-white dark:bg-gray-900">
+                      <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400">Close</button>
+                      <button onClick={handleSaveAsJpg} className="px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 transition-all">
+                          <FileImage size={18}/> Export Image
+                      </button>
+                      <button onClick={handlePrintFinal} className="px-10 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all active:scale-95">
+                          Print Receipt
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+}
