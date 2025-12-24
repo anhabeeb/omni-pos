@@ -53,11 +53,12 @@ const broadcastSyncUpdate = () => {
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
     const queue = getItem<any[]>('sync_queue', []);
     // Ensure all numeric IDs are numbers before queuing
-    if (data.id) data.id = Number(data.id);
-    if (data.storeId) data.storeId = Number(data.storeId);
-    if (data.createdAt) data.createdAt = Number(data.createdAt);
+    const cleanData = { ...data };
+    if (cleanData.id) cleanData.id = Number(cleanData.id);
+    if (cleanData.storeId) cleanData.storeId = Number(cleanData.storeId);
+    if (cleanData.createdAt) cleanData.createdAt = Number(cleanData.createdAt);
     
-    queue.push({ id: uuid(), action, table, data, timestamp: Date.now() });
+    queue.push({ id: uuid(), action, table, data: cleanData, timestamp: Date.now() });
     setItem('sync_queue', queue);
     
     if (getItem<boolean>('sync_enabled', true)) {
@@ -175,6 +176,25 @@ export const db = {
         window.location.reload();
     },
 
+    clearSyncQueue: () => {
+        setItem('sync_queue', []);
+        lastSyncError = null;
+        currentSyncStatus = 'CONNECTED';
+        broadcastSyncUpdate();
+    },
+
+    skipFailedTask: () => {
+        let queue = getItem<any[]>('sync_queue', []);
+        if (queue.length > 0) {
+            queue = queue.slice(1);
+            setItem('sync_queue', queue);
+            lastSyncError = null;
+            currentSyncStatus = queue.length > 0 ? 'SYNCING' : 'CONNECTED';
+            if (queue.length > 0) processSyncQueue();
+            broadcastSyncUpdate();
+        }
+    },
+
     getSyncStatus: (): { status: SyncStatus, pendingCount: number, error: string | null, isBackendMissing: boolean } => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         return { 
@@ -238,7 +258,6 @@ export const db = {
     },
 
     syncAllLocalToCloud: async () => {
-        // Collect all global tables
         const tables = [
             { name: 'users', key: 'global_users' },
             { name: 'stores', key: 'global_stores' },
@@ -251,7 +270,6 @@ export const db = {
             data.forEach(item => addToSyncQueue('INSERT', t.name, item));
         });
 
-        // Collect all store-specific tables
         const stores = getItem<Store[]>('global_stores', []);
         stores.forEach(s => {
             const storeTables = [

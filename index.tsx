@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+// Fix: App.tsx uses named exports for its components and hooks (like useAuth), so App must be imported as a named export.
+import { App } from './App';
 import { db } from './services/db';
 
 const initApp = async () => {

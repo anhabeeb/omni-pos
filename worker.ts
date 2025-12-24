@@ -40,44 +40,48 @@ export default {
           const { action, table, data, username, password } = payload;
 
           if (action === 'INIT_SCHEMA') {
-            const schema = [
-              "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
-              "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
-              "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
-              "CREATE TABLE IF NOT EXISTS `categories` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, orderId INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `customers` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, phone TEXT, type TEXT, companyName TEXT, tin TEXT, houseName TEXT, streetName TEXT, buildingName TEXT, street TEXT, island TEXT, country TEXT, address TEXT)",
-              "CREATE TABLE IF NOT EXISTS `orders` (id INTEGER PRIMARY KEY, orderNumber TEXT, storeId INTEGER, shiftId INTEGER, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy INTEGER, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
-              "CREATE TABLE IF NOT EXISTS `quotations` (id INTEGER PRIMARY KEY, quotationNumber TEXT, storeId INTEGER, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy INTEGER, createdAt INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
-              "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
-              "CREATE TABLE IF NOT EXISTS `inventory` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-              "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
-              "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
-            ];
-            
-            for (const q of schema) {
-              await DB.prepare(q).run();
-            }
-            
-            // Migration for existing databases
-            const migrations = [
-              { table: 'stores', column: 'buildingName', type: 'TEXT' },
-              { table: 'stores', column: 'streetName', type: 'TEXT' },
-              { table: 'stores', column: 'city', type: 'TEXT' },
-              { table: 'stores', column: 'province', type: 'TEXT' },
-              { table: 'stores', column: 'zipCode', type: 'TEXT' },
-              { table: 'users', column: 'phoneNumber', type: 'TEXT' },
-              { table: 'users', column: 'email', type: 'TEXT' }
-            ];
+            try {
+              const schema = [
+                "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
+                "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
+                "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
+                "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
+                "CREATE TABLE IF NOT EXISTS `categories` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, orderId INTEGER)",
+                "CREATE TABLE IF NOT EXISTS `customers` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, phone TEXT, type TEXT, companyName TEXT, tin TEXT, houseName TEXT, streetName TEXT, buildingName TEXT, street TEXT, island TEXT, country TEXT, address TEXT)",
+                "CREATE TABLE IF NOT EXISTS `orders` (id INTEGER PRIMARY KEY, orderNumber TEXT, storeId INTEGER, shiftId INTEGER, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy INTEGER, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
+                "CREATE TABLE IF NOT EXISTS `quotations` (id INTEGER PRIMARY KEY, quotationNumber TEXT, storeId INTEGER, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy INTEGER, createdAt INTEGER)",
+                "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
+                "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
+                "CREATE TABLE IF NOT EXISTS `inventory` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
+                "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
+                "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
+              ];
+              
+              for (const q of schema) {
+                await DB.prepare(q).run();
+              }
+              
+              const migrations = [
+                { table: 'stores', column: 'buildingName', type: 'TEXT' },
+                { table: 'stores', column: 'streetName', type: 'TEXT' },
+                { table: 'stores', column: 'city', type: 'TEXT' },
+                { table: 'stores', column: 'province', type: 'TEXT' },
+                { table: 'stores', column: 'zipCode', type: 'TEXT' },
+                { table: 'users', column: 'phoneNumber', type: 'TEXT' },
+                { table: 'users', column: 'email', type: 'TEXT' }
+              ];
 
-            for (const m of migrations) {
-              try {
-                await DB.prepare(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`).run();
-              } catch (e) {}
+              for (const m of migrations) {
+                try {
+                  await DB.prepare(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`).run();
+                } catch (e) {
+                    // Fail silently if column already exists
+                }
+              }
+              return jsonResponse({ success: true });
+            } catch (err: any) {
+              return jsonResponse({ success: false, error: `Schema Init Error: ${err.message}` }, 500);
             }
-
-            return jsonResponse({ success: true });
           }
 
           if (action === 'REMOTE_LOGIN') {
@@ -125,7 +129,6 @@ export default {
                 let val = data[k];
                 if (val === undefined) return null;
                 
-                // CRITICAL: Coerce known numeric fields to Numbers to avoid SQLITE_MISMATCH
                 const numericFields = [
                   'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
                   'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
@@ -147,7 +150,7 @@ export default {
             } catch (err: any) {
               return jsonResponse({ 
                 success: false, 
-                error: `Database Error in ${table}: ${err.message}. Hint: Use 'Repair DB Schema'.` 
+                error: `Database Error in ${table}: ${err.message}. Hint: Use 'Repair DB Schema' or 'Skip Task'.` 
               }, 500);
             }
           }
