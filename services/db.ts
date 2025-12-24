@@ -108,21 +108,22 @@ const processSyncQueue = async () => {
     broadcastSyncUpdate();
 };
 
-// Periodic polling to keep terminals in sync automatically
+// Automatic background polling to keep terminals in sync without manual clicks
 const startBackgroundPolling = () => {
     if (autoSyncInterval) clearInterval(autoSyncInterval);
     
     autoSyncInterval = setInterval(async () => {
-        if (getItem<boolean>('sync_enabled', true) && navigator.onLine) {
+        const isEnabled = getItem<boolean>('sync_enabled', true);
+        if (isEnabled && navigator.onLine) {
             const queue = getItem<any[]>('sync_queue', []);
-            // Only pull if we don't have pending outgoing changes to avoid complicated conflicts
+            // Only pull if we don't have pending changes to avoid conflict noise in local state
             if (queue.length === 0) {
                 await db.pullAllFromCloud();
             }
-            // Also try to process queue in case it got stuck
+            // Always try to flush queue in case a previous attempt failed silently
             processSyncQueue();
         }
-    }, 30000); // Sync every 30 seconds
+    }, 30000); // Check every 30 seconds
 };
 
 export const db = {
