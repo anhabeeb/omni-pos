@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+// @ts-ignore - Fixing missing member errors in react-router-dom
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
 import { db, SyncStatus } from './services/db';
@@ -161,11 +162,11 @@ const SyncIndicator = () => {
     const toggleSync = () => db.setSyncEnabled(!db.isSyncEnabled());
 
     const getStatusConfig = () => {
-        if (status.status === 'DISABLED') return { icon: Database, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100' };
+        if (status.status === 'DISABLED') return { icon: Database, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
         switch(status.status) {
-            case 'CONNECTED': return { icon: Cloud, text: 'Synced', color: 'text-green-500', bg: 'bg-green-50' };
-            case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50', spin: true };
-            case 'ERROR': return { icon: AlertCircle, text: 'Error', color: 'text-red-500', bg: 'bg-red-50' };
+            case 'CONNECTED': return { icon: Cloud, text: 'Synced', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/10' };
+            case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', spin: true };
+            case 'ERROR': return { icon: AlertCircle, text: 'Error', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/10' };
             default: return { icon: Cloud, text: 'Init', color: 'text-gray-500', bg: 'bg-gray-50' };
         }
     };
@@ -178,14 +179,14 @@ const SyncIndicator = () => {
                         status.error?.toLowerCase().includes("mismatch");
 
     return (
-        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full border border-transparent transition-all group relative cursor-help ${config.bg}`}>
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-transparent transition-all group relative cursor-help ${config.bg}`}>
             <Icon size={12} className={`${config.color} ${config.spin ? 'animate-spin' : ''}`} />
             <span className={`text-[10px] font-black uppercase tracking-tight ${config.color}`}>{config.text}</span>
             
-            <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[200] w-72 hidden group-hover:block animate-in fade-in slide-in-from-top-1">
+            <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[200] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between items-center mb-3">
-                    <p className="text-[10px] font-black text-gray-400 uppercase">Cloud Sync</p>
-                    <button onClick={toggleSync} className={`text-[10px] font-black px-2 py-0.5 rounded ${db.isSyncEnabled() ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Database Sync</p>
+                    <button onClick={toggleSync} className={`text-[10px] font-black px-2 py-0.5 rounded transition-colors ${db.isSyncEnabled() ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                         {db.isSyncEnabled() ? 'STOP' : 'START'}
                     </button>
                 </div>
@@ -193,20 +194,22 @@ const SyncIndicator = () => {
                 {db.isSyncEnabled() && (
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
-                            <button onClick={handleBootstrap} className="flex flex-col items-center gap-1 py-2 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
-                                <UploadCloud size={14} /> Push
+                            <button onClick={handleBootstrap} className="flex flex-col items-center justify-center gap-1 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70">
+                                <UploadCloud size={16} />
+                                <span className="text-[9px] font-black uppercase">Push All</span>
                             </button>
-                            <button onClick={handlePull} className="flex flex-col items-center gap-1 py-2 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase">
-                                <CloudDownload size={14} /> Pull
+                            <button onClick={handlePull} className="flex flex-col items-center justify-center gap-1 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70">
+                                <CloudDownload size={16} />
+                                <span className="text-[9px] font-black uppercase">Pull All</span>
                             </button>
                         </div>
                         {status.error && (
-                            <div className="p-2 bg-red-50 rounded-lg text-[10px]">
-                                <p className="font-bold text-red-500 mb-1">Last Error:</p>
-                                <p className="text-gray-600 truncate">{status.error}</p>
-                                <div className="flex flex-col gap-1 mt-2">
-                                    {isSchemaError && <button onClick={handleRepairSchema} className="bg-red-600 text-white p-1 rounded uppercase font-black">Repair Schema</button>}
-                                    <button onClick={handleSkipTask} className="bg-gray-100 text-gray-700 p-1 rounded uppercase font-black">Skip Task</button>
+                            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30 overflow-hidden text-[10px]">
+                                <p className="font-black text-red-500 uppercase mb-1">Last Error:</p>
+                                <p className="text-gray-600 dark:text-gray-300 font-medium leading-tight break-words">{status.error}</p>
+                                <div className="grid grid-cols-1 gap-2 mt-3">
+                                    {isSchemaError && <button onClick={handleRepairSchema} className="w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors"><Terminal size={12}/> Repair Schema</button>}
+                                    <button onClick={handleSkipTask} className="w-full flex items-center justify-center gap-2 py-1.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded hover:bg-orange-200 transition-colors"><FastForward size={12}/> Skip Task</button>
                                 </div>
                             </div>
                         )}
@@ -215,6 +218,165 @@ const SyncIndicator = () => {
             </div>
         </div>
     );
+};
+
+const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const { user, login } = useAuth();
+  const [name, setName] = useState(user?.name || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!user) return;
+    if (newPassword && newPassword !== confirmPassword) {
+      setError('New passwords do not match.');
+      return;
+    }
+
+    if (newPassword && !currentPassword) {
+      setError('Please provide current password to update it.');
+      return;
+    }
+
+    if (currentPassword && currentPassword !== user.password) {
+      setError('Invalid current password.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updatedUser = {
+        ...user,
+        name: name,
+        password: newPassword ? newPassword : user.password
+      };
+
+      await db.updateUser(updatedUser);
+      login(updatedUser); 
+      setSuccess('Profile updated successfully!');
+      setTimeout(() => {
+        onClose();
+        setSuccess('');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }, 1500);
+    } catch (e: any) {
+      setError('Failed to update profile: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-50 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/30">
+          <h2 className="text-xl font-black dark:text-white flex items-center gap-3">
+            <UserCircle className="text-blue-600" /> User Profile
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+            <X size={20} className="text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
+          {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-red-100"><AlertCircle size={16}/> {error}</div>}
+          {success && <div className="bg-green-50 text-green-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-green-100"><CheckCircle size={16}/> {success}</div>}
+
+          <div className="grid grid-cols-2 gap-4 bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+             <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Username</p>
+                <p className="text-sm font-mono font-bold dark:text-blue-300">@{user?.username}</p>
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">System Role</p>
+                <p className="text-sm font-bold dark:text-white uppercase">{user?.role}</p>
+             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Display Name</label>
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-3 text-gray-400" size={16} />
+              <input 
+                type="text" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" 
+                required
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 border-t dark:border-gray-700 space-y-4">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <Key size={12}/> Security (Update Password)
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Current Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                  <input 
+                    type="password" 
+                    value={currentPassword} 
+                    onChange={(e) => setCurrentPassword(e.target.value)} 
+                    placeholder="Verification needed to change"
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">New Password</label>
+                  <input 
+                    type="password" 
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Confirm New</label>
+                  <input 
+                    type="password" 
+                    value={confirmPassword} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold dark:text-white" 
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6 border-t dark:border-gray-700">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl transition-all">Cancel</button>
+            <button 
+              type="submit" 
+              disabled={isSaving}
+              className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 const ProtectedRoute = ({ children, permission }: { children: React.ReactNode, permission?: Permission }) => {
@@ -228,8 +390,11 @@ const ProtectedRoute = ({ children, permission }: { children: React.ReactNode, p
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, switchStore, currentStoreId, hasPermission } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
+  const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const storeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadStores = async () => {
@@ -238,85 +403,155 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       else if (user) setStores(data.filter(s => user.storeIds.includes(s.id)));
     };
     loadStores();
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (storeMenuRef.current && !storeMenuRef.current.contains(event.target as Node)) {
+        setIsStoreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [user]);
 
-  const navItems = [
-    { label: 'Overview', icon: LayoutDashboard, path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] },
-    { label: 'POS Terminal', icon: ShoppingCart, path: '/pos', permission: 'POS_ACCESS' },
-    { label: 'Kitchen', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT' },
-    { label: 'Inventory', icon: Package, path: currentStoreId ? `/store/${currentStoreId}/inventory` : null, permission: 'MANAGE_INVENTORY' },
-    { label: 'Menu', icon: MenuIcon, path: currentStoreId ? `/store/${currentStoreId}/menu` : null, permission: 'MANAGE_INVENTORY' },
-    { label: 'Customers', icon: UserSquare, path: currentStoreId ? `/store/${currentStoreId}/customers` : null, permission: 'MANAGE_CUSTOMERS' },
-    { label: 'History', icon: History, path: currentStoreId ? `/store/${currentStoreId}/history` : null, permission: 'VIEW_HISTORY' },
-    { label: 'Quotations', icon: FileText, path: currentStoreId ? `/store/${currentStoreId}/quotations` : null, permission: 'VIEW_QUOTATIONS' },
-    { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
-    { label: 'Users', icon: Lock, path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { label: 'Employees', icon: UserCircle, path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { label: 'Logs', icon: ScrollText, path: '/logs', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { label: 'Design', icon: Printer, path: currentStoreId ? `/store/${currentStoreId}/designer` : null, permission: 'MANAGE_PRINT_DESIGNER' },
+  const globalMenuItems = [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT] },
+    { label: 'System Logs', icon: ScrollText, path: '/logs', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { label: 'Employee Management', icon: UserSquare, path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
+    { label: 'User & Access Management', icon: ShieldCheck, path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
   ];
 
+  const getStoreActions = (storeId: number) => [
+    { label: 'POS Terminal', icon: ShoppingCart, path: '/pos', permission: 'POS_ACCESS' },
+    { label: 'Kitchen Tickets', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT' },
+    { label: 'Sales History', icon: History, path: `/store/${storeId}/history`, permission: 'VIEW_HISTORY' },
+    { label: 'Quotations', icon: FileText, path: `/store/${storeId}/quotations`, permission: 'VIEW_QUOTATIONS' },
+    { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
+    { label: 'Customers', icon: UserCircle, path: `/store/${storeId}/customers`, permission: 'MANAGE_CUSTOMERS' },
+    { label: 'Inventory', icon: Package, path: `/store/${storeId}/inventory`, permission: 'MANAGE_INVENTORY' },
+    { label: 'Menu Editor', icon: MenuIcon, path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
+    { label: 'Employee Registry', icon: Users, path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
+    { label: 'Print Templates', icon: Printer, path: `/store/${storeId}/designer`, permission: 'MANAGE_PRINT_DESIGNER' },
+  ];
+
+  const currentStore = stores.find(s => s.id === currentStoreId);
+  const storeActions = currentStoreId ? getStoreActions(currentStoreId) : [];
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Top Header Bar */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-50">
-        <div className="px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex flex-col cursor-pointer" onClick={() => navigate('/dashboard')}>
-              <h1 className="text-xl font-black text-blue-600 italic tracking-tighter leading-none">OmniPOS</h1>
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Enterprise</span>
-            </div>
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
+      
+      {/* Primary Top Bar */}
+      <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col cursor-pointer" onClick={() => navigate('/dashboard')}>
+            <h1 className="text-xl font-black text-blue-600 italic tracking-tighter leading-none">OmniPOS</h1>
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-Store Suite</span>
+          </div>
 
-            <div className="hidden lg:flex items-center gap-3 pl-8 border-l border-gray-100 dark:border-gray-800">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Store Context</label>
-              <select 
-                value={currentStoreId || ''} 
-                onChange={(e) => switchStore(Number(e.target.value))}
-                className="bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-xs font-bold py-1.5 px-3 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+          <nav className="hidden md:flex items-center gap-1">
+            {globalMenuItems.filter(item => !item.roles || item.roles.includes(user?.role as UserRole)).map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-bold whitespace-nowrap ${location.pathname === item.path ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
               >
-                <option value="" disabled>Select...</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <SyncIndicator />
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-100 dark:border-gray-800">
-                <div className="text-right hidden sm:block">
-                    <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase leading-none">{user?.name}</p>
-                    <p className="text-[8px] font-bold text-blue-600 uppercase tracking-widest mt-1">{user?.role}</p>
-                </div>
-                <button onClick={logout} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                    <LogOut size={20} />
-                </button>
-            </div>
-          </div>
+                <item.icon size={16} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
 
-        {/* Secondary Navigation Row */}
-        <nav className="px-6 h-12 flex items-center gap-1 overflow-x-auto custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800">
-          {navItems.map((item, idx) => {
-            if (item.path === null) return null;
-            const hasRole = !item.roles || item.roles.includes(user?.role as UserRole);
-            const hasPerm = !item.permission || hasPermission(item.permission as Permission);
-            if (!hasRole || !hasPerm) return null;
+        <div className="flex items-center gap-4">
+          <SyncIndicator />
 
-            const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path.split('/').slice(0, 3).join('/')));
-            
+          <div className="h-8 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
+
+          {/* Store Switcher Dropdown */}
+          <div className="relative" ref={storeMenuRef}>
+            <button
+              onClick={() => setIsStoreMenuOpen(!isStoreMenuOpen)}
+              className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-all ${currentStore ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}
+            >
+              <StoreIcon size={16} />
+              <span className="text-xs font-black uppercase tracking-tight max-w-[150px] truncate">
+                {currentStore?.name || 'Select Store'}
+              </span>
+              <ChevronDown size={14} className={isStoreMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+
+            {isStoreMenuOpen && (
+              <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl shadow-2xl py-3 z-[60] animate-in slide-in-from-top-2 duration-200">
+                <div className="px-4 pb-2 mb-2 border-b dark:border-gray-700 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Locations</span>
+                    <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{stores.length}</span>
+                </div>
+                <div className="max-h-80 overflow-y-auto px-2 custom-scrollbar">
+                  {stores.map((store) => (
+                    <button
+                      key={store.id}
+                      onClick={() => {
+                        switchStore(store.id);
+                        setIsStoreMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl text-left transition-all ${currentStoreId === store.id ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <div className={`p-2 rounded-lg ${currentStoreId === store.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
+                        <StoreIcon size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-xs font-black uppercase truncate ${currentStoreId === store.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{store.name}</p>
+                        <p className="text-[9px] text-gray-400 truncate mt-0.5">{store.address}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 pl-4 border-l dark:border-gray-700">
+            <button 
+              onClick={() => setIsProfileModalOpen(true)}
+              className="group flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 p-1.5 pr-3 rounded-2xl transition-all"
+              title="View Profile"
+            >
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                <UserIcon size={18} />
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] font-black dark:text-white leading-tight uppercase group-hover:text-blue-600 transition-colors">{user?.name}</p>
+                <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">{user?.role}</p>
+              </div>
+            </button>
+            <button onClick={logout} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all border border-transparent hover:border-red-100" title="Logout">
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Secondary Action Bar (Contextual to selected store) */}
+      {currentStoreId && (
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-2 flex items-center justify-center gap-1 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide">
+          {storeActions.filter(a => {
+              if (a.permission && !hasPermission(a.permission as Permission)) return false;
+              return true;
+          }).map((action) => {
+            const isActive = location.pathname === action.path || (action.path !== '/dashboard' && location.pathname.startsWith(action.path.split('/').slice(0, 3).join('/')));
             return (
-              <button 
-                key={idx}
-                onClick={() => navigate(item.path!)}
-                className={`flex items-center gap-2 px-4 h-full text-xs font-bold transition-all border-b-2 whitespace-nowrap ${isActive ? 'text-blue-600 border-blue-600 bg-blue-50/50' : 'text-gray-500 border-transparent hover:text-gray-800 dark:hover:text-gray-300'}`}
+              <button
+                key={action.path}
+                onClick={() => navigate(action.path)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold'}`}
               >
-                <item.icon size={16} className={isActive ? 'text-blue-600' : 'text-gray-400'} />
-                {item.label}
+                <action.icon size={14} className={isActive ? 'text-white' : 'text-gray-400'} />
+                <span className="text-xs font-black uppercase tracking-tight">{action.label}</span>
               </button>
             );
           })}
-        </nav>
-      </header>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8">

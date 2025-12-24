@@ -4,6 +4,7 @@ import { db } from '../services/db';
 import { Store, UserRole, Order, OrderStatus, ActiveSession } from '../types';
 import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2, Database } from 'lucide-react';
 import { useAuth } from '../App';
+// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 

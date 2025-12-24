@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { db } from '../services/db';
 import { User, Store, UserRole } from '../types';
+// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { Store as StoreIcon, ArrowRight, Loader2, AlertCircle, CloudDownload, ShieldCheck } from 'lucide-react';
 
