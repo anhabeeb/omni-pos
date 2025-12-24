@@ -134,13 +134,11 @@ export default function StoreMenu() {
         }
 
       const exportData = products.map(p => ({
-          ID: p.id,
           Name: p.name,
           Category: categories.find(c => c.id === p.categoryId)?.name || 'Unknown',
-          Price_Excl_Tax: p.price,
-          Price_Incl_Tax: (p.price * (1 + (store?.taxRate || 0) / 100)),
+          Price: p.price,
           Cost: p.cost || 0,
-          Status: p.isAvailable ? 'Available' : 'Unavailable'
+          IsAvailable: p.isAvailable ? 'Yes' : 'No'
       }));
 
       const ws = utils.json_to_sheet(exportData);
@@ -148,6 +146,27 @@ export default function StoreMenu() {
       utils.book_append_sheet(wb, ws, "Menu");
       const dateStr = new Date().toISOString().split('T')[0];
       writeFile(wb, `${store?.name || 'Store'}_Menu_${dateStr}.xlsx`);
+  };
+
+  const handleDownloadTemplate = () => {
+      const templateData = [{
+          'Name': 'Cheese Burger',
+          'Category': 'Main Course',
+          'Price': 15.50,
+          'Cost': 5.20,
+          'IsAvailable': 'Yes'
+      }, {
+          'Name': 'Iced Peach Tea',
+          'Category': 'Beverages',
+          'Price': 4.00,
+          'Cost': 0.80,
+          'IsAvailable': 'Yes'
+      }];
+
+      const ws = utils.json_to_sheet(templateData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Menu_Template");
+      writeFile(wb, "Menu_Import_Template.xlsx");
   };
 
   const triggerImport = () => { fileInputRef.current?.click(); };
@@ -164,31 +183,45 @@ export default function StoreMenu() {
               const ws = wb.Sheets[wsName];
               const data = utils.sheet_to_json<any>(ws);
               if (data.length === 0) { alert("File is empty."); return; }
+              
               let addedCount = 0;
               let localCategories = await db.getCategories(storeId);
+              
               for (const row of data) {
-                  if (!row.Name || !row.Category || !row.Price) continue; 
-                  const catName = row.Category.trim();
+                  // Allow Name, Category, Price as required
+                  const prodName = row.Name || row.name;
+                  const catNameInput = row.Category || row.category;
+                  const priceInput = row.Price || row.price;
+
+                  if (!prodName || !catNameInput || priceInput === undefined) continue; 
+                  
+                  const catName = catNameInput.trim();
                   let category = localCategories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+                  
                   if (!category) {
                       category = await db.addCategory(storeId, { name: catName } as Category);
                       localCategories.push(category);
                   }
+
+                  const costInput = row.Cost || row.cost || 0;
+                  const availInput = row.IsAvailable || row.isAvailable;
+                  
                   await db.addProduct(storeId, {
                       id: '', 
-                      name: row.Name,
+                      name: prodName,
                       categoryId: category.id,
-                      price: parseFloat(row.Price),
-                      cost: row.Cost ? parseFloat(row.Cost) : 0,
-                      isAvailable: row.IsAvailable === 'No' || row.IsAvailable === false ? false : true,
+                      price: parseFloat(priceInput),
+                      cost: parseFloat(costInput),
+                      isAvailable: availInput === 'No' || availInput === 'no' || availInput === false ? false : true,
                       storeId: storeId
                   } as Product);
                   addedCount++;
               }
-              alert(`Imported ${addedCount} products.`);
+              alert(`Imported ${addedCount} products successfully.`);
               if (fileInputRef.current) fileInputRef.current.value = '';
           } catch (error) {
-              alert("Error parsing file.");
+              console.error("Import error:", error);
+              alert("Error parsing file. Ensure it is a valid Excel/CSV file.");
           }
       };
       reader.readAsBinaryString(file);
@@ -224,10 +257,17 @@ export default function StoreMenu() {
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={handleExport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold">
+          <button 
+            onClick={handleDownloadTemplate} 
+            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
+            title="Download Import Template"
+          >
+            <FileSpreadsheet size={18} /> Template
+          </button>
+          <button onClick={handleExport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold">
             <Download size={18} /> Export
           </button>
-          <button onClick={triggerImport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold">
+          <button onClick={triggerImport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold">
             <Upload size={18} /> Import
             <input ref={fileInputRef} type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileChange} />
           </button>
