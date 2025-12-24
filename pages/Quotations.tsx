@@ -295,9 +295,9 @@ export default function Quotations() {
   const displayTaxRate: number = typeof store?.taxRate === 'number' ? store.taxRate : 0;
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col min-h-full gap-4">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center shrink-0">
           <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2"><FileText className="text-blue-600" /> Quotations</h1>
             <p className="text-sm text-gray-500">{store?.name}</p>
@@ -333,60 +333,67 @@ export default function Quotations() {
       )}
 
       {activeTab === 'NEW' && (
-          <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-              <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl border flex flex-col p-4 shadow-sm overflow-hidden">
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+              {/* Product List - Now expands to drive the main scrollbar */}
+              <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl border flex flex-col p-4 shadow-sm">
                   <div className="relative mb-4">
                       <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                       <input placeholder="Search products..." className="w-full pl-10 pr-4 py-2 border rounded-xl bg-gray-50 dark:bg-gray-700 outline-none focus:ring-2 focus:ring-blue-500" value={productSearch} onChange={e => setProductSearch(e.target.value)} />
                   </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                       {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
-                          <button key={p.id} onClick={() => addToCart(p)} className="p-3 border rounded-xl text-left hover:border-blue-500 group transition-all">
-                              <div className="font-bold text-sm truncate group-hover:text-blue-600 dark:text-white">{p.name}</div>
-                              <div className="text-blue-600 font-black text-xs mt-1">{store?.currency}{p.price.toFixed(2)}</div>
+                          <button key={p.id} onClick={() => addToCart(p)} className="p-4 border rounded-xl text-left hover:border-blue-500 group transition-all bg-white dark:bg-gray-900 shadow-sm active:scale-95">
+                              <div className="font-bold text-sm truncate group-hover:text-blue-600 dark:text-white uppercase tracking-tight">{p.name}</div>
+                              <div className="text-blue-600 font-black text-sm mt-1">{store?.currency}{p.price.toFixed(2)}</div>
                           </button>
                       ))}
                   </div>
               </div>
               
-              <div className="w-full md:w-96 bg-white dark:bg-gray-800 rounded-2xl border flex flex-col shadow-xl overflow-hidden">
-                  <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b">
+              {/* Sticky Cart Sidebar - Floats with scrolling */}
+              <div className="w-full md:w-96 bg-white dark:bg-gray-800 rounded-2xl border flex flex-col shadow-xl sticky top-4 max-h-[calc(100vh-10rem)] overflow-hidden">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b shrink-0">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Recipient Customer</label>
                       <select className="w-full p-2.5 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 font-bold outline-none" value={selectedCustomer?.id || ''} onChange={e => setSelectedCustomer(customers.find(c => c.id === Number(e.target.value)) || null)}>
                           <option value="">Select Customer...</option>
                           {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                   </div>
+                  
                   <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                       {cart.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-40">
+                        <div className="h-48 flex flex-col items-center justify-center text-gray-300 opacity-40">
                             <ShoppingBag size={48} className="mb-2" />
                             <p className="font-black text-xs uppercase tracking-widest">Cart is empty</p>
                         </div>
                       ) : cart.map(item => (
-                          <div key={item.productId} className="flex justify-between items-center group">
-                              <div className="flex-1 pr-2"><div className="text-sm font-bold truncate dark:text-white">{item.productName}</div><div className="text-[10px] text-gray-500">{store?.currency}{item.price.toFixed(2)}</div></div>
-                              <div className="flex items-center gap-3">
-                                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 p-1 rounded-lg">
-                                      <button onClick={() => updateQuantity(item.productId, -1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-600 rounded shadow-sm">-</button>
-                                      <span className="w-5 text-center text-sm font-black dark:text-white">{item.quantity}</span>
-                                      <button onClick={() => updateQuantity(item.productId, 1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-600 rounded shadow-sm">+</button>
+                          <div key={item.productId} className="flex justify-between items-center group bg-white dark:bg-gray-900 p-2 rounded-xl border border-gray-100 dark:border-gray-800">
+                              <div className="flex-1 pr-2">
+                                  <div className="text-xs font-bold truncate dark:text-white uppercase leading-tight">{item.productName}</div>
+                                  <div className="text-[10px] text-gray-500 font-bold">{store?.currency}{item.price.toFixed(2)}</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 p-1 rounded-lg">
+                                      <button onClick={() => updateQuantity(item.productId, -1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-600 rounded shadow-sm text-xs">-</button>
+                                      <span className="w-5 text-center text-xs font-black dark:text-white">{item.quantity}</span>
+                                      <button onClick={() => updateQuantity(item.productId, 1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-600 rounded shadow-sm text-xs">+</button>
                                   </div>
-                                  <button onClick={() => removeFromCart(item.productId)} className="text-red-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                  <button onClick={() => removeFromCart(item.productId)} className="text-red-300 hover:text-red-500 transition-colors p-1"><Trash2 size={14}/></button>
                               </div>
                           </div>
                       ))}
                   </div>
-                  <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                  
+                  <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 shrink-0">
                       <div className="space-y-2 mb-6">
-                          <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span className="font-bold">{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
+                          <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase"><span>Subtotal</span><span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.subtotal.toFixed(2)}</span></div>
                           {displayScRate > 0 && (
-                            <div className="flex justify-between text-sm text-gray-500"><span>Service Charge (${displayScRate}%)</span><span className="font-bold">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase"><span>Service (${displayScRate}%)</span><span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.serviceCharge.toFixed(2)}</span></div>
                           )}
-                          <div className="flex justify-between text-sm text-gray-500"><span>Tax (${displayTaxRate}%)</span><span className="font-bold">{store?.currency}{totals.tax.toFixed(2)}</span></div>
-                          <div className="flex justify-between font-black text-2xl pt-3 mt-3 border-t dark:border-gray-700 dark:text-white"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
+                          <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase"><span>Tax (${displayTaxRate}%)</span><span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.tax.toFixed(2)}</span></div>
+                          <div className="flex justify-between font-black text-2xl pt-3 mt-3 border-t border-gray-200 dark:border-gray-700 dark:text-white tracking-tighter"><span>Total</span><span>{store?.currency}{totals.total.toFixed(2)}</span></div>
                       </div>
-                      <button onClick={handleSaveQuotation} disabled={cart.length === 0 || !selectedCustomer} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-30 transition-all active:scale-[0.98]">Generate Quote</button>
+                      <button onClick={handleSaveQuotation} disabled={cart.length === 0 || !selectedCustomer} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-30 transition-all active:scale-[0.98]">Generate Quote</button>
                   </div>
               </div>
           </div>
