@@ -739,33 +739,33 @@ export default function POS() {
   };
 
   const renderProductGrid = (productList: Product[]) => (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 content-start">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
           {productList.map(product => (
               <button 
                   key={product.id} 
                   onClick={() => addToCart(product)} 
-                  className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-500/10 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-3"
+                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
               >
                   <div 
-                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-2xl mb-3 flex items-center justify-center text-gray-300 overflow-hidden relative"
-                      style={{ height: `${5 * menuScale}rem` }}
+                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
+                      style={{ height: `${4 * menuScale}rem` }}
                   >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={24 * menuScale}/>}
-                      <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center">
-                          <div className="bg-blue-600 text-white p-2 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-xl">
-                            <Plus size={16}/>
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={20 * menuScale}/>}
+                      <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
+                          <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
+                            <Plus size={14}/>
                           </div>
                       </div>
                   </div>
-                  <h3 className="text-xs font-black truncate dark:text-white mb-1 uppercase tracking-tight">{product.name}</h3>
-                  <p className="text-blue-600 dark:text-blue-400 font-black text-sm tracking-tighter">{store?.currency}{product.price.toFixed(2)}</p>
+                  <h3 className="text-[11px] font-black truncate dark:text-white mb-0.5 uppercase tracking-tight leading-tight">{product.name}</h3>
+                  <p className="text-blue-600 dark:text-blue-400 font-black text-xs tracking-tighter">{store?.currency}{product.price.toFixed(2)}</p>
               </button>
           ))}
       </div>
   );
 
   return (
-    <div className="flex flex-col gap-6 relative">
+    <div className="flex flex-col gap-4 h-[calc(100vh-13rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
       
       {/* Toast Notification */}
@@ -778,7 +778,7 @@ export default function POS() {
           </div>
       )}
 
-      {/* POS Context Bar (Inside Page Content) */}
+      {/* POS Context Bar */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shrink-0">
           <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
               {['MENU', 'ORDERS', 'HELD', 'HISTORY'].map(tab => (
@@ -805,16 +805,16 @@ export default function POS() {
           </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 overflow-hidden min-h-[600px]">
-        {/* Left Side: Product/Tabs Area */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 overflow-hidden">
+        {/* Main Grid Area */}
+        <div className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden">
             {activeTab === 'MENU' ? (
                 <>
-                    <div className="flex flex-col gap-6 h-full">
-                        <div className="relative group">
-                            <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18}/>
+                    <div className="flex flex-col gap-4 h-full">
+                        <div className="relative group shrink-0">
+                            <Search className="absolute left-4 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={16}/>
                             <input 
-                                className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold dark:text-white shadow-sm transition-all" 
+                                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold dark:text-white shadow-sm transition-all text-sm" 
                                 placeholder="Search menu items..." 
                                 value={searchTerm} 
                                 onChange={e => setSearchTerm(e.target.value)} 
@@ -824,7 +824,7 @@ export default function POS() {
                         <div className="flex items-center gap-2 overflow-x-auto shrink-0 pb-1 custom-scrollbar-hide">
                             <button 
                                 onClick={() => setSelectedCategoryId('ALL')}
-                                className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${selectedCategoryId === 'ALL' ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-100'}`}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${selectedCategoryId === 'ALL' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-100'}`}
                             >
                                 All Items
                             </button>
@@ -832,97 +832,98 @@ export default function POS() {
                                 <button 
                                     key={cat.id}
                                     onClick={() => setSelectedCategoryId(cat.id)}
-                                    className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${selectedCategoryId === cat.id ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-100'}`}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${selectedCategoryId === cat.id ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-100'}`}
                                 >
                                     {cat.name}
                                 </button>
                             ))}
                         </div>
 
-                        <div className="flex-1 pr-2">
+                        <div className="flex-1 pr-2 overflow-y-auto custom-scrollbar">
                             {renderProductGrid(products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
                         </div>
                     </div>
 
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-4 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-3xl shadow-2xl">
-                        <Maximize2 size={16} className="text-gray-400"/>
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-3 py-1.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl">
+                        <Maximize2 size={14} className="text-gray-400"/>
                         <input
                             type="range" min="0.8" max="1.5" step="0.05"
                             value={menuScale}
                             onChange={(e) => setMenuScale(parseFloat(e.target.value))}
-                            className="w-32 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            className="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
                         />
                         <span className="text-[10px] font-black text-blue-600 w-8">{Math.round(menuScale * 100)}%</span>
                     </div>
                 </>
             ) : (
-                <div className="flex-1">
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                     {activeTab === 'ORDERS' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                             {activeOrders.map(order => (
-                                <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-2xl transition-all cursor-pointer">
-                                    <div className="flex justify-between items-start mb-4 border-b border-gray-50 dark:border-gray-700 pb-3">
+                                <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-[2rem] border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
+                                    <div className="flex justify-between items-start mb-2 border-b border-gray-50 dark:border-gray-700 pb-2">
                                         <div>
-                                            <h3 className="font-black dark:text-white text-lg tracking-tighter text-blue-600 uppercase">#{order.orderNumber}</h3>
-                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                                            <h3 className="font-black dark:text-white text-base tracking-tighter text-blue-600 uppercase leading-none">#{order.orderNumber}</h3>
+                                            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{new Date(order.createdAt).toLocaleTimeString()}</p>
                                         </div>
-                                        <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
                                     </div>
-                                    <div className="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
-                                    <div className="space-y-2 mb-6 flex-1">
-                                        {order.items.slice(0, 4).map((it, idx) => <div key={idx} className="text-xs font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
+                                    <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                                    <div className="space-y-1 mb-4 flex-1">
+                                        {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
+                                        {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
                                     </div>
-                                    <div className="pt-4 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
-                                        <div className="flex gap-2">
-                                            <button onClick={(e) => { e.stopPropagation(); resumeOrder(order); }} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={16}/></button>
-                                            <button onClick={(e) => handleQuickSettle(order, e)} className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><DollarSign size={16}/></button>
+                                    <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
+                                        <div className="flex gap-1.5">
+                                            <button onClick={(e) => { e.stopPropagation(); resumeOrder(order); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={14}/></button>
+                                            <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><DollarSign size={14}/></button>
                                         </div>
-                                        <span className="font-black text-xl dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</span>
+                                        <span className="font-black text-base dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</span>
                                     </div>
                                 </div>
                             ))}
-                            {activeOrders.length === 0 && <div className="col-span-full py-20 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No active tickets</div>}
+                            {activeOrders.length === 0 && <div className="col-span-full py-16 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No active tickets</div>}
                         </div>
                     ) : activeTab === 'HELD' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                             {heldOrders.map(order => (
-                                <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-5 rounded-3xl border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-2xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
-                                    <div className="flex justify-between items-start mb-4 border-b border-orange-100 dark:border-orange-800 pb-3">
+                                <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
+                                    <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                         <div>
-                                            <h3 className="font-black text-orange-600 text-lg tracking-tighter uppercase">#{order.orderNumber}</h3>
-                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                                            <h3 className="font-black text-orange-600 text-base tracking-tighter uppercase leading-none">#{order.orderNumber}</h3>
+                                            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{new Date(order.createdAt).toLocaleTimeString()}</p>
                                         </div>
-                                        <span className="text-[9px] font-black uppercase bg-orange-100 text-orange-700 px-2 py-1 rounded-lg tracking-widest">ON HOLD</span>
+                                        <span className="text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest">ON HOLD</span>
                                     </div>
-                                    <p className="text-xs font-black text-gray-600 dark:text-gray-400 mb-6 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
+                                    <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
                                     <div className="mt-auto flex gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); handleActivateOrder(order); }} className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-orange-600/20 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"><Play size={14}/> Activate</button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleActivateOrder(order); }} className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"><Play size={12}/> Activate</button>
                                     </div>
                                 </div>
                             ))}
-                            {heldOrders.length === 0 && <div className="col-span-full py-20 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No held orders</div>}
+                            {heldOrders.length === 0 && <div className="col-span-full py-16 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No held orders</div>}
                         </div>
                     ) : (
                         <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
-                                    <tr className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                                        <th className="p-5">Time</th>
-                                        <th className="p-5">Ticket</th>
-                                        <th className="p-5">Summary</th>
-                                        <th className="p-5 text-right">Amount</th>
-                                        <th className="p-5 text-right">Action</th>
+                                    <tr className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
+                                        <th className="p-3">Time</th>
+                                        <th className="p-3">Ticket</th>
+                                        <th className="p-3">Summary</th>
+                                        <th className="p-3 text-right">Amount</th>
+                                        <th className="p-3 text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                                     {historyOrders.map(order => (
                                         <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                            <td className="p-5 text-xs font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-                                            <td className="p-5 font-mono font-black text-blue-600">#{order.orderNumber}</td>
-                                            <td className="p-5 text-xs font-bold dark:text-gray-400 truncate max-w-[200px] uppercase">{order.customerName || `Walk-in`}</td>
-                                            <td className="p-5 text-right font-black text-lg dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
-                                            <td className="p-5 text-right">
-                                                <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={18}/></button>
+                                            <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                                            <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
+                                            <td className="p-3 text-[11px] font-bold dark:text-gray-400 truncate max-w-[150px] uppercase">{order.customerName || `Walk-in`}</td>
+                                            <td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
+                                            <td className="p-3 text-right">
+                                                <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -934,51 +935,51 @@ export default function POS() {
             )}
         </div>
 
-        {/* Right Side: Sidebar */}
-        <aside className="w-full lg:w-[420px] bg-white dark:bg-gray-900 border lg:border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl rounded-[2.5rem] lg:rounded-none lg:rounded-r-[2.5rem] overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 space-y-6">
+        {/* Sidebar Context */}
+        <aside className="w-full lg:w-[360px] bg-white dark:bg-gray-900 border lg:border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl rounded-[2.5rem] lg:rounded-none lg:rounded-r-[2.5rem] overflow-hidden h-full">
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
-                        <div className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">
-                            <Hash size={12} /> Predicted Ticket {nextOrderNum}
+                        <h2 className="font-black text-lg dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
+                        <div className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 uppercase tracking-widest mt-1">
+                            <Hash size={10} /> Predicted Ticket {nextOrderNum}
                         </div>
                     </div>
                     {cart.length > 0 && (
-                        <button onClick={clearCart} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                            <Trash2 size={20} />
+                        <button onClick={clearCart} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                            <Trash2 size={18} />
                         </button>
                     )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl">
+                <div className="grid grid-cols-3 gap-1.5 bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl">
                     {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
-                        <button key={t} onClick={() => setOrderType(t)} className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-xl' : 'text-gray-400'}`}>
+                        <button key={t} onClick={() => setOrderType(t)} className={`py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400'}`}>
                             {t.split('_')[0]}
                         </button>
                     ))}
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                     <div className="relative group">
-                        <Search className="absolute left-3.5 top-3 text-gray-400" size={16} />
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
                         <input 
-                            type="text" placeholder="Search Customer..." 
-                            className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-800 border-none rounded-2xl text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+                            type="text" placeholder="Find Customer..." 
+                            className="w-full pl-9 pr-9 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
                             value={customerSearch} 
                             onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
                             onFocus={() => setShowCustomerResults(true)} 
                         />
-                        <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-3 top-2 p-1.5 bg-blue-600 text-white rounded-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
-                            <UserPlus size={14}/>
+                        <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-1.5 p-1 bg-blue-600 text-white rounded-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
+                            <UserPlus size={12}/>
                         </button>
                         
                         {showCustomerResults && customerSearch && !selectedCustomer && (
-                            <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-60 overflow-y-auto p-2">
+                            <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
                                 {filteredCustomers.map(c => (
-                                    <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-lg flex items-center justify-center font-black">{c.name[0]}</div>
-                                        <div><div className="font-black text-xs dark:text-white uppercase">{c.name}</div><div className="text-[10px] text-gray-500 font-mono">{c.phone}</div></div>
+                                    <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-2">
+                                        <div className="w-7 h-7 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-lg flex items-center justify-center font-black text-[10px]">{c.name[0]}</div>
+                                        <div><div className="font-black text-[10px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[8px] text-gray-500 font-mono mt-0.5">{c.phone}</div></div>
                                     </button>
                                 ))}
                             </div>
@@ -986,12 +987,12 @@ export default function POS() {
                     </div>
 
                     {orderType === OrderType.DINE_IN && (
-                        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1.5 rounded-2xl">
-                            <div className="p-2 bg-gray-50 dark:bg-gray-700 text-gray-400 rounded-xl">
-                                <Tag size={18}/>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 p-1 rounded-2xl">
+                            <div className="p-1.5 bg-gray-50 dark:bg-gray-700 text-gray-400 rounded-xl">
+                                <Tag size={14}/>
                             </div>
-                            <select className="flex-1 bg-transparent text-xs font-black uppercase tracking-widest outline-none dark:text-white" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
-                                <option value="">Select Table</option>
+                            <select className="flex-1 bg-transparent text-[10px] font-black uppercase tracking-widest outline-none dark:text-white" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
+                                <option value="">Table #</option>
                                 {Array.from({length: store?.numberOfTables || 0}, (_, i) => (i + 1).toString()).map(num => <option key={num} value={num}>Table {num}</option>)}
                             </select>
                         </div>
@@ -999,25 +1000,25 @@ export default function POS() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar min-h-[200px]">
+            <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
                 {cart.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-20 py-10">
-                        <ShoppingBag size={80} strokeWidth={1} />
-                        <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4">Order is Empty</p>
+                    <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-20 py-6">
+                        <ShoppingBag size={56} strokeWidth={1} />
+                        <p className="font-black uppercase tracking-[0.2em] text-[8px] mt-2">Empty Order</p>
                     </div>
                 ) : cart.map(item => (
-                    <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-4 duration-300">
-                        <div className="flex-1 pr-4">
-                            <div className="text-xs font-black dark:text-white uppercase tracking-tight leading-tight mb-1">{item.productName}</div>
-                            <div className="text-[10px] font-black text-blue-600 tracking-widest">{store?.currency}{item.price.toFixed(2)}</div>
+                    <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-2 duration-200">
+                        <div className="flex-1 pr-3">
+                            <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-tight mb-0.5">{item.productName}</div>
+                            <div className="text-[9px] font-black text-blue-600 tracking-tighter">{store?.currency}{item.price.toFixed(2)}</div>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-                                <button onClick={() => updateQuantity(item.productId, -1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-600 hover:text-red-500 shadow-sm transition-all">-</button>
-                                <span className="text-xs font-black dark:text-white w-4 text-center">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.productId, 1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-600 hover:text-blue-500 shadow-sm transition-all">+</button>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-xl">
+                                <button onClick={() => updateQuantity(item.productId, -1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-600 hover:text-red-500 shadow-sm transition-all text-xs">-</button>
+                                <span className="text-[11px] font-black dark:text-white w-3 text-center">{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item.productId, 1)} className="w-5 h-5 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-600 hover:text-blue-500 shadow-sm transition-all text-xs">+</button>
                             </div>
-                            <div className="w-20 text-right font-black text-xs dark:text-white tracking-tighter">
+                            <div className="w-16 text-right font-black text-[11px] dark:text-white tracking-tighter">
                                 {store?.currency}{(item.price * item.quantity).toFixed(2)}
                             </div>
                         </div>
@@ -1025,48 +1026,48 @@ export default function POS() {
                 ))}
             </div>
 
-            <div className="p-6 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-inner">
-                <div className="space-y-2 mb-6">
-                    <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            <div className="p-5 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-inner shrink-0">
+                <div className="space-y-1.5 mb-4">
+                    <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest">
                         <span>Subtotal</span>
                         <span className="text-gray-900 dark:text-white">{store?.currency}{totals.subtotal.toFixed(2)}</span>
                     </div>
                     {totals.discountAmount > 0 && (
-                        <div className="flex justify-between text-[10px] font-black text-red-500 uppercase tracking-widest">
+                        <div className="flex justify-between text-[9px] font-black text-red-500 uppercase tracking-widest">
                             <span>Discount ({discountPercent}%)</span>
                             <span>-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
                         </div>
                     )}
-                    <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest">
                         <span>Tax ({store?.taxRate}%)</span>
                         <span className="text-gray-900 dark:text-white">{store?.currency}{totals.tax.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-4 mt-2 border-t border-gray-200 dark:border-gray-800">
-                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tighter">Total Due</span>
-                        <span className="text-4xl font-black text-blue-600 tracking-tighter">{store?.currency}{totals.total.toFixed(2)}</span>
+                    <div className="flex justify-between items-center pt-3 mt-1.5 border-t border-gray-200 dark:border-gray-800">
+                        <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tighter">Due</span>
+                        <span className="text-2xl font-black text-blue-600 tracking-tighter">{store?.currency}{totals.total.toFixed(2)}</span>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                    <button onClick={handleHoldCart} disabled={cart.length === 0} className="flex flex-col items-center justify-center gap-1 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl text-[9px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-300 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-30">
-                        <PauseCircle size={18}/> Hold
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button onClick={handleHoldCart} disabled={cart.length === 0} className="flex flex-col items-center justify-center gap-0.5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-[8px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-300 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-30">
+                        <PauseCircle size={14}/> Hold
                     </button>
-                    <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex flex-col items-center justify-center gap-1 py-3 bg-orange-500 text-white rounded-3xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-30">
-                        <ChefHat size={18}/> Kitchen
+                    <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex flex-col items-center justify-center gap-0.5 py-2 bg-orange-500 text-white rounded-2xl text-[8px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-30">
+                        <ChefHat size={14}/> Kitchen
                     </button>
                 </div>
                 <button 
                     onClick={handleCheckout} 
                     disabled={cart.length === 0} 
-                    className="w-full py-4 bg-blue-600 text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-blue-500/50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-30"
+                    className="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.15em] shadow-xl shadow-blue-500/40 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-30"
                 >
-                    <DollarSign size={20}/> Complete Payment
+                    <DollarSign size={16}/> Settle Payment
                 </button>
             </div>
         </aside>
       </div>
 
-      {/* Modern Settlement Modal */}
+      {/* Payment Settlement Modal */}
       {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 flex flex-col">
