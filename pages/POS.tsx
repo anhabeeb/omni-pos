@@ -13,7 +13,8 @@ import {
   Percent,
   MapPin,
   Loader2,
-  Activity
+  Activity,
+  Tag
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -741,6 +742,41 @@ export default function POS() {
     }
   };
 
+  // Helper for grouped product display
+  const renderProductGrid = (productList: Product[]) => (
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
+          {productList.map(product => (
+              <button 
+                  key={product.id} 
+                  onClick={() => addToCart(product)} 
+                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
+              >
+                  <div 
+                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
+                      style={{ height: `${3.5 * menuScale}rem` }}
+                  >
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={18 * menuScale}/>}
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
+                      </div>
+                  </div>
+                  <h3 
+                      className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-1 leading-tight h-8"
+                      style={{ fontSize: `${9 * menuScale}px` }}
+                  >
+                      {product.name}
+                  </h3>
+                  <div 
+                      className="mt-auto font-black text-blue-600"
+                      style={{ fontSize: `${11 * menuScale}px` }}
+                  >
+                      {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
+                  </div>
+              </button>
+          ))}
+      </div>
+  );
+
   return (
     <div className="flex h-full bg-gray-50 dark:bg-gray-900 overflow-hidden text-gray-800 dark:text-gray-200">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -779,59 +815,63 @@ export default function POS() {
         <div className="flex-1 overflow-hidden flex flex-col p-3">
             {activeTab === 'MENU' ? (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-3 mb-2 shrink-0 custom-scrollbar-hide whitespace-nowrap">
+                    <div className="flex flex-wrap gap-2 mb-4 shrink-0 overflow-y-auto max-h-32 custom-scrollbar pr-2">
                         <button 
                             onClick={() => setSelectedCategoryId('ALL')}
-                            className={`px-3 py-1.5 rounded-full text-[10px] md:text-xs font-black uppercase transition-all border ${selectedCategoryId === 'ALL' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}
+                            className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === 'ALL' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
                         >
-                            All Items
+                            <Activity size={12}/> All Items
                         </button>
                         {categories.map(cat => (
                             <button 
                                 key={cat.id}
                                 onClick={() => setSelectedCategoryId(cat.id)}
-                                className={`px-3 py-1.5 rounded-full text-[10px] md:text-xs font-black uppercase transition-all border ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}
+                                className={`px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-black uppercase transition-all border flex items-center gap-2 ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
                             >
-                                {cat.name}
+                                <Tag size={12}/> {cat.name}
                             </button>
                         ))}
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 content-start">
-                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)).map(product => (
-                                <button 
-                                    key={product.id} 
-                                    onClick={() => addToCart(product)} 
-                                    className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
-                                >
-                                    <div 
-                                        className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
-                                        style={{ height: `${3.5 * menuScale}rem` }}
-                                    >
-                                        {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={18 * menuScale}/>}
-                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="bg-blue-600 text-white p-1 rounded-full"><Plus size={10}/></div>
+                        {selectedCategoryId === 'ALL' ? (
+                            <div className="space-y-8 pb-20">
+                                {categories.map(cat => {
+                                    const catProducts = products.filter(p => p.categoryId === cat.id && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                                    if (catProducts.length === 0) return null;
+                                    return (
+                                        <div key={cat.id} className="space-y-3">
+                                            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 flex items-center gap-2 border-b dark:border-gray-800 pb-2">
+                                                <Tag size={12} className="text-blue-500" /> {cat.name}
+                                            </h2>
+                                            {renderProductGrid(catProducts)}
                                         </div>
-                                    </div>
-                                    <h3 
-                                        className="font-bold text-gray-800 dark:text-white line-clamp-2 mb-1 leading-tight h-8"
-                                        style={{ fontSize: `${9 * menuScale}px` }}
-                                    >
-                                        {product.name}
-                                    </h3>
-                                    <div 
-                                        className="mt-auto font-black text-blue-600"
-                                        style={{ fontSize: `${11 * menuScale}px` }}
-                                    >
-                                        {store?.currency}{((product.price) * (1 + (store?.taxRate || 0) / 100)).toFixed(2)}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
+                                    );
+                                })}
+                                {/* Handling uncategorized if any */}
+                                {(() => {
+                                    const uncategorized = products.filter(p => !categories.some(c => c.id === p.categoryId) && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                                    if (uncategorized.length > 0) {
+                                        return (
+                                            <div className="space-y-3">
+                                                <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 flex items-center gap-2 border-b dark:border-gray-800 pb-2">
+                                                    <Tag size={12} className="text-gray-400" /> Others
+                                                </h2>
+                                                {renderProductGrid(uncategorized)}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+                            </div>
+                        ) : (
+                            <div className="pb-20">
+                                {renderProductGrid(products.filter(p => p.categoryId === selectedCategoryId && p.name.toLowerCase().includes(searchTerm.toLowerCase())))}
+                            </div>
+                        )}
                     </div>
 
-                    <div className="absolute bottom-6 right-6 z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
+                    <div className="absolute bottom-6 left-6 z-20 flex items-center gap-3 px-3 py-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
                         <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                             <Maximize2 size={16} />
                         </div>
@@ -1018,7 +1058,7 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Modals remain same, using fixed/absolute positioning already */}
+      {/* Modals */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
