@@ -422,14 +422,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   const getStoreActions = (storeId: number) => [
     { label: 'POS Terminal', icon: ShoppingCart, path: '/pos', permission: 'POS_ACCESS' },
-    { label: 'Kitchen Tickets', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT' },
+    { label: 'KOT', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT' },
     { label: 'Sales History', icon: History, path: `/store/${storeId}/history`, permission: 'VIEW_HISTORY' },
     { label: 'Quotations', icon: FileText, path: `/store/${storeId}/quotations`, permission: 'VIEW_QUOTATIONS' },
     { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
     { label: 'Customers', icon: UserCircle, path: `/store/${storeId}/customers`, permission: 'MANAGE_CUSTOMERS' },
     { label: 'Inventory', icon: Package, path: `/store/${storeId}/inventory`, permission: 'MANAGE_INVENTORY' },
-    { label: 'Menu Editor', icon: MenuIcon, path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
-    { label: 'Employee Registry', icon: Users, path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
+    { label: 'Menu', icon: MenuIcon, path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
+    { label: 'Users', icon: Users, path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
     { label: 'Print Templates', icon: Printer, path: `/store/${storeId}/designer`, permission: 'MANAGE_PRINT_DESIGNER' },
   ];
 
