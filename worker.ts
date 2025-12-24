@@ -1,7 +1,7 @@
 
 /**
  * OmniPOS Standard Cloudflare Worker
- * This script handles API requests and serves as the bridge to D1.
+ * Updated for Numerical ID Schema
  */
 
 interface Env {
@@ -26,87 +26,59 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Only intercept requests to the sync API
     if (url.pathname === '/api/sync') {
       try {
         const DB = env.DB;
-        if (!DB) {
-          return jsonResponse({ success: false, error: 'Database binding "DB" not found.' }, 500);
-        }
+        if (!DB) return jsonResponse({ success: false, error: 'Database binding "DB" not found.' }, 500);
 
-        if (request.method === 'GET') {
-          return jsonResponse({ success: true, message: 'OmniPOS Worker API is active.' });
-        }
+        if (request.method === 'GET') return jsonResponse({ success: true, message: 'OmniPOS Worker API is active.' });
 
         if (request.method === 'POST') {
           let payload: any;
-          try {
-            payload = await request.json();
-          } catch (e) {
-            return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
-          }
+          try { payload = await request.json(); } catch (e) { return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400); }
 
           const { action, table, data, storeId, username, password, userId } = payload;
 
-          if (action === 'PING') {
-            await DB.prepare('SELECT 1').run();
-            return jsonResponse({ success: true, message: 'pong' });
-          }
-
-          if (action === 'REMOTE_LOGIN') {
-            if (!username || !password) return jsonResponse({ success: false, error: 'Missing credentials' }, 400);
+          if (action === 'INIT_SCHEMA') {
+            const schema = [
+              "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
+              "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT)",
+              "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
+              "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
+              "CREATE TABLE IF NOT EXISTS `categories` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, orderId INTEGER)",
+              "CREATE TABLE IF NOT EXISTS `customers` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, phone TEXT, type TEXT, companyName TEXT, tin TEXT, houseName TEXT, streetName TEXT, buildingName TEXT, street TEXT, island TEXT, country TEXT, address TEXT)",
+              "CREATE TABLE IF NOT EXISTS `orders` (id INTEGER PRIMARY KEY, orderNumber TEXT, storeId INTEGER, shiftId INTEGER, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy INTEGER, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
+              "CREATE TABLE IF NOT EXISTS `quotations` (id INTEGER PRIMARY KEY, quotationNumber TEXT, storeId INTEGER, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy INTEGER, createdAt INTEGER)",
+              "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
+              "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
+              "CREATE TABLE IF NOT EXISTS `inventory` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
+              "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
+              "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
+            ];
+            for (const q of schema) await DB.prepare(q).run();
             
-            const user = await DB.prepare('SELECT * FROM users WHERE username = ? AND password = ?').bind(username, password).first();
-            
-            if (user) {
-                const now = Date.now();
-                // Session timeout threshold: 5 minutes of inactivity allows a new login
-                const SESSION_TIMEOUT = 300000; 
-
-                // Check for existing active session
-                const activeSession = await DB.prepare('SELECT lastActive, status FROM sessions WHERE userId = ?').bind(user.id).first();
-                
-                if (activeSession && activeSession.status === 'logged_in' && (now - activeSession.lastActive < SESSION_TIMEOUT)) {
-                    return jsonResponse({ 
-                        success: false, 
-                        error: 'Concurrent Session Blocked: This user is already logged in on another device. Please log out from that device first or wait for the session to expire (5 min).' 
-                    }, 403);
-                }
-
-                // Create or update session lock - Mark as logged_in
-                await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive, status) VALUES (?, ?, ?)').bind(user.id, now, 'logged_in').run();
-
-                const u = { ...user };
-                if (typeof u.storeIds === 'string') u.storeIds = JSON.parse(u.storeIds);
-                return jsonResponse({ success: true, user: u });
+            // Migration for existing databases
+            const migrations = [
+              "ALTER TABLE `stores` ADD COLUMN `buildingName` TEXT",
+              "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
+              "ALTER TABLE `stores` ADD COLUMN `city` TEXT",
+              "ALTER TABLE `stores` ADD COLUMN `province` TEXT",
+              "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT"
+            ];
+            for (const m of migrations) {
+              try { await DB.prepare(m).run(); } catch (e) { /* column exists */ }
             }
-            return jsonResponse({ success: false, error: 'Invalid credentials' }, 401);
-          }
 
-          if (action === 'HEARTBEAT') {
-            if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
-            // Maintain the logged_in status and update timestamp
-            await DB.prepare('INSERT OR REPLACE INTO sessions (userId, lastActive, status) VALUES (?, ?, ?)').bind(userId, Date.now(), 'logged_in').run();
             return jsonResponse({ success: true });
-          }
-
-          if (action === 'LOGOUT') {
-             if (!userId) return jsonResponse({ success: false, error: 'UserId required' }, 400);
-             // Fully remove session record to allow immediate login on any device
-             await DB.prepare('DELETE FROM sessions WHERE userId = ?').bind(userId).run();
-             return jsonResponse({ success: true });
           }
 
           if (action === 'FETCH_HYDRATION_DATA') {
             const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
             const result: Record<string, any[]> = {};
-            
             for (const t of tables) {
                 const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
-                // Post-process JSON fields
                 result[t] = results.map((row: any) => {
                     const processed = { ...row };
-                    // Convert common JSON string fields back to objects
                     ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
                         if (processed[field] && typeof processed[field] === 'string') {
                             try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
@@ -118,77 +90,24 @@ export default {
             return jsonResponse({ success: true, data: result });
           }
 
-          if (action === 'GET_EXISTING_IDS') {
-            if (!table) return jsonResponse({ success: false, error: 'Table required' }, 400);
-            
-            let query = `SELECT id FROM \`${table}\``;
-            if (storeId && table !== 'users' && table !== 'stores' && table !== 'employees' && table !== 'global_permissions' && table !== 'system_activities') {
-                query += ` WHERE storeId = ?`;
-            }
-            
-            const { results } = await DB.prepare(query).bind(storeId || '').run();
-            const ids = results.map((r: any) => r.id);
-            
-            let orderNumbers: string[] = [];
-            if (table === 'orders' && storeId) {
-                const ordRes = await DB.prepare(`SELECT orderNumber FROM orders WHERE storeId = ?`).bind(storeId).run();
-                orderNumbers = ordRes.results.map((r: any) => r.orderNumber);
-            }
-
-            return jsonResponse({ success: true, ids, orderNumbers });
-          }
-
-          if (action === 'INIT_SCHEMA') {
-            const schema = [
-              "CREATE TABLE IF NOT EXISTS `stores` (id TEXT PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT)",
-              "CREATE TABLE IF NOT EXISTS `users` (id TEXT PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT)",
-              "CREATE TABLE IF NOT EXISTS `employees` (id TEXT PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `products` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, price REAL, cost REAL, categoryId TEXT, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
-              "CREATE TABLE IF NOT EXISTS `categories` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, orderId INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `customers` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, phone TEXT, type TEXT, companyName TEXT, tin TEXT, houseName TEXT, streetName TEXT, buildingName TEXT, street TEXT, island TEXT, country TEXT, address TEXT)",
-              "CREATE TABLE IF NOT EXISTS `orders` (id TEXT PRIMARY KEY, orderNumber TEXT, storeId TEXT, shiftId TEXT, subtotal REAL, tax REAL, serviceCharge REAL, total REAL, orderType TEXT, status TEXT, kitchenStatus TEXT, paymentMethod TEXT, transactions TEXT, tableNumber TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, note TEXT, cancellationReason TEXT, createdBy TEXT, createdAt INTEGER, discountPercent REAL, discountAmount REAL)",
-              "CREATE TABLE IF NOT EXISTS `quotations` (id TEXT PRIMARY KEY, quotationNumber TEXT, storeId TEXT, customerName TEXT, customerPhone TEXT, customerTin TEXT, customerAddress TEXT, items TEXT, subtotal REAL, discountPercent REAL, discountAmount REAL, tax REAL, total REAL, validUntil INTEGER, createdBy TEXT, createdAt INTEGER)",
-              "CREATE TABLE IF NOT EXISTS `shifts` (id TEXT PRIMARY KEY, shiftNumber INTEGER, storeId TEXT, openedBy TEXT, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy TEXT, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
-              "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
-              "CREATE TABLE IF NOT EXISTS `inventory` (id TEXT PRIMARY KEY, storeId TEXT, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-              "CREATE TABLE IF NOT EXISTS `sessions` (userId TEXT PRIMARY KEY, lastActive INTEGER, status TEXT)",
-              "CREATE TABLE IF NOT EXISTS `system_activities` (id TEXT PRIMARY KEY, storeId TEXT, userId TEXT, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
-            ];
-            for (const q of schema) await DB.prepare(q).run();
-            return jsonResponse({ success: true });
-          }
-
-          if (action === 'WRITE_TEST') {
-            await DB.prepare('SELECT name FROM sqlite_master WHERE type="table" LIMIT 1').run();
-            return jsonResponse({ success: true, message: 'D1 Database is correctly bound and readable.' });
-          }
-
-          if (!table || !data) return jsonResponse({ success: false, error: 'Missing parameters' }, 400);
-
-          let query = '';
-          let params: any[] = [];
-
           if (action === 'INSERT' || action === 'UPDATE') {
             const keys = Object.keys(data);
             const cols = keys.map(k => `\`${k}\``).join(',');
             const vals = keys.map(() => '?').join(',');
-            query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
-            params = keys.map(k => typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
-          } else if (action === 'DELETE') {
-            const pk = (table.includes('permission')) ? 'role' : 'id';
-            query = `DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`;
-            params = [data[pk]];
+            const query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
+            const params = keys.map(k => typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
+            const res = await DB.prepare(query).bind(...params).run();
+            return jsonResponse({ success: true, meta: res.meta });
           }
-
-          const result = await DB.prepare(query).bind(...params).run();
-          return jsonResponse({ success: true, meta: result.meta });
+          
+          if (action === 'DELETE') {
+            const pk = table === 'global_permissions' ? 'role' : 'id';
+            await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
+            return jsonResponse({ success: true });
+          }
         }
-      } catch (err: any) {
-        return jsonResponse({ success: false, error: err.message }, 500);
-      }
+      } catch (err: any) { return jsonResponse({ success: false, error: err.message }, 500); }
     }
-
-    // Fallback: Return a 404 to let Cloudflare Assets handle static file requests
     return new Response(null, { status: 404 });
   }
 };

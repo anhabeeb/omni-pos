@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -7,7 +8,8 @@ import { Clock, CheckCircle, Bell, Loader, Check, XCircle, AlertTriangle, ChefHa
 export default function KOT() {
   const { user, currentStoreId, hasPermission } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [processingOrderIds, setProcessingOrderIds] = useState<Set<string>>(new Set());
+  // Fix: Set should use number type for order.id
+  const [processingOrderIds, setProcessingOrderIds] = useState<Set<number>>(new Set());
   
   // Cancellation State
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
@@ -52,7 +54,7 @@ export default function KOT() {
               if (newKitchenStatus === 'PREPARING') updates.status = OrderStatus.PREPARING;
               if (newKitchenStatus === 'READY') updates.status = OrderStatus.READY;
           }
-          await db.updateOrder(currentStoreId, { ...order, ...updates });
+          await db.updateOrder(currentStoreId, { ...order, ...updates } as Order);
       } finally {
           setProcessingOrderIds(prev => {
               const next = new Set(prev);

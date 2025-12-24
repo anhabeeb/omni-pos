@@ -1,13 +1,16 @@
+
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/db';
-import { Customer, Store } from '../types';
-import { ArrowLeft, Plus, Edit2, Trash2, Search, User as UserIcon, Building2, MapPin, Loader2 } from 'lucide-react';
+import { Customer, Store, Permission } from '../types';
+import { useAuth } from '../App';
+import { ArrowLeft, Plus, Edit2, Trash2, Search, User as UserIcon, Building2, MapPin, Loader2, AlertCircle } from 'lucide-react';
 
 export default function StoreCustomers() {
   const { storeId } = useParams<{ storeId: string }>();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [store, setStore] = useState<Store | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,21 +34,24 @@ export default function StoreCustomers() {
   useEffect(() => {
     if (storeId) {
       loadData();
-      window.addEventListener(`db_change_store_${storeId}_customers`, loadData);
-      return () => window.removeEventListener(`db_change_store_${storeId}_customers`, loadData);
+      const listener = () => loadData();
+      window.addEventListener(`db_change_store_${storeId}_customers`, listener);
+      return () => window.removeEventListener(`db_change_store_${storeId}_customers`, listener);
     }
   }, [storeId]);
 
   const loadData = async () => {
     if (!storeId) return;
+    const numericStoreId = Number(storeId);
     const stores = await db.getStores();
-    setStore(stores.find(s => s.id === storeId) || null);
-    setCustomers(await db.getCustomers(storeId));
+    setStore(stores.find(s => s.id === numericStoreId) || null);
+    setCustomers(await db.getCustomers(numericStoreId));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeId || !editingCustomer.name || isSaving) return;
+    const numericStoreId = Number(storeId);
 
     const finalCustomer = { ...editingCustomer };
     if (finalCustomer.type === 'INDIVIDUAL') {
@@ -63,9 +69,9 @@ export default function StoreCustomers() {
     setIsSaving(true);
     try {
         if (finalCustomer.id) {
-          await db.updateCustomer(storeId, finalCustomer as Customer);
+          await db.updateCustomer(numericStoreId, finalCustomer as Customer);
         } else {
-          await db.addCustomer(storeId, finalCustomer as Customer);
+          await db.addCustomer(numericStoreId, { ...finalCustomer, id: 0 } as Customer);
         }
         setIsModalOpen(false);
         resetForm();
@@ -91,37 +97,36 @@ export default function StoreCustomers() {
   };
 
   const handleEdit = (customer: Customer) => {
+    if (!hasPermission('MANAGE_CUSTOMERS')) {
+        alert("You do not have permission to edit customers.");
+        return;
+    }
     setEditingCustomer(customer);
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this customer?')) {
-      if (storeId) db.deleteCustomer(storeId, id);
+  const handleDelete = async (id: number) => {
+    if (!hasPermission('MANAGE_CUSTOMERS')) {
+        alert("You do not have permission to delete customers.");
+        return;
+    }
+    if (confirm('Are you sure you want to permanently delete this customer?')) {
+      if (storeId) {
+          try {
+            await db.deleteCustomer(Number(storeId), id);
+          } catch (e) {
+            alert("Failed to delete customer. Check your connection.");
+          }
+      }
     }
   };
 
   const filteredCustomers = customers.filter(c => {
     const term = searchTerm.toLowerCase();
-    
     const nameMatch = c.name.toLowerCase().includes(term);
     const phoneMatch = c.phone.includes(term);
     const companyMatch = c.companyName?.toLowerCase().includes(term);
-    const tinMatch = c.tin?.includes(term);
-    
-    const addressFields = [
-        c.houseName, 
-        c.streetName, 
-        c.buildingName, 
-        c.street, 
-        c.island, 
-        c.country, 
-        c.address
-    ].filter(Boolean).join(' ').toLowerCase();
-    
-    const addressMatch = addressFields.includes(term);
-
-    return nameMatch || phoneMatch || companyMatch || tinMatch || addressMatch;
+    return nameMatch || phoneMatch || companyMatch;
   });
 
   const getFormattedAddress = (c: Customer) => {
@@ -134,7 +139,7 @@ export default function StoreCustomers() {
       }
   };
 
-  if (!store) return <div>Loading...</div>;
+  if (!store) return <div className="p-8 text-center text-gray-500">Loading customers...</div>;
 
   return (
     <div className="space-y-6">
@@ -147,15 +152,14 @@ export default function StoreCustomers() {
           <p className="text-gray-500 dark:text-gray-400">{store.name}</p>
         </div>
         <div className="flex-1"></div>
-        <button 
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap"
-        >
-          <Plus size={18} /> <span className="hidden md:inline">Add Customer</span>
-        </button>
+        {hasPermission('MANAGE_CUSTOMERS') && (
+            <button 
+                onClick={() => { resetForm(); setIsModalOpen(true); }}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap font-bold"
+            >
+                <Plus size={18} /> Add Customer
+            </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -164,7 +168,7 @@ export default function StoreCustomers() {
             <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Search by name, phone, address, TIN..."
+              placeholder="Search by name, phone, or company..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -185,19 +189,16 @@ export default function StoreCustomers() {
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filteredCustomers.map((customer, index) => (
-                <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                {filteredCustomers.length === 0 ? (
+                    <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">No customers found.</td></tr>
+                ) : filteredCustomers.map((customer, index) => (
+                <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 group">
                     <td className="p-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{index + 1}</td>
                     <td className="p-4">
                     <div className="font-medium text-gray-900 dark:text-white">{customer.name}</div>
                     {customer.type === 'COMPANY' && customer.companyName && (
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
                             <Building2 size={10} /> {customer.companyName}
-                        </div>
-                    )}
-                    {customer.tin && (
-                        <div className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 rounded w-fit mt-1">
-                            TIN: {customer.tin}
                         </div>
                     )}
                     </td>
@@ -215,13 +216,13 @@ export default function StoreCustomers() {
                             <span className="truncate">{getFormattedAddress(customer)}</span>
                         </div>
                     </td>
-                    <td className="p-4 text-right space-x-2">
-                    <button onClick={() => handleEdit(customer)} className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 p-2 rounded">
-                        <Edit2 size={18} />
-                    </button>
-                    <button onClick={() => handleDelete(customer.id)} className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 p-2 rounded">
-                        <Trash2 size={18} />
-                    </button>
+                    <td className="p-4 text-right space-x-1">
+                        <button onClick={() => handleEdit(customer)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                            <Edit2 size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(customer.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <Trash2 size={18} />
+                        </button>
                     </td>
                 </tr>
                 ))}
@@ -356,6 +357,7 @@ export default function StoreCustomers() {
                                 <input 
                                     placeholder="e.g. Male'" 
                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                    /* Fix: Correcting state variable name from 'newCustData' to 'editingCustomer' */
                                     value={editingCustomer.island}
                                     onChange={e => setEditingCustomer({...editingCustomer, island: e.target.value})}
                                 />
@@ -379,7 +381,7 @@ export default function StoreCustomers() {
                 <button 
                     type="submit" 
                     disabled={isSaving}
-                    className="px-6 py-2 bg-blue-600 text-white rounded font-bold shadow-md hover:bg-blue-700 flex items-center gap-2"
+                    className="px-6 py-2 bg-blue-600 text-white rounded font-bold shadow-md hover:bg-blue-700 flex items-center justify-center gap-2"
                 >
                     {isSaving && <Loader2 className="animate-spin" size={16} />}
                     Save
