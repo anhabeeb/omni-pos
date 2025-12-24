@@ -303,16 +303,13 @@ export default function POS() {
   const handleSendToKitchen = async () => {
       if (!currentStoreId || !user || !shift || cart.length === 0 || isSaving) return;
       
-      // Validations
-      if (orderType === OrderType.DINE_IN && !tableNumber) { 
-        showToast("Please select a table number.", "ERROR"); 
-        return; 
-      }
-      
-      if ((orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer) {
-          showToast(`Customer details required for ${orderType === OrderType.DINE_IN ? 'Dine-in' : 'Takeaway'}`, "ERROR");
+      // Mandatory Customer Check for Takeaway and Delivery
+      if ((orderType === OrderType.TAKEAWAY || orderType === OrderType.DELIVERY) && !selectedCustomer) {
+          showToast(`Customer details required for ${orderType === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}.`, "ERROR");
           return;
       }
+      
+      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
       
       setIsSaving(true);
       const newOrderData: Order = {
@@ -376,17 +373,13 @@ export default function POS() {
   const handleCheckout = () => {
       if (cart.length === 0) return;
       
-      // Validations
-      if (orderType === OrderType.DINE_IN && !tableNumber) { 
-        showToast("Please select a table number.", "ERROR"); 
-        return; 
-      }
-
-      if ((orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer) {
-        showToast(`Customer details required for ${orderType === OrderType.DINE_IN ? 'Dine-in' : 'Takeaway'}`, "ERROR");
+      // Mandatory Customer Check for Takeaway and Delivery
+      if ((orderType === OrderType.TAKEAWAY || orderType === OrderType.DELIVERY) && !selectedCustomer) {
+        showToast(`Customer details required for ${orderType === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}.`, "ERROR");
         return;
       }
-
+      
+      if (orderType === OrderType.DINE_IN && !tableNumber) { showToast("Please select a table number.", "ERROR"); return; }
       setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitPayment(false); setSplitAmount1(''); setSplitAmount2('');
       setIsPaymentModalOpen(true);
@@ -403,19 +396,19 @@ export default function POS() {
       if (!currentStoreId || !user || !shift || isSaving) return;
       const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
       
-      const transactions: Transaction[] = [];
+      const transList: Transaction[] = [];
 
       if (isSplitPayment) {
           const a1 = parseFloat(splitAmount1) || 0;
           const a2 = parseFloat(splitAmount2) || 0;
           if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Split sum (${store?.currency}${(a1+a2).toFixed(2)}) must equal total (${store?.currency}${payableTotal.toFixed(2)})`);
+              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
               return;
           }
-          transactions.push({
+          transList.push({
               id: uuid(), type: 'PAYMENT', amount: a1, method: splitMethod1, timestamp: Date.now(), performedBy: user.id
           });
-          transactions.push({
+          transList.push({
               id: uuid(), type: 'PAYMENT', amount: a2, method: splitMethod2, timestamp: Date.now(), performedBy: user.id
           });
       } else {
@@ -424,7 +417,7 @@ export default function POS() {
               setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
               return; 
           }
-          transactions.push({
+          transList.push({
               id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
               timestamp: Date.now(), performedBy: user.id, 
               tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
@@ -448,7 +441,7 @@ export default function POS() {
       try {
           let finalOrder: Order;
           if (orderToSettle) {
-              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitPayment ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
+              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitPayment ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transList] };
               await db.updateOrder(currentStoreId, finalOrder);
               db.logActivity({
                 storeId: currentStoreId, userId: user.id, userName: user.name,
@@ -463,7 +456,7 @@ export default function POS() {
                 discountPercent: localDisc,
                 discountAmount: localTotals.discountAmount,
                 tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
-                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitPayment ? undefined : paymentMethod, note: localNote, transactions, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
+                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitPayment ? undefined : paymentMethod, note: localNote, transactions: transList, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
                 customerName: localCust?.name, 
                 customerPhone: localCust?.phone, 
                 customerTin: localCust?.tin,
@@ -777,8 +770,8 @@ export default function POS() {
       </div>
   );
 
-  // Requirement Check Helper
-  const isCustomerMissing = (orderType === OrderType.DINE_IN || orderType === OrderType.TAKEAWAY) && !selectedCustomer;
+  // Requirement Check Helper: Strictly Takeaway and Delivery
+  const isCustomerMissing = (orderType === OrderType.TAKEAWAY || orderType === OrderType.DELIVERY) && !selectedCustomer;
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-13rem)] overflow-hidden relative">
@@ -797,13 +790,23 @@ export default function POS() {
       {/* POS Context Bar - Combined Tabs and Shift Controls */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 bg-white dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700 shadow-sm">
           <div className="flex gap-1">
-              {['MENU', 'ACTIVE', 'HELD', 'HISTORY'].map(tab => (
+              {[
+                  { id: 'MENU', label: 'MENU' },
+                  { id: 'ACTIVE', label: 'ACTIVE', badge: activeOrders.length, color: 'bg-yellow-400' },
+                  { id: 'HELD', label: 'HELD', badge: heldOrders.length, color: 'bg-orange-500' },
+                  { id: 'HISTORY', label: 'HISTORY' }
+              ].map(tab => (
                   <button 
-                      key={tab}
-                      onClick={() => setActiveTab(tab as any)}
-                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                   >
-                      {tab}
+                      {tab.label}
+                      {tab.badge !== undefined && tab.badge > 0 && (
+                          <span className={`px-1.5 py-0.5 rounded-full text-[8px] text-white font-black animate-in zoom-in duration-300 ${tab.color}`}>
+                              {tab.badge}
+                          </span>
+                      )}
                   </button>
               ))}
           </div>
@@ -934,7 +937,7 @@ export default function POS() {
                                         <th className="p-4 text-right">Action</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {historyOrders.map(order => (
                                         <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                             <td className="p-4 text-xs font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
@@ -954,7 +957,7 @@ export default function POS() {
             )}
         </div>
 
-        {/* Sidebar Context - Square corners as requested previously */}
+        {/* Sidebar Context - Square corners */}
         <aside className="w-full lg:w-[360px] bg-white dark:bg-gray-900 border lg:border-l border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl overflow-hidden h-full">
             <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
                 <div className="flex justify-between items-center">
@@ -1248,7 +1251,7 @@ export default function POS() {
           </div>
       )}
 
-      {/* Other Modals remain largely same but with slight density improvements */}
+      {/* Receipt Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
