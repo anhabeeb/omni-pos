@@ -52,6 +52,11 @@ const broadcastSyncUpdate = () => {
 
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
     const queue = getItem<any[]>('sync_queue', []);
+    // Ensure all numeric IDs are numbers before queuing
+    if (data.id) data.id = Number(data.id);
+    if (data.storeId) data.storeId = Number(data.storeId);
+    if (data.createdAt) data.createdAt = Number(data.createdAt);
+    
     queue.push({ id: uuid(), action, table, data, timestamp: Date.now() });
     setItem('sync_queue', queue);
     
@@ -116,7 +121,7 @@ export const db = {
         // Init Users
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
-            setItem('global_users', [{ 
+            const rootAdmin: User = { 
                 id: 1, 
                 userNumber: 1, 
                 name: 'System Admin', 
@@ -126,7 +131,9 @@ export const db = {
                 storeIds: [],
                 phoneNumber: '',
                 email: ''
-            }]);
+            };
+            setItem('global_users', [rootAdmin]);
+            addToSyncQueue('INSERT', 'users', rootAdmin);
         }
 
         // Ensure sys.admin has an employee profile
@@ -146,6 +153,7 @@ export const db = {
                 createdAt: Date.now()
             };
             setItem('global_employees', [adminEmp, ...employees]);
+            addToSyncQueue('INSERT', 'employees', adminEmp);
         }
 
         if (getItem<boolean>('sync_enabled', true)) {
@@ -154,7 +162,6 @@ export const db = {
     },
 
     resetSystem: async () => {
-        // DANGEROUS: Wipes all keys starting with prefix
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -177,14 +184,26 @@ export const db = {
             isBackendMissing 
         };
     },
-    testConnection: async () => true,
+    testConnection: async () => {
+        try {
+            const res = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'PING' }) 
+            });
+            return res.ok;
+        } catch(e) { return false; }
+    },
     setSyncEnabled: (e: boolean) => {
         setItem('sync_enabled', e);
         if (e) processSyncQueue();
     },
     isSyncEnabled: () => getItem<boolean>('sync_enabled', true),
 
-    verifyWriteAccess: async () => ({ success: true, message: 'Local Access Verified' }),
+    verifyWriteAccess: async () => {
+        const ok = await db.testConnection();
+        return ok ? { success: true, message: 'Cloud connection active' } : { success: false, message: 'Cloud connection failed' };
+    },
+
     pullAllFromCloud: async () => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
@@ -197,12 +216,18 @@ export const db = {
                 const data = result.data;
                 if (data.users) setItem('global_users', data.users);
                 if (data.stores) setItem('global_stores', data.stores);
-                if (data.customers) {
-                    const stores = await db.getStores();
-                    stores.forEach(s => {
-                        const storeCusts = data.customers.filter((c: any) => c.storeId === s.id);
-                        setItem(`store_${s.id}_customers`, storeCusts);
-                    });
+                if (data.employees) setItem('global_employees', data.employees);
+                if (data.global_permissions) setItem('global_permissions', data.global_permissions);
+                
+                // Hydrate store-specific data
+                const stores = data.stores || [];
+                for (const s of stores) {
+                    const id = s.id;
+                    if (data.products) setItem(`store_${id}_products`, data.products.filter((p:any) => p.storeId === id));
+                    if (data.categories) setItem(`store_${id}_categories`, data.categories.filter((c:any) => c.storeId === id));
+                    if (data.customers) setItem(`store_${id}_customers`, data.customers.filter((c:any) => c.storeId === id));
+                    if (data.orders) setItem(`store_${id}_orders`, data.orders.filter((o:any) => o.storeId === id));
+                    if (data.shifts) setItem(`store_${id}_shifts`, data.shifts.filter((sh:any) => sh.storeId === id));
                 }
                 return true;
             }
@@ -211,7 +236,38 @@ export const db = {
             return false;
         }
     },
-    syncAllLocalToCloud: async () => true,
+
+    syncAllLocalToCloud: async () => {
+        // Collect all global tables
+        const tables = [
+            { name: 'users', key: 'global_users' },
+            { name: 'stores', key: 'global_stores' },
+            { name: 'employees', key: 'global_employees' },
+            { name: 'global_permissions', key: 'global_permissions' }
+        ];
+
+        tables.forEach(t => {
+            const data = getItem<any[]>(t.key, []);
+            data.forEach(item => addToSyncQueue('INSERT', t.name, item));
+        });
+
+        // Collect all store-specific tables
+        const stores = getItem<Store[]>('global_stores', []);
+        stores.forEach(s => {
+            const storeTables = [
+                { name: 'products', key: `store_${s.id}_products` },
+                { name: 'categories', key: `store_${s.id}_categories` },
+                { name: 'customers', key: `store_${s.id}_customers` },
+                { name: 'orders', key: `store_${s.id}_orders` },
+                { name: 'shifts', key: `store_${s.id}_shifts` }
+            ];
+            storeTables.forEach(t => {
+                const data = getItem<any[]>(t.key, []);
+                data.forEach(item => addToSyncQueue('INSERT', t.name, item));
+            });
+        });
+        return true;
+    },
 
     getUsers: async () => getItem<User[]>('global_users', []),
     addUser: async (u: User) => {

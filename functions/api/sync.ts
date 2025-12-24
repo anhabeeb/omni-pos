@@ -110,16 +110,18 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
         const result: any = {};
         for (const t of tables) {
-            const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
-            result[t] = results.map((row: any) => {
-              const processed = { ...row };
-              ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
-                  if (processed[field] && typeof processed[field] === 'string') {
-                      try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
-                  }
+            try {
+              const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
+              result[t] = results.map((row: any) => {
+                const processed = { ...row };
+                ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
+                    if (processed[field] && typeof processed[field] === 'string') {
+                        try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
+                    }
+                });
+                return processed;
               });
-              return processed;
-          });
+            } catch(e) { result[t] = []; }
         }
         return jsonResponse({ success: true, data: result });
     }
@@ -132,8 +134,21 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       const query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
       
       const params = keys.map(k => {
-          const val = data[k];
+          let val = data[k];
           if (val === undefined) return null;
+
+          // Type Coercion for Numeric Fields
+          const numericFields = [
+            'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
+            'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
+            'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables'
+          ];
+          
+          if (numericFields.includes(k)) {
+              const coerced = Number(val);
+              if (!isNaN(coerced)) val = coerced;
+          }
+
           if (val !== null && typeof val === 'object') return JSON.stringify(val);
           return val;
       });

@@ -62,16 +62,19 @@ export default {
             
             // Migration for existing databases
             const migrations = [
-              "ALTER TABLE `stores` ADD COLUMN `buildingName` TEXT",
-              "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
-              "ALTER TABLE `stores` ADD COLUMN `city` TEXT",
-              "ALTER TABLE `stores` ADD COLUMN `province` TEXT",
-              "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT",
-              "ALTER TABLE `users` ADD COLUMN `phoneNumber` TEXT",
-              "ALTER TABLE `users` ADD COLUMN `email` TEXT"
+              { table: 'stores', column: 'buildingName', type: 'TEXT' },
+              { table: 'stores', column: 'streetName', type: 'TEXT' },
+              { table: 'stores', column: 'city', type: 'TEXT' },
+              { table: 'stores', column: 'province', type: 'TEXT' },
+              { table: 'stores', column: 'zipCode', type: 'TEXT' },
+              { table: 'users', column: 'phoneNumber', type: 'TEXT' },
+              { table: 'users', column: 'email', type: 'TEXT' }
             ];
+
             for (const m of migrations) {
-              try { await DB.prepare(m).run(); } catch (e) { /* ignore column exists error */ }
+              try {
+                await DB.prepare(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`).run();
+              } catch (e) {}
             }
 
             return jsonResponse({ success: true });
@@ -93,16 +96,20 @@ export default {
             const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
             const result: Record<string, any[]> = {};
             for (const t of tables) {
-                const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
-                result[t] = results.map((row: any) => {
-                    const processed = { ...row };
-                    ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
-                        if (processed[field] && typeof processed[field] === 'string') {
-                            try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
-                        }
+                try {
+                    const { results } = await DB.prepare(`SELECT * FROM \`${t}\``).run();
+                    result[t] = results.map((row: any) => {
+                        const processed = { ...row };
+                        ['storeIds', 'printSettings', 'quotationSettings', 'eodSettings', 'items', 'transactions', 'permissions', 'openingDenominations', 'closingDenominations', 'recipe'].forEach(field => {
+                            if (processed[field] && typeof processed[field] === 'string') {
+                                try { processed[field] = JSON.parse(processed[field]); } catch(e) {}
+                            }
+                        });
+                        return processed;
                     });
-                    return processed;
-                });
+                } catch(e) {
+                    result[t] = [];
+                }
             }
             return jsonResponse({ success: true, data: result });
           }
@@ -115,8 +122,21 @@ export default {
             const query = `INSERT OR REPLACE INTO \`${table}\` (${cols}) VALUES (${vals})`;
             
             const params = keys.map(k => {
-                const val = data[k];
+                let val = data[k];
                 if (val === undefined) return null;
+                
+                // CRITICAL: Coerce known numeric fields to Numbers to avoid SQLITE_MISMATCH
+                const numericFields = [
+                  'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
+                  'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
+                  'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables'
+                ];
+                
+                if (numericFields.includes(k)) {
+                    const coerced = Number(val);
+                    if (!isNaN(coerced)) val = coerced;
+                }
+
                 if (val !== null && typeof val === 'object') return JSON.stringify(val);
                 return val;
             });
@@ -125,8 +145,10 @@ export default {
               const res = await DB.prepare(query).bind(...params).run();
               return jsonResponse({ success: true, meta: res.meta });
             } catch (err: any) {
-              // Return detailed error so the frontend can display it
-              return jsonResponse({ success: false, error: `SQL Error in ${table}: ${err.message}` }, 500);
+              return jsonResponse({ 
+                success: false, 
+                error: `Database Error in ${table}: ${err.message}. Hint: Use 'Repair DB Schema'.` 
+              }, 500);
             }
           }
           
@@ -139,12 +161,12 @@ export default {
               await DB.prepare(`DELETE FROM \`${table}\` WHERE \`${pk}\` = ?`).bind(data[pk]).run();
               return jsonResponse({ success: true });
             } catch (err: any) {
-              return jsonResponse({ success: false, error: `SQL Delete Error in ${table}: ${err.message}` }, 500);
+              return jsonResponse({ success: false, error: `Delete Error: ${err.message}` }, 500);
             }
           }
         }
       } catch (err: any) { 
-          return jsonResponse({ success: false, error: `System Error: ${err.message}` }, 500); 
+          return jsonResponse({ success: false, error: `System Critical Error: ${err.message}` }, 500); 
       }
     }
     return new Response(null, { status: 404 });
