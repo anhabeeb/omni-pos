@@ -43,7 +43,9 @@ import {
   User as UserIcon,
   Save,
   Key,
-  ScrollText
+  ScrollText,
+  Phone,
+  Mail
 } from 'lucide-react';
 
 import Login from './pages/Login';
@@ -86,7 +88,6 @@ const SyncIndicator = () => {
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
     useEffect(() => {
-        // Fix: Explicitly cast CustomEvent detail to resolve SyncStatus type mismatch
         const handleSyncUpdate = (e: any) => {
             setStatus(e.detail as { status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean });
         };
@@ -212,7 +213,7 @@ const SyncIndicator = () => {
                 icon: CloudOff, 
                 text: 'Offline', 
                 color: 'text-orange-500', 
-                bg: 'bg-orange-50 dark:bg-orange-900/10' 
+                bg: 'bg-orange-900/10' 
             };
             case 'ERROR': return { 
                 icon: AlertCircle, 
@@ -299,6 +300,8 @@ const SyncIndicator = () => {
 const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
   const { user, login } = useAuth();
   const [name, setName] = useState(user?.name || '');
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -332,6 +335,8 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
       const updatedUser = {
         ...user,
         name: name,
+        phoneNumber: phoneNumber,
+        email: email,
         password: newPassword ? newPassword : user.password
       };
 
@@ -366,7 +371,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
           </button>
         </div>
 
-        <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
+        <form onSubmit={handleUpdateProfile} className="p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
           {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-red-100"><AlertCircle size={16}/> {error}</div>}
           {success && <div className="bg-green-50 text-green-600 p-4 rounded-xl text-xs font-bold flex items-center gap-3 border border-green-100"><CheckCircle size={16}/> {success}</div>}
 
@@ -381,18 +386,49 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
              </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Display Name</label>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-3 text-gray-400" size={16} />
-              <input 
-                type="text" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" 
-                required
-              />
-            </div>
+          <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Display Name</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-3 text-gray-400" size={16} />
+                  <input 
+                    type="text" 
+                    value={name} 
+                    onChange={(e) => setName(e.target.value)} 
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" 
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3 text-gray-400" size={16} />
+                      <input 
+                        type="text" 
+                        value={phoneNumber} 
+                        onChange={(e) => setPhoneNumber(e.target.value)} 
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white text-sm" 
+                        placeholder="+960..."
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 text-gray-400" size={16} />
+                      <input 
+                        type="email" 
+                        value={email} 
+                        onChange={(e) => setEmail(e.target.value)} 
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white text-sm" 
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                  </div>
+              </div>
           </div>
 
           <div className="pt-4 border-t dark:border-gray-700 space-y-4">

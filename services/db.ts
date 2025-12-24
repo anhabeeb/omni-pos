@@ -112,7 +112,17 @@ export const db = {
         }
         const users = getItem<User[]>('global_users', []);
         if (users.length === 0) {
-            setItem('global_users', [{ id: 1, userNumber: 1, name: 'System Admin', username: 'sys.admin', password: '123', role: UserRole.SUPER_ADMIN, storeIds: [] }]);
+            setItem('global_users', [{ 
+                id: 1, 
+                userNumber: 1, 
+                name: 'System Admin', 
+                username: 'sys.admin', 
+                password: '123', 
+                role: UserRole.SUPER_ADMIN, 
+                storeIds: [],
+                phoneNumber: '',
+                email: ''
+            }]);
         }
         if (getItem<boolean>('sync_enabled', true)) {
             processSyncQueue();
@@ -149,7 +159,6 @@ export const db = {
                 if (data.users) setItem('global_users', data.users);
                 if (data.stores) setItem('global_stores', data.stores);
                 if (data.customers) {
-                    // Group customers by store for local storage optimization
                     const stores = await db.getStores();
                     stores.forEach(s => {
                         const storeCusts = data.customers.filter((c: any) => c.storeId === s.id);

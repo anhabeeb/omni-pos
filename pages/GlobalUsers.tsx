@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { User, UserRole, Store, Permission, RolePermissionConfig, Employee } from '../types';
-import { Plus, Trash2, Shield, ShieldAlert, UserPlus, Lock, Briefcase, ChefHat, Monitor, UtensilsCrossed, Edit2, Search, CheckSquare, Square, Settings, Check, X, UserCheck, Hash, AlertCircle, Loader2, FileBarChart, History as HistoryIcon, FileText } from 'lucide-react';
+import { Plus, Trash2, Shield, ShieldAlert, UserPlus, Lock, Briefcase, ChefHat, Monitor, UtensilsCrossed, Edit2, Search, CheckSquare, Square, Settings, Check, X, UserCheck, Hash, AlertCircle, Loader2, FileBarChart, History as HistoryIcon, FileText, Phone, Mail } from 'lucide-react';
 import { useAuth } from '../App';
 
 const ALL_PERMISSIONS: { id: Permission; label: string; category: string }[] = [
@@ -46,12 +46,16 @@ export default function GlobalUsers() {
     password: string;
     role: UserRole;
     storeIds: number[];
+    phoneNumber: string;
+    email: string;
   }>({
     name: '',
     username: '',
     password: '',
     role: UserRole.CASHIER,
-    storeIds: []
+    storeIds: [],
+    phoneNumber: '',
+    email: ''
   });
   const [error, setError] = useState('');
 
@@ -70,10 +74,11 @@ export default function GlobalUsers() {
         window.removeEventListener('db_change_global_permissions', loadData);
         window.removeEventListener('db_change_global_employees', loadData);
     }
-  }, []);
+  }, [currentUser]);
 
   const loadData = async () => {
     const allUsers = await db.getUsers();
+    // CRITICAL: Filter out sys.admin for everyone except the root admin themselves
     const visibleUsers = allUsers.filter(u => {
         if (u.username === 'sys.admin') return currentUser?.username === 'sys.admin';
         return true;
@@ -93,8 +98,9 @@ export default function GlobalUsers() {
         const originalUser = users.find(u => u.id === formData.id);
         if (!originalUser) return;
 
+        // Extra layer of protection for sys.admin
         if (originalUser.username === 'sys.admin' && currentUser?.username !== 'sys.admin') {
-            setError("Protected Account: Only the System Administrator can modify this account.");
+            setError("Protected Account: Only the root System Administrator can modify this account.");
             return;
         }
 
@@ -116,6 +122,8 @@ export default function GlobalUsers() {
                 username: formData.username,
                 role: formData.role,
                 storeIds: formData.storeIds,
+                phoneNumber: formData.phoneNumber,
+                email: formData.email,
                 password: formData.password ? formData.password : originalUser.password
             });
             setIsModalOpen(false);
@@ -149,7 +157,9 @@ export default function GlobalUsers() {
                 username: employee.empId,
                 password: '123', 
                 role: formData.role,
-                storeIds: formData.storeIds
+                storeIds: formData.storeIds,
+                phoneNumber: employee.phoneNumber,
+                email: ''
             });
             setIsModalOpen(false);
             resetForm();
@@ -166,14 +176,17 @@ export default function GlobalUsers() {
           username: '', 
           password: '', 
           role: UserRole.CASHIER, 
-          storeIds: [] 
+          storeIds: [],
+          phoneNumber: '',
+          email: ''
       });
       setSelectedEmployeeId('');
   };
 
   const handleEditClick = (user: User) => {
+      // Root admin check
       if (user.username === 'sys.admin' && currentUser?.username !== 'sys.admin') {
-          alert("Protected Account: You do not have permission to edit the System Administrator.");
+          alert("Protected Account: This record is managed by the root system administrator only.");
           return;
       }
 
@@ -183,7 +196,9 @@ export default function GlobalUsers() {
           username: user.username,
           password: '', 
           role: user.role,
-          storeIds: user.storeIds || []
+          storeIds: user.storeIds || [],
+          phoneNumber: user.phoneNumber || '',
+          email: user.email || ''
       });
       setIsModalOpen(true);
   };
@@ -203,8 +218,13 @@ export default function GlobalUsers() {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
 
-    // Fix: Allow sys.admin to delete other SUPER_ADMIN accounts
-    if ((targetUser.role === UserRole.SUPER_ADMIN || targetUser.username === 'sys.admin') && currentUser?.username !== 'sys.admin') {
+    // Strict root protection
+    if (targetUser.username === 'sys.admin') {
+        alert("Protected Account: The root system administrator account cannot be deleted.");
+        return;
+    }
+
+    if (targetUser.role === UserRole.SUPER_ADMIN && currentUser?.username !== 'sys.admin') {
         alert("Protected Account: Only the main System Administrator can delete other administrative accounts.");
         return;
     }
@@ -474,9 +494,10 @@ export default function GlobalUsers() {
                 ) : (
                     <div className="space-y-4">
                         {formData.username === 'sys.admin' ? (
-                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 space-y-4">
                                 <label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2">Main System Administrator Details</label>
-                                <div className="space-y-3">
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1">Public Display Name</label>
                                         <input 
@@ -486,21 +507,70 @@ export default function GlobalUsers() {
                                             placeholder="System Admin"
                                         />
                                     </div>
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-500 font-bold uppercase tracking-widest text-[9px]">Root User Access</span>
-                                        <span className="font-mono font-black text-blue-600 dark:text-blue-300">#sys.admin</span>
+                                    <div className="flex flex-col justify-end">
+                                        <div className="flex justify-between items-center text-xs p-2.5 bg-white/50 dark:bg-black/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                                            <span className="text-gray-500 font-bold uppercase tracking-widest text-[9px]">Root Username</span>
+                                            <span className="font-mono font-black text-blue-600 dark:text-blue-300">#sys.admin</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1">Phone Number</label>
+                                        <div className="relative">
+                                            <Phone className="absolute left-3 top-3 text-blue-400" size={14} />
+                                            <input 
+                                                className="w-full pl-9 p-2.5 border border-blue-100 dark:border-blue-800 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={formData.phoneNumber}
+                                                onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+                                                placeholder="+960 7771234"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1">Email Address</label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-3 top-3 text-blue-400" size={14} />
+                                            <input 
+                                                className="w-full pl-9 p-2.5 border border-blue-100 dark:border-blue-800 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={formData.email}
+                                                onChange={e => setFormData({...formData, email: e.target.value})}
+                                                placeholder="admin@omnipos.com"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Account Holder</p>
-                                    <p className="text-lg font-black dark:text-white">{formData.name}</p>
+                            <div className="bg-white dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800 flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Account Holder</p>
+                                        <p className="text-lg font-black dark:text-white">{formData.name}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">System Username</p>
+                                        <p className="text-sm font-mono font-bold dark:text-blue-300">#{formData.username}</p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">System Username</p>
-                                    <p className="text-sm font-mono font-bold dark:text-blue-300">#{formData.username}</p>
+                                <div className="grid grid-cols-2 gap-4 pt-2 border-t dark:border-gray-800">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Contact No</label>
+                                        <input 
+                                            className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                            value={formData.phoneNumber}
+                                            onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Email</label>
+                                        <input 
+                                            className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                            value={formData.email}
+                                            onChange={e => setFormData({...formData, email: e.target.value})}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}

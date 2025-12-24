@@ -65,6 +65,8 @@ export interface User {
   password?: string;
   role: UserRole;
   storeIds: number[];
+  phoneNumber?: string;
+  email?: string;
 }
 
 export interface ActiveSession {

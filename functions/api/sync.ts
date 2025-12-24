@@ -75,7 +75,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     if (action === 'INIT_SCHEMA') {
       const schema = [
         "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
-        "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT)",
+        "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
         "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
         "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
         "CREATE TABLE IF NOT EXISTS `categories` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, orderId INTEGER)",
@@ -95,7 +95,9 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "ALTER TABLE `stores` ADD COLUMN `streetName` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `city` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `province` TEXT",
-        "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT"
+        "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT",
+        "ALTER TABLE `users` ADD COLUMN `phoneNumber` TEXT",
+        "ALTER TABLE `users` ADD COLUMN `email` TEXT"
       ];
       for (const m of migrations) {
         try { await DB.prepare(m).run(); } catch (e) { /* column exists */ }
