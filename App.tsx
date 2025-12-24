@@ -631,7 +631,7 @@ export const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Layout><Navigate to="/dashboard" replace /></Layout></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Layout><SuperAdminDashboard /></Layout></ProtectedRoute>} />
-          <Route path="/pos" element={<ProtectedRoute permission="POS_ACCESS"><POS /></ProtectedRoute>} />
+          <Route path="/pos" element={<ProtectedRoute permission="POS_ACCESS"><Layout><POS /></Layout></ProtectedRoute>} />
           <Route path="/kot" element={<ProtectedRoute permission="VIEW_KOT"><Layout><KOT /></Layout></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute permission="VIEW_REPORTS"><Layout><StoreReports /></Layout></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Layout><GlobalUsers /></Layout></ProtectedRoute>} />
