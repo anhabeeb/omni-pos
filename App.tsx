@@ -538,12 +538,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               if (a.permission && !hasPermission(a.permission as Permission)) return false;
               return true;
           }).map((action) => {
-            const isActive = location.pathname === action.path || (action.path !== '/dashboard' && location.pathname.startsWith(action.path.split('/').slice(0, 3).join('/')));
+            const isActive = location.pathname === action.path || (action.path !== '/' && location.pathname.startsWith(action.path));
             return (
               <button
                 key={action.path}
                 onClick={() => navigate(action.path)}
-                className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-all whitespace-nowrap group ${isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent font-bold'}`}
+                className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-all whitespace-nowrap group ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent font-bold'}`}
               >
                 <action.icon size={16} className={isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-600 transition-colors'} />
                 <span className="text-xs font-black uppercase tracking-tight">{action.label}</span>
