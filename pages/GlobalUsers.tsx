@@ -38,7 +38,6 @@ export default function GlobalUsers() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  // Fix: selectedEmployeeId should handle numerical ID if needed, but registry uses number IDs
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
   const [formData, setFormData] = useState<{
     id?: number;
@@ -59,7 +58,6 @@ export default function GlobalUsers() {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fix: Check originalUser role correctly using numerical ID
   const isEditingSuperAdmin = formData.id ? users.find(u => u.id === formData.id)?.role === UserRole.SUPER_ADMIN : false;
 
   useEffect(() => {
@@ -145,7 +143,6 @@ export default function GlobalUsers() {
 
         setIsSaving(true);
         try {
-            // Fix: pass id as 0 for auto-increment in db.ts
             await db.addUser({
                 id: 0, 
                 name: employee.fullName,
@@ -206,8 +203,9 @@ export default function GlobalUsers() {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
 
-    if (targetUser.role === UserRole.SUPER_ADMIN || targetUser.username === 'sys.admin') {
-        alert("Protected Account: System Administrator accounts cannot be deleted.");
+    // Fix: Allow sys.admin to delete other SUPER_ADMIN accounts
+    if ((targetUser.role === UserRole.SUPER_ADMIN || targetUser.username === 'sys.admin') && currentUser?.username !== 'sys.admin') {
+        alert("Protected Account: Only the main System Administrator can delete other administrative accounts.");
         return;
     }
 
@@ -432,7 +430,7 @@ export default function GlobalUsers() {
               )}
 
               <div className="space-y-4">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Employee Selection</h3>
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Account Details</h3>
                 
                 {!formData.id ? (
                     <div className="space-y-4">
@@ -474,15 +472,38 @@ export default function GlobalUsers() {
                         )}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Account Holder</p>
-                            <p className="text-lg font-black dark:text-white">{formData.name}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">System Username</p>
-                            <p className="text-sm font-mono font-bold dark:text-blue-300">#{formData.username}</p>
-                        </div>
+                    <div className="space-y-4">
+                        {formData.username === 'sys.admin' ? (
+                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                                <label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2">Main System Administrator Details</label>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1">Public Display Name</label>
+                                        <input 
+                                            className="w-full p-2.5 border border-blue-200 dark:border-blue-800 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={formData.name}
+                                            onChange={e => setFormData({...formData, name: e.target.value})}
+                                            placeholder="System Admin"
+                                        />
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-bold uppercase tracking-widest text-[9px]">Root User Access</span>
+                                        <span className="font-mono font-black text-blue-600 dark:text-blue-300">#sys.admin</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Account Holder</p>
+                                    <p className="text-lg font-black dark:text-white">{formData.name}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">System Username</p>
+                                    <p className="text-sm font-mono font-bold dark:text-blue-300">#{formData.username}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
               </div>
