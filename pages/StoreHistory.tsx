@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-// @ts-ignore - Fixing missing member errors in react-router-dom
+// @ts-ignore
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
-import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings } from '../types';
+import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
   Calendar, Receipt, ChefHat, Filter, ArrowRight, DollarSign, Info, Printer, 
   RotateCcw, Undo2, Trash2, X, Search, Wallet, FileText, CheckCircle, 
@@ -58,13 +57,13 @@ export default function StoreHistory() {
   const loadData = async () => {
     if (activeStoreId) {
       const allOrders = await db.getOrders(activeStoreId);
-      setOrders(allOrders.sort((a, b) => b.createdAt - a.createdAt));
+      setOrders(allOrders.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       const allShifts = await db.getRegisterShifts(activeStoreId);
-      setShifts(allShifts.sort((a,b) => b.openedAt - a.openedAt));
+      setShifts(allShifts.sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
       const usersData = await db.getUsers();
       setUsers(usersData);
       const stores = await db.getStores();
-      const s = stores.find(s => s.id === activeStoreId) || null;
+      const s = stores.find((st: Store) => st.id === activeStoreId) || null;
       setStore(s);
     }
   };
@@ -177,27 +176,24 @@ export default function StoreHistory() {
   const getUserName = (id: number) => { return users.find(u => u.id === id)?.name || 'Unknown'; };
 
   const getPaidAmount = (order: Order) => {
-      // Robust detection: if order is completed but has no transaction history (legacy data), 
-      // assume it was paid in full to allow refunds.
       const txs = order.transactions || [];
       if (txs.length === 0 && order.status === OrderStatus.COMPLETED) {
-          return Math.round((order.total || 0) * 100) / 100;
+          return Math.round((Number(order.total) || 0) * 100) / 100;
       }
 
-      const amount = txs.reduce((acc, t) => {
-          if (t.type === 'PAYMENT') return acc + t.amount;
-          if (t.type === 'REVERSAL' || t.type === 'REFUND' || t.type === 'CANCELLATION') return acc - t.amount;
+      const amount = txs.reduce((acc: number, t: Transaction) => {
+          const val = Number(t.amount) || 0;
+          if (t.type === 'PAYMENT') return acc + val;
+          if (t.type === 'REVERSAL' || t.type === 'REFUND' || t.type === 'CANCELLATION') return acc - val;
           return acc;
       }, 0);
 
-      // Round to 2 decimals to handle floating point precision
       return Math.round(amount * 100) / 100;
   };
 
   const openRefundModal = (order: Order) => {
       setRefundOrder(order);
       setRefundMode('FULL');
-      // For Full Refund, we set it to exactly what the calculated paid amount is
       const paid = getPaidAmount(order);
       setRefundAmount(paid.toFixed(2));
       setRefundReason('');
@@ -207,8 +203,6 @@ export default function StoreHistory() {
       if (!activeStoreId || !user || !refundOrder) return;
       
       const paidAmount = getPaidAmount(refundOrder);
-      
-      // CRITICAL FIX: If full refund is selected, ignore UI string to avoid rounding mismatches
       const amountToRefund = refundMode === 'FULL' 
         ? paidAmount 
         : Math.round((parseFloat(refundAmount) || 0) * 100) / 100;
@@ -218,9 +212,8 @@ export default function StoreHistory() {
         return; 
       }
       
-      // Use EPSILON (0.01) for comparison to handle rounding differences in the DB
-      // Standard currency logic: allow up to 1 cent discrepancy
-      if (amountToRefund > (paidAmount + 0.0101)) { 
+      // tolerance of 0.05 to handle rounding discrepancies
+      if (amountToRefund > (paidAmount + 0.05)) { 
         alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); 
         return; 
       }
@@ -235,8 +228,7 @@ export default function StoreHistory() {
       };
 
       let newStatus = refundOrder.status;
-      // If the remaining balance is tiny (rounding margin), treat as full return
-      if (refundMode === 'FULL' || Math.abs(paidAmount - amountToRefund) < 0.011) { 
+      if (refundMode === 'FULL' || Math.abs(paidAmount - amountToRefund) < 0.051) { 
           newStatus = OrderStatus.RETURNED; 
       }
 
@@ -510,7 +502,7 @@ export default function StoreHistory() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {filteredShifts.map(s => (
+                        {filteredShifts.map((s: RegisterShift) => (
                             <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                 <td className="p-4 font-mono font-bold text-blue-600">#{s.shiftNumber || s.id}</td>
                                 <td className="p-4 font-bold dark:text-white">{getUserName(s.openedBy)}</td>
@@ -545,7 +537,7 @@ export default function StoreHistory() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {filteredOrders.map(o => (
+                        {filteredOrders.map((o: Order) => (
                             <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                 <td className="p-4 font-mono font-bold text-blue-600">#{o.orderNumber}</td>
                                 <td className="p-4 text-xs dark:text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
@@ -598,7 +590,7 @@ export default function StoreHistory() {
                       <table className="w-full text-left">
                           <thead className="border-b dark:border-gray-700"><tr className="text-[10px] font-black uppercase text-gray-500"><th className="pb-2">Item</th><th className="pb-2 text-center">Qty</th><th className="pb-2 text-right">Price</th><th className="pb-2 text-right">Total</th></tr></thead>
                           <tbody className="divide-y dark:divide-gray-700">
-                              {viewOrder.items.map((it, i) => (
+                              {viewOrder.items.map((it: OrderItem, i: number) => (
                                   <tr key={i}><td className="py-2 text-sm dark:text-gray-200">{it.productName}</td><td className="py-2 text-center text-sm font-bold dark:text-gray-400">{it.quantity}</td><td className="py-2 text-right text-sm dark:text-gray-400">{store?.currency}{it.price.toFixed(2)}</td><td className="py-2 text-right text-sm font-black dark:text-white">{store?.currency}{(it.price * it.quantity).toFixed(2)}</td></tr>
                               ))}
                           </tbody>
