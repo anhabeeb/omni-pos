@@ -1,4 +1,3 @@
-
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
@@ -137,6 +136,8 @@ export interface Store {
   minStartingCash?: number; 
   numberOfTables?: number; 
   isActive: boolean;
+  useKOT?: boolean;
+  useInventory?: boolean;
   printSettings?: PrintSettings;
   quotationSettings?: PrintSettings;
   eodSettings?: PrintSettings;

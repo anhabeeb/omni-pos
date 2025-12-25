@@ -1,11 +1,8 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { Store, UserRole, Order, OrderStatus, ActiveSession } from '../types';
-import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2, Database } from 'lucide-react';
-// Fix: useAuth should be imported from AuthContext
+import { Plus, Store as StoreIcon, Users, ShoppingCart, Edit, TrendingUp, Clock, MapPin, Phone, FileText, DollarSign, Activity, Monitor, ShieldAlert, Shield, Briefcase, ChefHat, UtensilsCrossed, Trash2, X, Lock, AlertTriangle, AlertCircle, PauseCircle, CheckCircle2, Loader2, Database, Box, Utensils } from 'lucide-react';
 import { useAuth } from '../AuthContext';
-// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
@@ -24,7 +21,6 @@ export default function SuperAdminDashboard() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
-  // Factory Reset Logic
   const [resetConfirmation, setResetConfirmation] = useState(0);
 
   const [editingStore, setEditingStore] = useState<Partial<Store>>({
@@ -41,7 +37,9 @@ export default function SuperAdminDashboard() {
     serviceChargeRate: 0,
     minStartingCash: 0,
     numberOfTables: 0,
-    isActive: true
+    isActive: true,
+    useKOT: true,
+    useInventory: true
   });
 
   useEffect(() => {
@@ -56,17 +54,13 @@ export default function SuperAdminDashboard() {
 
   const loadData = async () => {
     if (!user) return;
-
     let loadedStores = await db.getStores();
-
     if (user.role === UserRole.MANAGER) {
         loadedStores = loadedStores.filter(s => user.storeIds.includes(s.id));
     }
-
     setStores(loadedStores);
     const activeSessions = await db.getActiveSessions();
     setSessions(activeSessions);
-
     const orders: {storeId: number, order: Order}[] = [];
     for (const store of loadedStores) {
         const storeOrders = await db.getOrders(store.id);
@@ -78,7 +72,6 @@ export default function SuperAdminDashboard() {
   const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-
     const fullAddress = [
         editingStore.buildingName,
         editingStore.streetName,
@@ -86,16 +79,14 @@ export default function SuperAdminDashboard() {
         editingStore.province,
         editingStore.zipCode
     ].filter(Boolean).join(', ');
-
     const storeData = { ...editingStore, address: fullAddress };
-
     if (storeData.name) {
       setIsSaving(true);
       try {
           if (storeData.id) {
             await db.updateStore(storeData as Store);
           } else {
-            await db.addStore({ ...storeData, id: 0, isActive: true } as Store);
+            await db.addStore({ ...storeData, id: 0, isActive: true, useKOT: editingStore.useKOT ?? true, useInventory: editingStore.useInventory ?? true } as Store);
           }
           setIsModalOpen(false);
           resetForm();
@@ -112,14 +103,11 @@ export default function SuperAdminDashboard() {
   const handleDeleteStore = async (e: React.FormEvent) => {
       e.preventDefault();
       setDeleteError('');
-
       if (!user || !storeToDelete || isSaving) return;
-
       if (!isSuperOrAdmin) {
           setDeleteError('Permission Denied: Only Administrators can delete stores.');
           return;
       }
-
       if (confirmPassword === user.password) {
           setIsSaving(true);
           try {
@@ -138,7 +126,7 @@ export default function SuperAdminDashboard() {
 
   const resetForm = () => {
     setEditingStore({
-        name: '', phone: '', currency: '$', tin: '', buildingName: '', streetName: '', city: '', province: '', zipCode: '', taxRate: 0, serviceChargeRate: 0, minStartingCash: 0, numberOfTables: 0, isActive: true
+        name: '', phone: '', currency: '$', tin: '', buildingName: '', streetName: '', city: '', province: '', zipCode: '', taxRate: 0, serviceChargeRate: 0, minStartingCash: 0, numberOfTables: 0, isActive: true, useKOT: true, useInventory: true
     });
   };
 
@@ -165,35 +153,28 @@ export default function SuperAdminDashboard() {
       const today = new Date();
       today.setHours(0,0,0,0);
       const todayTs = today.getTime();
-
       const storeOrders = allOrders.filter(w => w.storeId === storeId).map(w => w.order);
       const todaySales = storeOrders
           .filter(o => o.createdAt >= todayTs && o.status === OrderStatus.COMPLETED)
           .reduce((sum, o) => sum + o.total, 0);
-      
       const activeCount = storeOrders
           .filter(o => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status))
           .length;
-
       const heldCount = storeOrders
           .filter(o => o.status === OrderStatus.ON_HOLD)
           .length;
-
       const completedTodayCount = storeOrders
           .filter(o => o.createdAt >= todayTs && o.status === OrderStatus.COMPLETED)
           .length;
-
       const last7Days = new Array(7).fill(0).map((_, i) => {
           const d = new Date();
           d.setDate(d.getDate() - (6 - i));
           d.setHours(0,0,0,0);
           return d;
       });
-
       const trendData = last7Days.map(date => {
           const nextDay = new Date(date);
           nextDay.setDate(date.getDate() + 1);
-          
           const dailyTotal = storeOrders
               .filter(o => 
                   o.createdAt >= date.getTime() && 
@@ -201,13 +182,11 @@ export default function SuperAdminDashboard() {
                   o.status === OrderStatus.COMPLETED
               )
               .reduce((sum, o) => sum + o.total, 0);
-
           return {
               date: date.toLocaleDateString('en-US', { weekday: 'short' }),
               sales: dailyTotal
           };
       });
-
       return { todaySales, activeCount, heldCount, completedTodayCount, trendData, currency };
   };
 
@@ -231,10 +210,9 @@ export default function SuperAdminDashboard() {
   const handleSystemReset = () => {
     if (resetConfirmation === 0) {
       setResetConfirmation(1);
-      setTimeout(() => setResetConfirmation(0), 5000); // Reset button if not clicked again within 5s
+      setTimeout(() => setResetConfirmation(0), 5000); 
       return;
     }
-    
     if (resetConfirmation === 1) {
       if (confirm("FINAL WARNING: This will permanently wipe all local database records including users, stores, products and sales history. This device will be signed out. Continue?")) {
           db.resetSystem();
@@ -243,10 +221,7 @@ export default function SuperAdminDashboard() {
   };
 
   const hasAccess = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER].includes(user?.role as UserRole);
-  
-  if (!hasAccess) {
-    return <div className="text-gray-800 dark:text-gray-200">Access Denied</div>;
-  }
+  if (!hasAccess) return <div className="text-gray-800 dark:text-gray-200">Access Denied</div>;
 
   return (
     <div className="space-y-8">
@@ -257,7 +232,6 @@ export default function SuperAdminDashboard() {
           </h1>
           <p className="text-gray-500 dark:text-gray-400">Overview of performance by location.</p>
         </div>
-        
         <div className="flex gap-3">
             {isRootAdmin && (
                 <button 
@@ -285,7 +259,6 @@ export default function SuperAdminDashboard() {
           <h2 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
               <Activity size={16} className="text-green-500" /> Live System Activity
           </h2>
-          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {visibleSessions.filter(s => !s.storeId).length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
@@ -308,7 +281,6 @@ export default function SuperAdminDashboard() {
                       </div>
                   </div>
               )}
-
               {stores.map(st => {
                   const storeUsers = visibleSessions.filter(s => s.storeId === st.id);
                   if (storeUsers.length === 0) return null;
@@ -334,7 +306,6 @@ export default function SuperAdminDashboard() {
                       </div>
                   );
               })}
-
               {visibleSessions.length === 0 && (
                   <div className="col-span-full py-6 text-center text-gray-400 italic text-sm">
                       No users currently online.
@@ -356,9 +327,17 @@ export default function SuperAdminDashboard() {
                             </div>
                             <div>
                                 <h2 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">{store.name}</h2>
-                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${store.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
-                                    {store.isActive ? 'Active Store' : 'Disabled'}
-                                </span>
+                                <div className="flex gap-2 items-center mt-0.5">
+                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${store.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
+                                        {store.isActive ? 'Active' : 'Disabled'}
+                                    </span>
+                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${store.useKOT ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                        {store.useKOT ? 'KOT ON' : 'KOT OFF'}
+                                    </span>
+                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${store.useInventory ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
+                                        {store.useInventory ? 'Inventory ON' : 'Inventory OFF'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -380,7 +359,6 @@ export default function SuperAdminDashboard() {
                             )}
                         </div>
                     </div>
-
                     <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                         <div className="lg:col-span-3 flex flex-col gap-4">
                             <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
@@ -403,13 +381,9 @@ export default function SuperAdminDashboard() {
                                     <span className="text-xs">Currency: {store.currency || '$'}</span>
                                 </div>
                             </div>
-
                             <div className="border-t border-gray-100 dark:border-gray-700 pt-4 flex flex-col gap-2 mt-auto">
                                 <button 
-                                    onClick={() => {
-                                        switchStore(store.id);
-                                        navigate('/pos');
-                                    }}
+                                    onClick={() => { switchStore(store.id); navigate('/pos'); }}
                                     className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl hover:bg-blue-700 transition-all font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95"
                                 >
                                     <ShoppingCart size={16} /> Open POS
@@ -430,7 +404,6 @@ export default function SuperAdminDashboard() {
                                 </div>
                             </div>
                         </div>
-
                         <div className="lg:col-span-4 grid grid-cols-2 gap-4">
                             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 flex flex-col justify-between">
                                 <div>
@@ -439,7 +412,6 @@ export default function SuperAdminDashboard() {
                                 </div>
                                 <TrendingUp size={18} className="text-blue-500 mt-2" />
                             </div>
-
                             <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800 flex flex-col justify-between">
                                 <div>
                                     <p className="text-orange-600 dark:text-orange-400 text-[10px] font-black uppercase tracking-widest mb-1">Active</p>
@@ -447,7 +419,6 @@ export default function SuperAdminDashboard() {
                                 </div>
                                 <Clock size={18} className="text-orange-500 mt-2" />
                             </div>
-
                             <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-2xl border border-yellow-100 dark:border-yellow-800 flex flex-col justify-between">
                                 <div>
                                     <p className="text-yellow-600 dark:text-yellow-400 text-[10px] font-black uppercase tracking-widest mb-1">Held</p>
@@ -455,7 +426,6 @@ export default function SuperAdminDashboard() {
                                 </div>
                                 <PauseCircle size={18} className="text-yellow-500 mt-2" />
                             </div>
-
                             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-2xl border border-green-100 dark:border-green-800 flex flex-col justify-between">
                                 <div>
                                     <p className="text-green-600 dark:text-green-400 text-[10px] font-black uppercase tracking-widest mb-1">Completed</p>
@@ -464,7 +434,6 @@ export default function SuperAdminDashboard() {
                                 <CheckCircle2 size={18} className="text-green-500 mt-2" />
                             </div>
                         </div>
-
                         <div className="lg:col-span-5 border-l border-gray-100 dark:border-gray-700 pl-6">
                             <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">7-Day Sales Trend</h3>
                             <div className="h-44">
@@ -498,7 +467,6 @@ export default function SuperAdminDashboard() {
                   <p className="text-gray-500 dark:text-gray-400 text-center text-sm mb-8">
                       This action is permanent and will delete all associated products, orders, and reports for this store location.
                   </p>
-
                   <form onSubmit={handleDeleteStore} className="space-y-6">
                       <div className="space-y-2">
                           <label className="block text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Confirm System Password</label>
@@ -516,7 +484,6 @@ export default function SuperAdminDashboard() {
                           </div>
                           {deleteError && <p className="text-red-500 text-xs font-bold mt-2 flex items-center gap-1"><AlertCircle size={14}/> {deleteError}</p>}
                       </div>
-
                       <div className="flex flex-col gap-3">
                           <button 
                               type="submit"
@@ -549,7 +516,6 @@ export default function SuperAdminDashboard() {
           <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{editingStore.id ? 'Edit Store Details' : 'Register New Store'}</h2>
             <form onSubmit={handleSaveStore} className="space-y-6">
-              
               <div className="space-y-4">
                   <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 border-b dark:border-gray-700 pb-2 flex items-center gap-2 uppercase tracking-[0.2em]">
                       <StoreIcon size={16} /> Business Details
@@ -712,18 +678,45 @@ export default function SuperAdminDashboard() {
                   </div>
               </div>
               
-              {editingStore.id && (
-                <div className="flex items-center gap-3 pt-2 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                    <input 
-                        type="checkbox" 
-                        id="isActive"
-                        checked={editingStore.isActive}
-                        onChange={e => setEditingStore({...editingStore, isActive: e.target.checked})}
-                        className="w-5 h-5 text-blue-600 rounded-lg cursor-pointer"
-                    />
-                    <label htmlFor="isActive" className="text-sm font-black uppercase text-gray-700 dark:text-gray-300 cursor-pointer">Store Is Active</label>
-                </div>
-              )}
+              <div className="space-y-3 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Store-Level Features</h3>
+                  <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                          <input 
+                              type="checkbox" 
+                              id="isActive"
+                              checked={editingStore.isActive}
+                              onChange={e => setEditingStore({...editingStore, isActive: e.target.checked})}
+                              className="w-5 h-5 text-blue-600 rounded-lg cursor-pointer"
+                          />
+                          <label htmlFor="isActive" className="text-sm font-black uppercase text-gray-700 dark:text-gray-300 cursor-pointer">Store Is Active</label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                          <input 
+                              type="checkbox" 
+                              id="useKOT"
+                              checked={editingStore.useKOT ?? true}
+                              onChange={e => setEditingStore({...editingStore, useKOT: e.target.checked})}
+                              className="w-5 h-5 text-orange-600 rounded-lg cursor-pointer"
+                          />
+                          <label htmlFor="useKOT" className="text-sm font-black uppercase text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                              <Utensils size={14}/> Use Kitchen Display (KOT)
+                          </label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                          <input 
+                              type="checkbox" 
+                              id="useInventory"
+                              checked={editingStore.useInventory ?? true}
+                              onChange={e => setEditingStore({...editingStore, useInventory: e.target.checked})}
+                              className="w-5 h-5 text-purple-600 rounded-lg cursor-pointer"
+                          />
+                          <label htmlFor="useInventory" className="text-sm font-black uppercase text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                              <Box size={14}/> Use Inventory Management
+                          </label>
+                      </div>
+                  </div>
+              </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-700">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">Cancel</button>

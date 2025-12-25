@@ -42,7 +42,7 @@ export default {
           if (action === 'INIT_SCHEMA') {
             try {
               const schema = [
-                "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
+                "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, useKOT INTEGER, useInventory INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
                 "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
                 "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
                 "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
@@ -67,6 +67,8 @@ export default {
                 { table: 'stores', column: 'city', type: 'TEXT' },
                 { table: 'stores', column: 'province', type: 'TEXT' },
                 { table: 'stores', column: 'zipCode', type: 'TEXT' },
+                { table: 'stores', column: 'useKOT', type: 'INTEGER' },
+                { table: 'stores', column: 'useInventory', type: 'INTEGER' },
                 { table: 'users', column: 'phoneNumber', type: 'TEXT' },
                 { table: 'users', column: 'email', type: 'TEXT' },
                 { table: 'orders', column: 'items', type: 'TEXT' }
@@ -133,7 +135,7 @@ export default {
                 const numericFields = [
                   'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
                   'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
-                  'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables'
+                  'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables', 'useKOT', 'useInventory'
                 ];
                 
                 if (numericFields.includes(k)) {
