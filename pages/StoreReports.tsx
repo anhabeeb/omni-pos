@@ -222,12 +222,29 @@ export default function StoreReports() {
       const totalServiceCharge = completedOrders.reduce((sum, o) => sum + o.serviceCharge, 0);
       const totalNetSales = completedOrders.reduce((sum, o) => sum + o.subtotal, 0);
 
+      // Reconciliation Logic with Fixed Float
+      const totalCashPayments = completedOrders
+          .filter(o => o.paymentMethod === 'CASH')
+          .reduce((sum, o) => sum + o.total, 0);
+      
+      const totalCashRefunds = returnedOrders
+          .filter(o => o.paymentMethod === 'CASH')
+          .reduce((sum, o) => sum + o.total, 0);
+
       const dayShifts = shifts.filter(s => s.closedAt && s.closedAt >= start && s.closedAt <= end);
       
       const payments: Record<string, number> = { CASH: 0, CARD: 0, TRANSFER: 0 };
       completedOrders.forEach(o => {
           if (o.paymentMethod) payments[o.paymentMethod] = (payments[o.paymentMethod] || 0) + o.total;
       });
+
+      // Use store's fixed opening float as requested
+      const fixedOpeningFloat = store?.minStartingCash || 0;
+      const totalExpected = fixedOpeningFloat + totalCashPayments - totalCashRefunds;
+      
+      // Get the actual counted cash from the last shift closed in the period
+      const sortedClosedShifts = [...dayShifts].sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
+      const finalActualCount = sortedClosedShifts.length > 0 ? (sortedClosedShifts[0].actualCash || 0) : fixedOpeningFloat;
 
       return {
           start: new Date(start), 
@@ -242,10 +259,10 @@ export default function StoreReports() {
           payments,
           shifts: { 
               count: dayShifts.length, 
-              totalOpening: dayShifts.reduce((sum, s) => sum + s.startingCash, 0), 
-              totalExpected: dayShifts.reduce((sum, s) => sum + (s.expectedCash || 0), 0), 
-              totalActual: dayShifts.reduce((sum, s) => sum + (s.actualCash || 0), 0), 
-              totalVariance: dayShifts.reduce((sum, s) => sum + (s.difference || 0), 0) 
+              totalOpening: fixedOpeningFloat, 
+              totalExpected: totalExpected, 
+              totalActual: finalActualCount, 
+              totalVariance: finalActualCount - totalExpected 
           }
       };
   };
@@ -286,6 +303,7 @@ export default function StoreReports() {
         ${Object.entries(stats.payments).map(([m, a]) => `<div class="row"><span>${m}</span><span>${currency}${(a as number).toFixed(2)}</span></div>`).join('')}
 
         <div class="section-title">Drawer Reconciliation</div>
+        <div class="row"><span>Opening Float (Fixed)</span><span>${currency}${stats.shifts.totalOpening.toFixed(2)}</span></div>
         <div class="row"><span>Expected In Drawer</span><span>${currency}${stats.shifts.totalExpected.toFixed(2)}</span></div>
         <div class="row"><span>Actual Counted</span><span>${currency}${stats.shifts.totalActual.toFixed(2)}</span></div>
         <div class="row total"><span>Variance</span><span style="color: ${stats.shifts.totalVariance < 0 ? 'red' : 'green'}">${currency}${stats.shifts.totalVariance.toFixed(2)}</span></div>
@@ -351,7 +369,7 @@ export default function StoreReports() {
     }
   };
 
-  const eodStats = useMemo(() => generateEODStats(), [orders, dateRange, customStart, customEnd, shifts]);
+  const eodStats = useMemo(() => generateEODStats(), [orders, dateRange, customStart, customEnd, shifts, store]);
 
   const setView = (view: 'SUMMARY' | 'EOD') => {
       setSearchParams({ view });
@@ -652,7 +670,7 @@ export default function StoreReports() {
                                 <span className="text-sm font-black dark:text-white">{eodStats.shifts.count}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-sm font-bold text-gray-500 uppercase tracking-tight">Opening Float</span>
+                                <span className="text-sm font-bold text-gray-500 uppercase tracking-tight">Opening Float (Fixed)</span>
                                 <span className="text-sm font-black dark:text-white">{store?.currency}{eodStats.shifts.totalOpening.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between items-center">
@@ -660,7 +678,7 @@ export default function StoreReports() {
                                 <span className="text-sm font-black dark:text-white">{store?.currency}{eodStats.shifts.totalExpected.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between items-center pt-4 border-t dark:border-gray-700">
-                                <span className="text-sm font-black text-blue-600 uppercase tracking-widest">Actual Counted</span>
+                                <span className="text-sm font-black text-blue-600 uppercase tracking-widest">Final Actual Count</span>
                                 <span className="text-xl font-black text-blue-600 tracking-tighter">{store?.currency}{eodStats.shifts.totalActual.toFixed(2)}</span>
                             </div>
                         </div>
