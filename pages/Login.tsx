@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { db } from '../services/db';
 import { User, Store, UserRole } from '../types';
 // @ts-ignore - Fixing missing member errors in react-router-dom

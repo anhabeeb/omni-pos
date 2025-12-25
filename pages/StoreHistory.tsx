@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAuth } from '../App';
+import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
 import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
@@ -611,7 +611,6 @@ export default function StoreHistory() {
           </div>
       )}
 
-      {/* Print Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">

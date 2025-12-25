@@ -1,6 +1,5 @@
-// @ts-nocheck
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
 import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
@@ -786,7 +785,6 @@ export default function POS() {
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-10.5rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
       
-      {/* Toast Notification */}
       {toast && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top-2">
               <div className={`px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-3 text-white text-xs font-black uppercase tracking-widest border-2 ${toast.type === 'SUCCESS' ? 'bg-emerald-600 border-emerald-400' : toast.type === 'ERROR' ? 'bg-red-600 border-red-400' : 'bg-blue-600 border-blue-400'}`}>
@@ -796,9 +794,7 @@ export default function POS() {
           </div>
       )}
 
-      {/* Main Terminal Area (Left) */}
       <div className="flex-1 flex flex-col gap-4 min-w-0 overflow-hidden">
-          {/* POS Context Bar */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
               <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
                   {[
@@ -963,7 +959,6 @@ export default function POS() {
           </div>
       </div>
 
-      {/* Sidebar Context (Cart) - Now extended to top */}
       <aside className="w-full lg:w-[380px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl overflow-hidden h-full rounded-3xl">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
               <div className="flex justify-between items-center">
@@ -1137,7 +1132,6 @@ export default function POS() {
           </div>
       </aside>
 
-      {/* Payment Settlement Modal */}
       {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 flex flex-col">
@@ -1273,7 +1267,6 @@ export default function POS() {
           </div>
       )}
 
-      {/* Receipt Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
@@ -1318,7 +1311,6 @@ export default function POS() {
           </div>
       )}
 
-      {/* Customer Full Modal (Quick Registration) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1477,7 +1469,6 @@ export default function POS() {
           </div>
       )}
 
-      {/* Shift Control Modal */}
       {isShiftModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-400 border border-gray-100 dark:border-gray-700 flex flex-col">
@@ -1527,7 +1518,6 @@ export default function POS() {
           </div>
       )}
 
-      {/* Finalize Closure Modal */}
       {isShiftConfirmOpen && shift && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[400] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 p-10 rounded-[3rem] w-full max-md shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-in zoom-in-95 duration-300">

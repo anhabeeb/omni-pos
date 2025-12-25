@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { db } from '../services/db';
 import { Quotation, Product, Customer, Store, OrderItem, PrintSettings, User } from '../types';
 import { Plus, Trash2, Printer, Search, FileText, UserSquare, Calendar, Eye, X, ArrowLeft, ShoppingBag, Download, FileImage } from 'lucide-react';

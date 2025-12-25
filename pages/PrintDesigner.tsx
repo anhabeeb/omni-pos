@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/db';
 import { Store, PrintSettings, UserRole } from '../types';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { ArrowLeft, Save, Printer, Type, Image as ImageIcon, Layout, Eye, AlignLeft, AlignCenter, AlignRight, DollarSign, FileType } from 'lucide-react';
 
 const DEFAULT_SETTINGS: PrintSettings = {

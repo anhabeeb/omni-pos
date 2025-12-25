@@ -1,15 +1,17 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../AuthContext';
 import { db } from '../services/db';
 import { Order, OrderStatus, Product, User, Category, RegisterShift, PrintSettings } from '../types';
-// @ts-ignore - Fixing missing member errors in react-router-dom
+// @ts-ignore
 import { useSearchParams } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
-// Fix: Added FileText to the lucide-react imports
-import { DollarSign, ShoppingBag, Percent, TrendingUp, Users, Clock, Package, CreditCard, User as UserIcon, Calendar, Printer, CalendarCheck, X, BarChart3, PieChart as PieIcon, Download, FileImage, List, FileBarChart, FileText } from 'lucide-react';
+import { 
+  DollarSign, ShoppingBag, Percent, TrendingUp, Users, Clock, Package, 
+  CreditCard, User as UserIcon, Calendar, Printer, CalendarCheck, X, 
+  BarChart3, PieChart as PieIcon, Download, FileImage, List, FileBarChart, FileText 
+} from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -82,7 +84,7 @@ export default function StoreReports() {
             yesterday.setHours(0,0,0,0);
             start = yesterday.getTime();
             const endYesterday = new Date();
-            endYesterday.setDate(endYesterday.getDate() - 1);
+            endYesterday.setDate(yesterday.getDate());
             endYesterday.setHours(23,59,59,999);
             end = endYesterday.getTime();
             break;
@@ -135,7 +137,7 @@ export default function StoreReports() {
   const salesTrendData = useMemo(() => {
       const groups: Record<string, { sales: number; count: number }> = {};
       filteredOrders.forEach(o => {
-          const date = new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const date = new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           if (!groups[date]) groups[date] = { sales: 0, count: 0 };
           groups[date].sales += o.total;
           groups[date].count += 1;
@@ -222,7 +224,6 @@ export default function StoreReports() {
       const totalServiceCharge = completedOrders.reduce((sum, o) => sum + o.serviceCharge, 0);
       const totalNetSales = completedOrders.reduce((sum, o) => sum + o.subtotal, 0);
 
-      // Reconciliation Logic with Fixed Float
       const totalCashPayments = completedOrders
           .filter(o => o.paymentMethod === 'CASH')
           .reduce((sum, o) => sum + o.total, 0);
@@ -238,11 +239,9 @@ export default function StoreReports() {
           if (o.paymentMethod) payments[o.paymentMethod] = (payments[o.paymentMethod] || 0) + o.total;
       });
 
-      // Use store's fixed opening float as requested
       const fixedOpeningFloat = store?.minStartingCash || 0;
       const totalExpected = fixedOpeningFloat + totalCashPayments - totalCashRefunds;
       
-      // Get the actual counted cash from the last shift closed in the period
       const sortedClosedShifts = [...dayShifts].sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
       const finalActualCount = sortedClosedShifts.length > 0 ? (sortedClosedShifts[0].actualCash || 0) : fixedOpeningFloat;
 
@@ -476,7 +475,7 @@ export default function StoreReports() {
                         {paymentMethodData.map((d, i) => (
                             <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                 <td className="p-3 text-sm font-bold flex items-center gap-2 dark:text-gray-200">
-                                    <div className={`w-2 h-2 rounded-full ${d.name === 'CASH' ? 'bg-blue-600' : d.name === 'CARD' ? 'bg-emerald-600' : 'bg-amber-600'}`}></div>
+                                    <div className={`w-2 h-2 rounded-full ${d.name === 'CASH' ? 'bg-blue-600' : d.name === 'CARD' ? 'bg-emerald-600' : 'bg-amber-100'}`}></div>
                                     {d.name}
                                 </td>
                                 <td className="p-3 text-sm text-right dark:text-gray-400 font-mono">{d.count}</td>
@@ -791,7 +790,7 @@ export default function StoreReports() {
         )}
 
         {printModalOpen && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
                 <div className="bg-white dark:bg-gray-800 w-full max-w-2xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
                     <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                         <h2 className="text-xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">

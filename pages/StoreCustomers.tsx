@@ -4,7 +4,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/db';
 import { Customer, Store, Permission } from '../types';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { 
   ArrowLeft, 
   Plus, 
@@ -453,7 +454,7 @@ export default function StoreCustomers() {
                         <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN)</label>
                         <input 
                             placeholder="e.g. 123-456-789" 
-                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
                             value={editingCustomer.tin}
                             onChange={e => setEditingCustomer({...editingCustomer, tin: e.target.value})}
                         />

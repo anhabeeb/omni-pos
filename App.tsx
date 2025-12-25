@@ -1,9 +1,9 @@
-
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { User, UserRole, Store, Permission, Employee, ActiveSession, RolePermissionConfig } from './types';
+import { User, UserRole, Store, Permission, RolePermissionConfig } from './types';
 import { db, SyncStatus } from './services/db';
+import { AuthContext, AuthContextType } from './AuthContext';
 import { 
   LayoutDashboard, 
   Store as StoreIcon, 
@@ -17,28 +17,20 @@ import {
   Printer,
   History,
   ChevronDown,
-  ChevronRight,
   FileText,
   UserCircle,
   AlertCircle,
   CheckCircle,
   Loader2,
   Cloud,
-  CloudOff,
   RefreshCw,
-  Zap,
   Package,
   Globe,
-  Settings2,
-  Database,
   Terminal,
   Activity,
-  Unplug,
   ShieldCheck,
   UploadCloud,
-  ArrowUpRight,
   CloudDownload,
-  Settings,
   X,
   Lock,
   User as UserIcon,
@@ -48,10 +40,10 @@ import {
   Phone,
   Mail,
   FastForward,
-  Eraser,
-  Tag
+  Hash
 } from 'lucide-react';
 
+import { useAuth } from './AuthContext';
 import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import GlobalUsers from './pages/GlobalUsers';
@@ -68,27 +60,11 @@ import Quotations from './pages/Quotations';
 import EmployeeManagement from './pages/EmployeeManagement';
 import SystemLogs from './pages/SystemLogs';
 
-interface AuthContextType {
-  user: User | null;
-  currentStoreId: number | null; 
-  login: (u: User, storeId?: number) => void;
-  logout: () => Promise<void>;
-  switchStore: (storeId: number) => void;
-  hasPermission: (permission: Permission) => boolean;
-  openProfile: () => void;
-}
-
-const AuthContext = createContext<AuthContextType>(null!);
-
-export const useAuth = () => useContext(AuthContext);
-
 const SyncIndicator = () => {
     const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean }>(db.getSyncStatus());
-    const [isTesting, setIsTesting] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(false);
     const [isPulling, setIsPulling] = useState(false);
-    const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
@@ -97,15 +73,6 @@ const SyncIndicator = () => {
         window.addEventListener('db_sync_update', handleSyncUpdate);
         return () => window.removeEventListener('db_sync_update', handleSyncUpdate);
     }, []);
-
-    const runDiagnostic = async () => {
-        setIsTesting(true);
-        try {
-            await db.verifyWriteAccess();
-        } finally {
-            setIsTesting(false);
-        }
-    };
 
     const handleRepairSchema = async () => {
         setIsRepairing(true);
@@ -127,10 +94,6 @@ const SyncIndicator = () => {
         }
     };
 
-    const handleClearQueue = () => {
-        if (confirm("Clear pending sync queue?")) db.clearSyncQueue();
-    };
-
     const handleSkipTask = () => {
         if (confirm("Skip current failed task?")) db.skipFailedTask();
     };
@@ -138,11 +101,8 @@ const SyncIndicator = () => {
     const handleBootstrap = async () => {
         if (!confirm("Push all local data to cloud?")) return;
         setIsBootstrapping(true);
-        setSyncMessage("Syncing...");
         try {
             await db.syncAllLocalToCloud();
-            setSyncMessage("Queued!");
-            setTimeout(() => setSyncMessage(null), 2000);
         } finally {
             setIsBootstrapping(false);
         }
@@ -162,7 +122,7 @@ const SyncIndicator = () => {
     const toggleSync = () => db.setSyncEnabled(!db.isSyncEnabled());
 
     const getStatusConfig = () => {
-        if (status.status === 'DISABLED') return { icon: Database, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
+        if (status.status === 'DISABLED') return { icon: Cloud, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
         switch(status.status) {
             case 'CONNECTED': return { icon: Cloud, text: 'Synced', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/10' };
             case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', spin: true };
@@ -440,7 +400,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
       
-      {/* Primary Top Bar */}
       <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
         <div className="flex items-center gap-8">
           <div className="flex flex-col cursor-pointer" onClick={() => navigate('/dashboard')}>
@@ -467,7 +426,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
           <div className="h-8 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
 
-          {/* Store Switcher Dropdown */}
           <div className="relative" ref={storeMenuRef}>
             <button
               onClick={() => setIsStoreMenuOpen(!isStoreMenuOpen)}
@@ -531,7 +489,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </header>
 
-      {/* Secondary Action Bar (Contextual to selected store) */}
       {currentStoreId && (
         <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-6 py-2.5 flex items-center justify-start lg:justify-center gap-2 z-40 shrink-0 shadow-sm overflow-x-auto custom-scrollbar-hide scroll-smooth">
           {storeActions.filter(a => {
@@ -553,7 +510,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8">
         <div className="max-w-[1600px] mx-auto">
           {children}

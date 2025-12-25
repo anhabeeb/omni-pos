@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
 import { Order, OrderStatus, KitchenStatus, Transaction } from '../types';
 import { Clock, CheckCircle, Bell, Loader, Check, XCircle, AlertTriangle, ChefHat, Loader2 } from 'lucide-react';

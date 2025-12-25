@@ -20,7 +20,8 @@ import {
   X,
   ChevronDown
 } from 'lucide-react';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 
 const getActionColor = (action: string) => {
     const act = action.toUpperCase();
@@ -243,60 +244,4 @@ export default function SystemLogs() {
                                       <div className="w-5 h-5 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
                                           <UserIcon size={12} />
                                       </div>
-                                      <span className="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">{act.userName}</span>
-                                  </div>
-                                  <span className="text-[9px] font-bold text-gray-300 dark:text-gray-600 uppercase tracking-widest">{new Date(act.timestamp).toLocaleDateString()}</span>
-                              </div>
-                          </div>
-                      ))
-                  )}
-              </div>
-          </div>
-
-          {/* Individual Store Activity Cards */}
-          {stores.map(store => (
-              <div key={store.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-[600px]">
-                  <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-xl">
-                              <StoreIcon size={20} />
-                          </div>
-                          <h2 className="font-black text-xs uppercase tracking-widest dark:text-white truncate max-w-[150px]">{store.name}</h2>
-                      </div>
-                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">STORE</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
-                      {getStoreActivities(store.id).length === 0 ? (
-                          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 space-y-2">
-                              <Activity size={32} />
-                              <p className="text-xs font-bold uppercase tracking-widest">No matching activities</p>
-                          </div>
-                      ) : (
-                          getStoreActivities(store.id).map(act => (
-                              <div key={act.id} className="p-4 border-b dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group relative">
-                                  <div className="flex justify-between items-start mb-1.5">
-                                      <span className={`text-[10px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-gray-50 dark:bg-gray-700/50 ${getActionColor(act.action)}`}>{act.action}</span>
-                                      <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
-                                          <Clock size={10} /> {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                      </span>
-                                  </div>
-                                  <p className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-relaxed mb-3">{act.description}</p>
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1.5">
-                                          <div className="w-5 h-5 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
-                                              <UserIcon size={12} />
-                                          </div>
-                                          <span className="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">{act.userName}</span>
-                                      </div>
-                                      <span className="text-[9px] font-bold text-gray-300 dark:text-gray-600 uppercase tracking-widest">{new Date(act.timestamp).toLocaleDateString()}</span>
-                                  </div>
-                              </div>
-                          ))
-                      )}
-                  </div>
-              </div>
-          ))}
-      </div>
-    </div>
-  );
-}
+                                      

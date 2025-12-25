@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../services/db';
 import { Employee, UserRole } from '../types';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 import { 
   Plus, 
   Search, 

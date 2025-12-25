@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { User, UserRole, Store, Permission, RolePermissionConfig, Employee } from '../types';
 import { Plus, Trash2, Shield, ShieldAlert, UserPlus, Lock, Briefcase, ChefHat, Monitor, UtensilsCrossed, Edit2, Search, CheckSquare, Square, Settings, Check, X, UserCheck, Hash, AlertCircle, Loader2, FileBarChart, History as HistoryIcon, FileText, Phone, Mail } from 'lucide-react';
-import { useAuth } from '../App';
+// Fix: useAuth should be imported from AuthContext
+import { useAuth } from '../AuthContext';
 
 const ALL_PERMISSIONS: { id: Permission; label: string; category: string }[] = [
     { id: 'POS_ACCESS', label: 'Access POS System', category: 'POS' },
