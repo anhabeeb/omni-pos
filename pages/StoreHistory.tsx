@@ -1,13 +1,17 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-// @ts-ignore
+// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
-// @ts-ignore
 import { useAuth } from '../App';
-// @ts-ignore
 import { db, uuid } from '../services/db';
-import { Order, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
+import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings } from '../types';
 import { 
-  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
+  Calendar, Receipt, ChefHat, Filter, ArrowRight, DollarSign, Info, Printer, 
+  RotateCcw, Undo2, Trash2, X, Search, Wallet, FileText, CheckCircle, 
+  AlertTriangle, CreditCard, Lock, Unlock, PauseCircle, Download, FileImage,
+  Layers, CreditCard as PaymentIcon, Hash, User as UserIcon,
+  Trash,
+  History as HistoryIcon,
+  Eye
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
@@ -24,11 +28,11 @@ export default function StoreHistory() {
   const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterOrderType] = useState('ALL');
-  const [filterPaymentMethod] = useState('ALL');
+  const [filterOrderType, setFilterOrderType] = useState('ALL');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('ALL');
 
   const [shiftSearch, setShiftSearch] = useState('');
-  const [shiftStatusFilter] = useState('ALL');
+  const [shiftStatusFilter, setShiftStatusFilter] = useState('ALL');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [shifts, setShifts] = useState<RegisterShift[]>([]);
@@ -45,6 +49,7 @@ export default function StoreHistory() {
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  const [previewShift, setPreviewShift] = useState<RegisterShift | null>(null); 
   const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
 
   const exportRef = useRef<HTMLDivElement>(null);
@@ -52,13 +57,13 @@ export default function StoreHistory() {
   const loadData = async () => {
     if (activeStoreId) {
       const allOrders = await db.getOrders(activeStoreId);
-      setOrders(allOrders.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setOrders(allOrders.sort((a, b) => b.createdAt - a.createdAt));
       const allShifts = await db.getRegisterShifts(activeStoreId);
-      setShifts(allShifts.sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
+      setShifts(allShifts.sort((a,b) => b.openedAt - a.openedAt));
       const usersData = await db.getUsers();
       setUsers(usersData);
       const stores = await db.getStores();
-      const s = stores.find((st: Store) => st.id === activeStoreId) || null;
+      const s = stores.find(s => s.id === activeStoreId) || null;
       setStore(s);
     }
   };
@@ -135,29 +140,31 @@ export default function StoreHistory() {
   const filteredOrders = useMemo(() => {
     let result = orders;
     const { start, end } = getTimeRange();
-    result = result.filter((o: Order) => {
+    result = result.filter(o => {
         const t = o.createdAt;
         return t >= start && t <= end;
     });
     if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        result = result.filter((o: Order) => 
+        result = result.filter(o => 
             o.orderNumber.toString().includes(term) ||
             (o.customerName?.toLowerCase() || '').includes(term) ||
             (o.tableNumber?.toLowerCase() || '').includes(term)
         );
     }
+    if (filterOrderType !== 'ALL') { result = result.filter(o => o.orderType === filterOrderType); }
+    if (filterPaymentMethod !== 'ALL') { result = result.filter(o => o.paymentMethod === filterPaymentMethod); }
     return result;
-  }, [orders, dateRange, customStart, customEnd, searchTerm]);
+  }, [orders, dateRange, customStart, customEnd, searchTerm, filterOrderType, filterPaymentMethod]);
 
   const filteredShifts = useMemo(() => {
       let result = shifts;
       const { start, end } = getTimeRange();
-      result = result.filter((s: RegisterShift) => s.openedAt >= start && s.openedAt <= end);
-      if (shiftStatusFilter !== 'ALL') { result = result.filter((s: RegisterShift) => s.status === shiftStatusFilter); }
+      result = result.filter(s => s.openedAt >= start && s.openedAt <= end);
+      if (shiftStatusFilter !== 'ALL') { result = result.filter(s => s.status === shiftStatusFilter); }
       if (shiftSearch) {
           const term = shiftSearch.toLowerCase();
-          result = result.filter((s: RegisterShift) => {
+          result = result.filter(s => {
               const numMatch = (s.shiftNumber?.toString() || '').includes(term);
               const userMatch = getUserName(s.openedBy).toLowerCase().includes(term);
               return numMatch || userMatch;
@@ -166,10 +173,10 @@ export default function StoreHistory() {
       return result;
   }, [shifts, dateRange, customStart, customEnd, shiftStatusFilter, shiftSearch]);
 
-  const getUserName = (id: number) => { return users.find((u: User) => u.id === id)?.name || 'Unknown'; };
+  const getUserName = (id: number) => { return users.find(u => u.id === id)?.name || 'Unknown'; };
 
   const getPaidAmount = (order: Order) => {
-      return order.transactions?.reduce((acc: number, t: Transaction) => {
+      return order.transactions?.reduce((acc, t) => {
           if (t.type === 'PAYMENT') return acc + t.amount;
           if (t.type === 'REVERSAL') return acc - t.amount;
           return acc;
@@ -188,7 +195,7 @@ export default function StoreHistory() {
       const amountToRefund = parseFloat(refundAmount);
       const paidAmount = getPaidAmount(refundOrder);
       if (isNaN(amountToRefund) || amountToRefund <= 0) { alert("Please enter a valid refund amount."); return; }
-      if (amountToRefund > (paidAmount + 0.01)) { alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); return; }
+      if (amountToRefund > paidAmount) { alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); return; }
       const transaction: Transaction = {
           id: uuid(), type: 'REVERSAL', amount: amountToRefund, timestamp: Date.now(), performedBy: user.id, note: `Refund (${refundMode}): ${refundReason}`
       };
@@ -211,7 +218,7 @@ export default function StoreHistory() {
 
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
-    const settings: PrintSettings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
+    const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
     const currency = settings.currencySymbol || store.currency || '$';
     const paperSize = paperSizeOverride || settings.paperSize || 'thermal';
     
@@ -221,7 +228,7 @@ export default function StoreHistory() {
     if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
     if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
     
-    const itemsHtml = settings.showItems !== false ? order.items.map((item: OrderItem) => {
+    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -269,7 +276,7 @@ export default function StoreHistory() {
                 ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleDateString()}</div>` : ''}
             </div>
             <div style="text-align: right;">
-                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find((u: User) => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
+                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find(u => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
                 ${settings.showCustomerDetails && order.tableNumber ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
             </div>
         </div>
@@ -327,6 +334,7 @@ export default function StoreHistory() {
 
   const handlePrint = (order: Order) => {
     setPreviewOrder(order);
+    setPreviewShift(null);
     setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
     setPrintModalOpen(true);
   };
@@ -426,7 +434,7 @@ export default function StoreHistory() {
             {dateRange === 'CUSTOM' && (
                 <div className="flex items-center gap-2">
                     <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="p-2 text-xs border rounded-lg bg-white dark:bg-gray-700 dark:text-white" />
-                    <span className="text-gray-400">-</span>
+                    <span className="text-gray-400">to</span>
                     <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="p-2 text-xs border rounded-lg bg-white dark:bg-gray-700 dark:text-white" />
                 </div>
             )}
@@ -458,7 +466,7 @@ export default function StoreHistory() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {filteredShifts.map((s: RegisterShift) => (
+                        {filteredShifts.map(s => (
                             <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                 <td className="p-4 font-mono font-bold text-blue-600">#{s.shiftNumber || s.id}</td>
                                 <td className="p-4 font-bold dark:text-white">{getUserName(s.openedBy)}</td>
@@ -486,13 +494,14 @@ export default function StoreHistory() {
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Order #</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Time</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Details</th>
+                            <th className="p-4 text-[10px] font-black uppercase text-gray-500">Type</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500 text-right">Total</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Status</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {filteredOrders.map((o: Order) => (
+                        {filteredOrders.map(o => (
                             <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                 <td className="p-4 font-mono font-bold text-blue-600">#{o.orderNumber}</td>
                                 <td className="p-4 text-xs dark:text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
@@ -500,6 +509,7 @@ export default function StoreHistory() {
                                     <div className="text-sm font-bold dark:text-white">{o.customerName || 'Walk-in'}</div>
                                     {o.tableNumber && <div className="text-[10px] text-gray-500">Table: {o.tableNumber}</div>}
                                 </td>
+                                <td className="p-4 text-[10px] font-black uppercase text-gray-400">{o.orderType}</td>
                                 <td className="p-4 text-right font-black dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
                                 <td className="p-4">
                                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : o.status === OrderStatus.CANCELLED ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{o.status}</span>
@@ -544,7 +554,7 @@ export default function StoreHistory() {
                       <table className="w-full text-left">
                           <thead className="border-b dark:border-gray-700"><tr className="text-[10px] font-black uppercase text-gray-500"><th className="pb-2">Item</th><th className="pb-2 text-center">Qty</th><th className="pb-2 text-right">Price</th><th className="pb-2 text-right">Total</th></tr></thead>
                           <tbody className="divide-y dark:divide-gray-700">
-                              {viewOrder.items.map((it: OrderItem, i: number) => (
+                              {viewOrder.items.map((it, i) => (
                                   <tr key={i}><td className="py-2 text-sm dark:text-gray-200">{it.productName}</td><td className="py-2 text-center text-sm font-bold dark:text-gray-400">{it.quantity}</td><td className="py-2 text-right text-sm dark:text-gray-400">{store?.currency}{it.price.toFixed(2)}</td><td className="py-2 text-right text-sm font-black dark:text-white">{store?.currency}{(it.price * it.quantity).toFixed(2)}</td></tr>
                               ))}
                           </tbody>
@@ -553,34 +563,6 @@ export default function StoreHistory() {
                           <div className="w-48 flex justify-between text-sm text-gray-500"><span>Subtotal:</span><span>{store?.currency}{viewOrder.subtotal.toFixed(2)}</span></div>
                           <div className="w-48 flex justify-between font-black text-xl dark:text-white border-t-2 border-gray-100 dark:border-gray-700 pt-2 mt-1"><span>TOTAL:</span><span>{store?.currency}{viewOrder.total.toFixed(2)}</span></div>
                       </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Shift Details Modal */}
-      {viewShift && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in zoom-in-95">
-                  <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10 text-blue-600 flex justify-between items-center">
-                      <h3 className="font-bold flex items-center gap-2">Shift Record: #{viewShift.shiftNumber || viewShift.id}</h3>
-                      <button onClick={() => setViewShift(null)} className="p-1.5 hover:bg-blue-100 rounded-full transition-colors"><X size={20}/></button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Staff</p><p className="font-bold dark:text-white">{getUserName(viewShift.openedBy)}</p></div>
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Status</p><p className={`font-black ${viewShift.status === 'OPEN' ? 'text-green-500' : 'text-gray-500'}`}>{viewShift.status}</p></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t dark:border-gray-700">
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Starting Cash</p><p className="font-mono dark:text-gray-200">{store?.currency}{viewShift.startingCash.toFixed(2)}</p></div>
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Actual Cash</p><p className="font-mono dark:text-gray-200">{viewShift.actualCash ? `${store?.currency}${viewShift.actualCash.toFixed(2)}` : '-'}</p></div>
-                      </div>
-                      {viewShift.status === 'CLOSED' && (
-                          <div className={`p-4 rounded-xl border ${viewShift.difference && viewShift.difference < 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
-                              <p className="text-[10px] font-black uppercase mb-1">Variance / Discrepancy</p>
-                              <p className="text-xl font-black font-mono">{store?.currency}{viewShift.difference?.toFixed(2) || '0.00'}</p>
-                          </div>
-                      )}
                   </div>
               </div>
           </div>
@@ -614,7 +596,7 @@ export default function StoreHistory() {
           </div>
       )}
 
-      {/* Print Preview Modal */}
+      {/* Print Preview Modal - HIGH FIDELITY VERSION MATCHING POS Terminal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">

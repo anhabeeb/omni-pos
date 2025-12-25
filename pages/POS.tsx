@@ -1,24 +1,31 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
-import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
+import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User, Permission } from '../types';
 import { 
-  Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
-  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play,
+  Search, Trash2, Plus, Minus, CreditCard, Banknote, 
+  X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
+  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play, StickyNote,
   Maximize2,
   Hash,
   FileImage,
   Percent,
   MapPin,
   Loader2,
+  Activity,
   Tag,
+  UserSquare,
+  LogOut,
+  LayoutDashboard,
+  ChevronDown,
   ArrowRight,
   Split,
   User as UserIcon,
-  Banknote,
-  CreditCard
+  Building2,
+  FileText
 } from 'lucide-react';
-// @ts-ignore
+// @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 
@@ -74,6 +81,7 @@ export default function POS() {
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  // State for paper size selector in preview
   const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
   
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -88,6 +96,7 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
+  // Fix: Added missing formatAddress helper function
   const formatAddress = (c: Customer) => {
     if (c.type === 'INDIVIDUAL') {
         return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
@@ -184,24 +193,24 @@ export default function POS() {
           db.getNextOrderNumber(currentStoreId)
       ]);
 
-      const s = sList.find((st: Store) => st.id === currentStoreId);
+      const s = sList.find(st => st.id === currentStoreId);
       setStores(sList);
       setStore(s || null);
-      setProducts(pList.filter((p: Product) => p.isAvailable));
-      setCategories(cList.sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
+      setProducts(pList.filter(p => p.isAvailable));
+      setCategories(cList.sort((a,b) => (a.orderId || 0) - (b.orderId || 0)));
       setCustomers(custs);
       setUsers(uList);
       setNextOrderNum(orderNum);
       setShift(activeShift || null);
 
-      setActiveOrders(allOrders.filter((o: Order) => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
-      setHeldOrders(allOrders.filter((o: Order) => o.status === OrderStatus.ON_HOLD).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setActiveOrders(allOrders.filter(o => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a,b) => b.createdAt - a.createdAt));
+      setHeldOrders(allOrders.filter(o => o.status === OrderStatus.ON_HOLD).sort((a,b) => b.createdAt - a.createdAt));
       
       const history = activeShift 
-        ? allOrders.filter((o: Order) => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
-        : allOrders.filter((o: Order) => o.status === OrderStatus.COMPLETED).slice(-20);
+        ? allOrders.filter(o => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
+        : allOrders.filter(o => o.status === OrderStatus.COMPLETED).slice(-20);
       
-      setHistoryOrders(history.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setHistoryOrders(history.sort((a,b) => b.createdAt - a.createdAt));
   };
 
   const addToCart = (product: Product) => {
@@ -349,7 +358,7 @@ export default function POS() {
   };
 
   const totals = useMemo(() => {
-      const subtotal = cart.reduce((sum: number, item: OrderItem) => sum + (item.price * item.quantity), 0);
+      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const dPercent = discountPercent || 0;
       const discountAmount = (subtotal * dPercent) / 100;
       const subtotalAfterDiscount = subtotal - discountAmount;
@@ -493,7 +502,7 @@ export default function POS() {
     if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
     if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
     
-    const itemsHtml = settings.showItems !== false ? order.items.map((item: OrderItem) => {
+    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -659,7 +668,7 @@ export default function POS() {
     return '320px'; // thermal width
   };
 
-  const filteredCustomers = customers.filter((c: Customer) => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
+  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
   const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name); setShowCustomerResults(false); };
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
@@ -698,7 +707,7 @@ export default function POS() {
   };
 
   const calculateDenomTotal = () => { 
-    return DENOMINATIONS.reduce((sum: number, d: number) => {
+    return DENOMINATIONS.reduce((sum, d) => {
       const count = denominations[d] || 0;
       return sum + (d * count);
     }, 0);
@@ -760,7 +769,7 @@ export default function POS() {
 
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
-          {productList.map((product: Product) => (
+          {productList.map(product => (
               <button 
                   key={product.id} 
                   onClick={() => addToCart(product)} 
@@ -770,7 +779,7 @@ export default function POS() {
                       className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
                       style={{ height: `${4 * menuScale}rem` }}
                   >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={product.name} /> : <Utensils size={20 * menuScale}/>}
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={20 * menuScale}/>}
                       <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
                           <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
                             <Plus size={14}/>
@@ -856,7 +865,7 @@ export default function POS() {
                               >
                                   All Items
                               </button>
-                              {categories.map((cat: Category) => (
+                              {categories.map(cat => (
                                   <button 
                                       key={cat.id}
                                       onClick={() => setSelectedCategoryId(cat.id)}
@@ -868,7 +877,7 @@ export default function POS() {
                           </div>
 
                           <div className="flex-1 pr-2 overflow-y-auto custom-scrollbar">
-                              {renderProductGrid(products.filter((p: Product) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
+                              {renderProductGrid(products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
                           </div>
                       </div>
 
@@ -887,7 +896,7 @@ export default function POS() {
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                       {activeTab === 'ACTIVE' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {activeOrders.map((order: Order) => (
+                              {activeOrders.map(order => (
                                   <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-[2rem] border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
                                       <div className="flex justify-between items-start mb-2 border-b border-gray-50 dark:border-gray-700 pb-2">
                                           <div>
@@ -898,7 +907,7 @@ export default function POS() {
                                       </div>
                                       <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
                                       <div className="space-y-1 mb-4 flex-1">
-                                          {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
+                                          {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
                                       </div>
                                       <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
@@ -915,7 +924,7 @@ export default function POS() {
                           </div>
                       ) : activeTab === 'HELD' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {heldOrders.map((order: Order) => (
+                              {heldOrders.map(order => (
                                   <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
                                       <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                           <div>
@@ -924,7 +933,7 @@ export default function POS() {
                                           </div>
                                           <span className={`text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest`}>ON HOLD</span>
                                       </div>
-                                      <p className="text-11px font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
+                                      <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
                                       <div className="mt-auto flex gap-2">
                                           <button onClick={(e) => { e.stopPropagation(); handleActivateOrder(order); }} className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"><Play size={12}/> Activate</button>
                                       </div>
@@ -945,7 +954,7 @@ export default function POS() {
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                                      {historyOrders.map((order: Order) => (
+                                      {historyOrders.map(order => (
                                           <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
@@ -1008,7 +1017,7 @@ export default function POS() {
                       
                       {showCustomerResults && customerSearch && !selectedCustomer && (
                           <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
-                              {filteredCustomers.map((c: Customer) => (
+                              {filteredCustomers.map(c => (
                                   <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
                                       <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name[0]}</div>
                                       <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
@@ -1038,7 +1047,7 @@ export default function POS() {
                       <ShoppingBag size={64} strokeWidth={1} className="opacity-20" />
                       <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4 text-gray-300 dark:text-gray-700">Cart Empty</p>
                   </div>
-              ) : cart.map((item: OrderItem) => (
+              ) : cart.map(item => (
                   <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-2 duration-200 bg-white dark:bg-gray-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
                       <div className="flex-1 pr-4">
                           <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-tight mb-1 truncate max-w-[150px]">{item.productName}</div>
@@ -1378,7 +1387,6 @@ export default function POS() {
                             <input 
                                 placeholder="Full Name" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                // Fix: Changed editingCustomer to newCustData
                                 value={newCustData.name}
                                 onChange={e => setNewCustData({...newCustData, name: e.target.value})}
                                 required
@@ -1390,7 +1398,6 @@ export default function POS() {
                             <input 
                                 placeholder="Phone Number" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                                // Fix: Changed editingCustomer to newCustData
                                 value={newCustData.phone}
                                 onChange={e => setNewCustData({...newCustData, phone: e.target.value})}
                                 required
