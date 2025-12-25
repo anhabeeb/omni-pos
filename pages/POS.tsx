@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -21,7 +22,8 @@ import {
   ArrowRight,
   Split,
   User as UserIcon,
-  Building2
+  Building2,
+  FileText
 } from 'lucide-react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
@@ -79,6 +81,8 @@ export default function POS() {
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  // State for paper size selector in preview
+  const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
   
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isShiftConfirmOpen, setIsShiftConfirmOpen] = useState(false);
@@ -475,6 +479,7 @@ export default function POS() {
           }
           setOrderToSettle(null); 
           setPreviewOrder(finalOrder); 
+          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
           setPrintModalOpen(true);
           showToast("Payment completed successfully.", "SUCCESS");
       } catch (e) {
@@ -485,11 +490,11 @@ export default function POS() {
       }
   };
 
-  const generateReceiptHtml = (order: Order, isAutoPrint = false) => {
+  const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
     const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
     const currency = settings.currencySymbol || store.currency || '$';
-    const paperSize = settings.paperSize || 'thermal';
+    const paperSize = paperSizeOverride || settings.paperSize || 'thermal';
     
     let width = '300px'; 
     let pageSize = '80mm auto';
@@ -603,7 +608,7 @@ export default function POS() {
 
   const handlePrintFinal = () => {
     if (!previewOrder) return;
-    const html = generateReceiptHtml(previewOrder, true);
+    const html = generateReceiptHtml(previewOrder, true, previewPaperSize);
     const printWindow = window.open('', '_blank', 'width=600,height=800');
     if (printWindow) { printWindow.document.write(html); printWindow.document.close(); }
     else alert("Pop-up blocked. Please allow pop-ups to print receipts.");
@@ -612,13 +617,12 @@ export default function POS() {
   const handleSaveAsJpg = async () => {
       if (!previewOrder || !exportRef.current || !store) return;
       try {
-          const settings = store.printSettings || { paperSize: 'thermal' };
-          const paperSize = settings.paperSize || 'thermal';
+          const paperSize = previewPaperSize;
           let width = '320px';
           if (paperSize === 'a4' || paperSize === 'letter') width = '800px';
           else if (paperSize === 'a5') width = '500px';
 
-          const rawHtml = generateReceiptHtml(previewOrder, false);
+          const rawHtml = generateReceiptHtml(previewOrder, false, previewPaperSize);
           const styleMatch = rawHtml.match(/<style[^>]*>([\s\S]*)<\/style>/i);
           const bodyMatch = rawHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
           
@@ -652,12 +656,13 @@ export default function POS() {
       }
   };
 
-  const previewHtml = useMemo(() => { if (previewOrder) return generateReceiptHtml(previewOrder, false); return ''; }, [previewOrder, store, users]);
+  const previewHtml = useMemo(() => { 
+    if (previewOrder) return generateReceiptHtml(previewOrder, false, previewPaperSize); 
+    return ''; 
+  }, [previewOrder, store, users, previewPaperSize]);
   
   const getIframeWidth = () => {
-    if (!store) return '400px';
-    const settings = store.printSettings || { paperSize: 'thermal' };
-    const paperSize = settings.paperSize || 'thermal';
+    const paperSize = previewPaperSize;
     if (paperSize === 'a4' || paperSize === 'letter') return '650px';
     if (paperSize === 'a5') return '500px';
     return '320px'; // thermal width
@@ -926,7 +931,7 @@ export default function POS() {
                                               <h3 className="font-black text-orange-600 text-base tracking-tighter uppercase leading-none">#{order.orderNumber}</h3>
                                               <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{new Date(order.createdAt).toLocaleTimeString()}</p>
                                           </div>
-                                          <span className="text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest">ON HOLD</span>
+                                          <span className={`text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest`}>ON HOLD</span>
                                       </div>
                                       <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
                                       <div className="mt-auto flex gap-2">
@@ -956,7 +961,7 @@ export default function POS() {
                                               <td className="p-3 text-[11px] font-bold dark:text-gray-400 truncate max-w-[150px] uppercase">{order.customerName || `Walk-in`}</td>
                                               <td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
                                               <td className="p-3 text-right">
-                                                  <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button>
+                                                  <button onClick={() => {setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button>
                                               </td>
                                           </tr>
                                       ))}
@@ -1283,15 +1288,32 @@ export default function POS() {
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center">
-                      <h2 className="text-xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">
-                        <Printer size={24} className="text-blue-600"/> Ticket Preview: #{previewOrder.orderNumber}
-                      </h2>
+                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                      <div className="flex items-center gap-4">
+                        <Printer size={24} className="text-blue-600"/>
+                        <div>
+                            <h2 className="text-xl font-black dark:text-white uppercase tracking-tighter leading-none">Ticket Preview: #{previewOrder.orderNumber}</h2>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Format: {previewPaperSize.toUpperCase()}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1 rounded-xl border dark:border-gray-700 shadow-sm">
+                          {(['thermal', 'a4', 'a5', 'letter'] as const).map((size) => (
+                              <button
+                                  key={size}
+                                  onClick={() => setPreviewPaperSize(size)}
+                                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${previewPaperSize === size ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                              >
+                                  {size}
+                              </button>
+                          ))}
+                      </div>
+
                       <button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button>
                   </div>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto custom-scrollbar">
-                      <div className="bg-white shadow-2xl h-fit rounded p-1 border">
-                          <iframe srcDoc={previewHtml} className="w-full h-[1000px] border-none" style={{width: getIframeWidth()}} title="Receipt Preview" />
+                      <div className="bg-white shadow-2xl h-fit rounded p-1 border animate-in zoom-in-95 duration-300">
+                          <iframe srcDoc={previewHtml} className="w-full h-[1000px] border-none transition-all duration-300" style={{width: getIframeWidth()}} title="Receipt Preview" />
                       </div>
                   </div>
                   <div className="p-6 border-t dark:border-gray-700 flex flex-wrap justify-end gap-3 bg-white dark:bg-gray-900">
@@ -1299,7 +1321,7 @@ export default function POS() {
                       <button onClick={handleSaveAsJpg} className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 transition-all">
                           <FileImage size={18}/> Save to Media
                       </button>
-                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-600/30 hover:bg-blue-700 transition-all active:scale-95">
+                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
                           Execute Print
                       </button>
                   </div>
