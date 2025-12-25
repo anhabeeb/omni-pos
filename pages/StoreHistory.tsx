@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
@@ -11,9 +10,7 @@ import {
   AlertTriangle, CreditCard, Lock, Unlock, PauseCircle, Download, FileImage,
   Layers, CreditCard as PaymentIcon, Hash, User as UserIcon,
   Trash,
-  // Fix: Renamed History to HistoryIcon to avoid conflict with browser History API
   History as HistoryIcon,
-  // Fix: Added missing Eye icon import
   Eye
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
@@ -51,9 +48,9 @@ export default function StoreHistory() {
   const [refundReason, setRefundReason] = useState('');
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
-  const [previewOrder, setPreviewOrder] = useState<Partial<Order> | null>(null);
+  const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
   const [previewShift, setPreviewShift] = useState<RegisterShift | null>(null); 
-  const [previewPaperSize, setPreviewPaperSize] = useState<'thermal'|'a4'|'a5'|'letter'>('thermal');
+  const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
 
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -219,19 +216,19 @@ export default function StoreHistory() {
     }
   };
 
-  const generateReceiptHtml = (order: Partial<Order>, paperSize: string, allUsers: User[], isAutoPrint = false) => {
+  const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
-    const settings: PrintSettings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
+    const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
     const currency = settings.currencySymbol || store.currency || '$';
-    const paperSizeKey = paperSize || settings.paperSize || 'thermal';
+    const paperSize = paperSizeOverride || settings.paperSize || 'thermal';
     
-    let width = '300px';
+    let width = '300px'; 
     let pageSize = '80mm auto';
-    if (paperSizeKey === 'a4') { width = '210mm'; pageSize = 'A4'; }
-    if (paperSizeKey === 'a5') { width = '148mm'; pageSize = 'A5'; }
-    if (paperSizeKey === 'letter') { width = '8.5in'; pageSize = 'letter'; }
-
-    const itemsHtml = settings.showItems !== false ? order.items?.map(item => {
+    if (paperSize === 'a4') { width = '210mm'; pageSize = 'A4'; }
+    if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
+    if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
+    
+    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -249,7 +246,7 @@ export default function StoreHistory() {
             </tr>
         `;
     }).join('') : '';
-
+    
     const headerAlignment = settings.headerAlignment || 'center';
     const footerAlignment = settings.footerAlignment || 'center';
     const logoAlignment = settings.logoPosition || 'center';
@@ -276,10 +273,10 @@ export default function StoreHistory() {
         <div style="display: grid; grid-template-cols: 1fr 1fr; gap: 10px; text-align: left; font-size: 11px; margin-top: 15px; border-top: 1px solid #000; padding-top: 10px; margin-bottom: 10px;">
             <div>
                 ${settings.showOrderNumber !== false ? `<div><strong>ORDER:</strong> #${order.orderNumber}</div>` : ''}
-                ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt || Date.now()).toLocaleDateString()}</div>` : ''}
+                ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleDateString()}</div>` : ''}
             </div>
             <div style="text-align: right;">
-                ${settings.showCashierName ? `<div><strong>BY:</strong> ${allUsers.find(u => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
+                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find(u => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
                 ${settings.showCustomerDetails && order.tableNumber ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
             </div>
         </div>
@@ -300,17 +297,25 @@ export default function StoreHistory() {
     ` : '';
 
     return `
-    <!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>
-        @media print { body { margin: 0; padding: 20px; } @page { size: ${pageSize}; margin: 0; } } 
-        body { font-family: ${paperSizeKey === 'thermal' ? 'monospace' : 'sans-serif'}; font-size: 12px; width: ${width}; margin: 0 auto; padding: 20px; color: #000; background: #fff; line-height: 1.4; box-sizing: border-box; } 
-        .header { text-align: ${headerAlignment}; margin-bottom: 20px; } 
-        .totals { margin-top: 20px; } 
-        .total-row { font-weight: bold; font-size: 1.3em; border-top: 2px solid #000; padding-top: 8px; margin-top: 8px; } 
-        table { width: 100%; border-collapse: collapse; } 
-        th { text-align: left; border-bottom: 1px solid #000; padding-bottom: 4px; font-size: 10px; } 
-        .footer { text-align: ${footerAlignment}; margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; font-style: italic; }
-    </style>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @media print { body { margin: 0; padding: 20px; } @page { size: ${pageSize}; margin: 0; } } 
+            body { 
+                font-family: ${paperSize === 'thermal' ? 'monospace' : 'sans-serif'}; 
+                font-size: ${settings.fontSize === 'small' ? '10px' : settings.fontSize === 'large' ? '14px' : '12px'}; 
+                width: ${width}; margin: 0 auto; padding: 20px; color: #000; background: #fff; line-height: 1.4; box-sizing: border-box; 
+            } 
+            .header { text-align: ${headerAlignment}; margin-bottom: 20px; } 
+            .totals { margin-top: 20px; } 
+            .total-row { font-weight: bold; font-size: 1.3em; border-top: 2px solid #000; padding-top: 8px; margin-top: 8px; } 
+            table { width: 100%; border-collapse: collapse; } 
+            th { text-align: left; border-bottom: 1px solid #000; padding-bottom: 4px; font-size: 10px; } 
+            td { padding: 4px 0; } 
+            .footer { text-align: ${footerAlignment}; margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; font-style: italic; }
+        </style>
     </head>
     <body ${isAutoPrint ? 'onload="window.print(); window.close();"' : ''}>
         <div class="header">${logoBlock}${storeDetailsBlock}${taxIdBlock}</div>
@@ -318,35 +323,90 @@ export default function StoreHistory() {
         <table style="margin-top: 10px;"><thead><tr><th>DESCRIPTION</th>${settings.showAmount !== false ? '<th align="right">AMOUNT</th>' : ''}</tr></thead>
         <tbody>${itemsHtml}</tbody></table>
         <div class="totals">
-            ${settings.showSubtotal !== false ? `<div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${currency}${order.subtotal?.toFixed(2)}</span></div>` : ''}
+            ${settings.showSubtotal !== false ? `<div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${currency}${order.subtotal.toFixed(2)}</span></div>` : ''}
             ${discountBlock}
-            ${order.total !== undefined ? `<div style="display: flex; justify-content: space-between;" class="total-row"><span>TOTAL:</span><span>${currency}${order.total?.toFixed(2)}</span></div>` : ''}
+            ${settings.showTotal !== false ? `<div style="display: flex; justify-content: space-between;" class="total-row"><span>TOTAL:</span><span>${currency}${order.total.toFixed(2)}</span></div>` : ''}
         </div>
         <div class="footer">${settings.footerText || 'Thank you!'}</div>
-    </body></html>`;
+    </body>
+    </html>`;
   };
 
   const handlePrint = (order: Order) => {
     setPreviewOrder(order);
     setPreviewShift(null);
+    setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
     setPrintModalOpen(true);
   };
 
   const finalPrint = () => {
-    if (!previewOrder && !previewShift) return;
-    let html = '';
-    if (previewOrder) html = generateReceiptHtml(previewOrder as Order, previewPaperSize, users, true);
-    // Add logic for shift printing if needed
+    if (!previewOrder) return;
+    const html = generateReceiptHtml(previewOrder, true, previewPaperSize);
     const printWindow = window.open('', '_blank', 'width=600,height=800');
     if (printWindow) { printWindow.document.write(html); printWindow.document.close(); }
+    else alert("Pop-up blocked. Please allow pop-ups to print receipts.");
   };
+
+  const handleSaveAsJpg = async () => {
+    if (!previewOrder || !exportRef.current || !store) return;
+    try {
+        const paperSize = previewPaperSize;
+        let width = '320px';
+        if (paperSize === 'a4' || paperSize === 'letter') width = '800px';
+        else if (paperSize === 'a5') width = '500px';
+
+        const rawHtml = generateReceiptHtml(previewOrder, false, previewPaperSize);
+        const styleMatch = rawHtml.match(/<style[^>]*>([\s\S]*)<\/style>/i);
+        const bodyMatch = rawHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        
+        let css = styleMatch ? styleMatch[1] : '';
+        css = css.replace(/\bbody\b/g, '.capture-root');
+        const bodyContent = bodyMatch ? bodyMatch[1] : rawHtml;
+
+        exportRef.current.style.width = width;
+        exportRef.current.innerHTML = `<style>${css}</style><div class="capture-root" style="background:white; color:black; padding:20px; min-height:100%; box-sizing:border-box;">${bodyContent}</div>`;
+        
+        await new Promise(r => setTimeout(r, 400));
+        await document.fonts.ready;
+
+        const dataUrl = await toJpeg(exportRef.current, { 
+            quality: 0.98, 
+            backgroundColor: 'white',
+            cacheBust: true,
+            pixelRatio: 2
+        });
+
+        const link = document.createElement('a');
+        link.download = `receipt-${previewOrder.orderNumber}.jpg`;
+        link.href = dataUrl;
+        link.click();
+        
+        exportRef.current.innerHTML = '';
+    } catch (err) {
+        console.error(err);
+        alert("Failed to save image");
+    }
+  };
+
+  const getIframeWidth = () => {
+    const paperSize = previewPaperSize;
+    if (paperSize === 'a4' || paperSize === 'letter') return '650px';
+    if (paperSize === 'a5') return '500px';
+    return '320px'; // thermal width
+  };
+
+  const previewHtml = useMemo(() => { 
+    if (previewOrder) return generateReceiptHtml(previewOrder, false, previewPaperSize); 
+    return ''; 
+  }, [previewOrder, store, users, previewPaperSize]);
 
   return (
     <div className="space-y-6">
+      <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            {/* Fix: Used HistoryIcon instead of History to avoid name conflict */}
             <HistoryIcon className="text-blue-600" /> Store History
           </h1>
           <p className="text-gray-500 dark:text-gray-400">{store?.name} Records</p>
@@ -419,7 +479,6 @@ export default function StoreHistory() {
                                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${s.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
                                 </td>
                                 <td className="p-4 text-right">
-                                    {/* Fix: Used Eye icon here */}
                                     <button onClick={() => setViewShift(s)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Eye size={18}/></button>
                                 </td>
                             </tr>
@@ -456,7 +515,6 @@ export default function StoreHistory() {
                                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : o.status === OrderStatus.CANCELLED ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{o.status}</span>
                                 </td>
                                 <td className="p-4 text-right space-x-1">
-                                    {/* Fix: Used Eye icon here */}
                                     <button onClick={() => setViewOrder(o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Eye size={16}/></button>
                                     <button onClick={() => handlePrint(o)} className="p-2 text-gray-400 hover:text-blue-600"><Printer size={16}/></button>
                                     {o.status === OrderStatus.COMPLETED && hasPermission('POS_REFUND') && (
@@ -538,22 +596,46 @@ export default function StoreHistory() {
           </div>
       )}
 
-      {/* Print Preview Modal */}
+      {/* Print Preview Modal - HIGH FIDELITY VERSION MATCHING POS Terminal */}
       {printModalOpen && previewOrder && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[90vh]">
-                  <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-                      <h3 className="font-bold dark:text-white flex items-center gap-2"><Printer size={18}/> Receipt Preview</h3>
-                      <button onClick={() => setPrintModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                      <div className="flex items-center gap-4">
+                        <Printer size={24} className="text-blue-600"/>
+                        <div>
+                            <h2 className="text-xl font-black dark:text-white uppercase tracking-tighter leading-none">Ticket Preview: #{previewOrder.orderNumber}</h2>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Format: {previewPaperSize.toUpperCase()}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1 rounded-xl border dark:border-gray-700 shadow-sm">
+                          {(['thermal', 'a4', 'a5', 'letter'] as const).map((size) => (
+                              <button
+                                  key={size}
+                                  onClick={() => setPreviewPaperSize(size)}
+                                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${previewPaperSize === size ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                              >
+                                  {size}
+                              </button>
+                          ))}
+                      </div>
+
+                      <button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button>
                   </div>
-                  <div className="flex-1 overflow-auto bg-gray-100 dark:bg-gray-950 p-8 flex justify-center">
-                    <div className="bg-white shadow-lg p-8" style={{ width: '400px' }}>
-                        <iframe srcDoc={generateReceiptHtml(previewOrder, previewPaperSize, users, false)} className="w-full h-[600px] border-none" title="Print Frame" />
-                    </div>
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto custom-scrollbar">
+                      <div className="bg-white shadow-2xl h-fit rounded p-1 border animate-in zoom-in-95 duration-300">
+                          <iframe srcDoc={previewHtml} className="w-full h-[1000px] border-none transition-all duration-300" style={{width: getIframeWidth()}} title="Receipt Preview" />
+                      </div>
                   </div>
-                  <div className="p-4 border-t dark:border-gray-700 flex justify-end gap-3">
-                      <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 text-sm font-bold dark:text-white">Cancel</button>
-                      <button onClick={finalPrint} className="px-10 py-2 bg-blue-600 text-white rounded-lg font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all">Print</button>
+                  <div className="p-6 border-t dark:border-gray-700 flex flex-wrap justify-end gap-3 bg-white dark:bg-gray-900">
+                      <button onClick={() => setPrintModalOpen(false)} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 dark:text-gray-400">Close</button>
+                      <button onClick={handleSaveAsJpg} className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 transition-all">
+                          <FileImage size={18}/> Save to Media
+                      </button>
+                      <button onClick={finalPrint} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
+                          Execute Print
+                      </button>
                   </div>
               </div>
           </div>
