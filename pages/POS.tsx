@@ -1,29 +1,23 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
-import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User, Permission } from '../types';
+import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
-  Search, Trash2, Plus, Minus, CreditCard, Banknote, 
-  X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
-  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play, StickyNote,
+  Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
+  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play,
   Maximize2,
   Hash,
   FileImage,
   Percent,
   MapPin,
   Loader2,
-  Activity,
   Tag,
-  UserSquare,
-  LogOut,
-  LayoutDashboard,
-  ChevronDown,
   ArrowRight,
   Split,
   User as UserIcon,
-  Building2,
-  FileText
+  // Fix: Added missing Banknote and CreditCard icon imports
+  Banknote,
+  CreditCard
 } from 'lucide-react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useNavigate } from 'react-router-dom';
@@ -203,14 +197,14 @@ export default function POS() {
       setNextOrderNum(orderNum);
       setShift(activeShift || null);
 
-      setActiveOrders(allOrders.filter(o => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a,b) => b.createdAt - a.createdAt));
-      setHeldOrders(allOrders.filter(o => o.status === OrderStatus.ON_HOLD).sort((a,b) => b.createdAt - a.createdAt));
+      setActiveOrders(allOrders.filter((o: Order) => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setHeldOrders(allOrders.filter((o: Order) => o.status === OrderStatus.ON_HOLD).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       
       const history = activeShift 
-        ? allOrders.filter(o => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
-        : allOrders.filter(o => o.status === OrderStatus.COMPLETED).slice(-20);
+        ? allOrders.filter((o: Order) => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
+        : allOrders.filter((o: Order) => o.status === OrderStatus.COMPLETED).slice(-20);
       
-      setHistoryOrders(history.sort((a,b) => b.createdAt - a.createdAt));
+      setHistoryOrders(history.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
   };
 
   const addToCart = (product: Product) => {
@@ -358,7 +352,7 @@ export default function POS() {
   };
 
   const totals = useMemo(() => {
-      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const subtotal = cart.reduce((sum: number, item: OrderItem) => sum + (item.price * item.quantity), 0);
       const dPercent = discountPercent || 0;
       const discountAmount = (subtotal * dPercent) / 100;
       const subtotalAfterDiscount = subtotal - discountAmount;
@@ -779,7 +773,7 @@ export default function POS() {
                       className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
                       style={{ height: `${4 * menuScale}rem` }}
                   >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={20 * menuScale}/>}
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={product.name} /> : <Utensils size={20 * menuScale}/>}
                       <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
                           <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
                             <Plus size={14}/>
@@ -907,7 +901,7 @@ export default function POS() {
                                       </div>
                                       <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
                                       <div className="space-y-1 mb-4 flex-1">
-                                          {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
+                                          {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
                                       </div>
                                       <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
@@ -1526,7 +1520,7 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
                               <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (
