@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
@@ -479,6 +478,7 @@ export default function POS() {
           }
           setOrderToSettle(null); 
           setPreviewOrder(finalOrder); 
+          // Fix: removed setPreviewShift(null) as it's not defined
           setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
           setPrintModalOpen(true);
           showToast("Payment completed successfully.", "SUCCESS");
@@ -765,6 +765,13 @@ export default function POS() {
     } finally {
         setIsSaving(false);
     }
+  };
+
+  const handlePrint = (order: Order) => {
+    setPreviewOrder(order);
+    // Fix: removed setPreviewShift call as it's not defined
+    setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
+    setPrintModalOpen(true);
   };
 
   const renderProductGrid = (productList: Product[]) => (

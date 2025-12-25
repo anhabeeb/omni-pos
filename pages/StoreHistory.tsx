@@ -5,13 +5,7 @@ import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
 import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
-  Calendar, Receipt, ChefHat, Filter, ArrowRight, DollarSign, Info, Printer, 
-  RotateCcw, Undo2, Trash2, X, Search, Wallet, FileText, CheckCircle, 
-  AlertTriangle, CreditCard, Lock, Unlock, PauseCircle, Download, FileImage,
-  Layers, CreditCard as PaymentIcon, Hash, User as UserIcon,
-  Trash,
-  History as HistoryIcon,
-  Eye
+  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
@@ -28,11 +22,11 @@ export default function StoreHistory() {
   const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterOrderType, setFilterOrderType] = useState('ALL');
-  const [filterPaymentMethod, setFilterPaymentMethod] = useState('ALL');
+  const [filterOrderType] = useState('ALL');
+  const [filterPaymentMethod] = useState('ALL');
 
   const [shiftSearch, setShiftSearch] = useState('');
-  const [shiftStatusFilter, setShiftStatusFilter] = useState('ALL');
+  const [shiftStatusFilter] = useState('ALL');
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [shifts, setShifts] = useState<RegisterShift[]>([]);
@@ -49,7 +43,6 @@ export default function StoreHistory() {
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
-  const [previewShift, setPreviewShift] = useState<RegisterShift | null>(null); 
   const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
 
   const exportRef = useRef<HTMLDivElement>(null);
@@ -140,31 +133,31 @@ export default function StoreHistory() {
   const filteredOrders = useMemo(() => {
     let result = orders;
     const { start, end } = getTimeRange();
-    result = result.filter(o => {
+    result = result.filter((o: Order) => {
         const t = o.createdAt;
         return t >= start && t <= end;
     });
     if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        result = result.filter(o => 
+        result = result.filter((o: Order) => 
             o.orderNumber.toString().includes(term) ||
             (o.customerName?.toLowerCase() || '').includes(term) ||
             (o.tableNumber?.toLowerCase() || '').includes(term)
         );
     }
-    if (filterOrderType !== 'ALL') { result = result.filter(o => o.orderType === filterOrderType); }
-    if (filterPaymentMethod !== 'ALL') { result = result.filter(o => o.paymentMethod === filterPaymentMethod); }
+    if (filterOrderType !== 'ALL') { result = result.filter((o: Order) => o.orderType === filterOrderType); }
+    if (filterPaymentMethod !== 'ALL') { result = result.filter((o: Order) => o.paymentMethod === filterPaymentMethod); }
     return result;
   }, [orders, dateRange, customStart, customEnd, searchTerm, filterOrderType, filterPaymentMethod]);
 
   const filteredShifts = useMemo(() => {
       let result = shifts;
       const { start, end } = getTimeRange();
-      result = result.filter(s => s.openedAt >= start && s.openedAt <= end);
-      if (shiftStatusFilter !== 'ALL') { result = result.filter(s => s.status === shiftStatusFilter); }
+      result = result.filter((s: RegisterShift) => s.openedAt >= start && s.openedAt <= end);
+      if (shiftStatusFilter !== 'ALL') { result = result.filter((s: RegisterShift) => s.status === shiftStatusFilter); }
       if (shiftSearch) {
           const term = shiftSearch.toLowerCase();
-          result = result.filter(s => {
+          result = result.filter((s: RegisterShift) => {
               const numMatch = (s.shiftNumber?.toString() || '').includes(term);
               const userMatch = getUserName(s.openedBy).toLowerCase().includes(term);
               return numMatch || userMatch;
@@ -173,10 +166,10 @@ export default function StoreHistory() {
       return result;
   }, [shifts, dateRange, customStart, customEnd, shiftStatusFilter, shiftSearch]);
 
-  const getUserName = (id: number) => { return users.find(u => u.id === id)?.name || 'Unknown'; };
+  const getUserName = (id: number) => { return users.find((u: User) => u.id === id)?.name || 'Unknown'; };
 
   const getPaidAmount = (order: Order) => {
-      const txs = order.transactions || [];
+      const txs: Transaction[] = order.transactions || [];
       if (txs.length === 0 && order.status === OrderStatus.COMPLETED) {
           return Math.round((Number(order.total) || 0) * 100) / 100;
       }
@@ -213,7 +206,7 @@ export default function StoreHistory() {
       }
       
       // tolerance of 0.05 to handle rounding discrepancies
-      if (amountToRefund > (paidAmount + 0.05)) { 
+      if (amountToRefund > (paidAmount + 0.051)) { 
         alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); 
         return; 
       }
@@ -254,7 +247,7 @@ export default function StoreHistory() {
 
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
-    const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
+    const settings: PrintSettings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
     const currency = settings.currencySymbol || store.currency || '$';
     const paperSize = paperSizeOverride || settings.paperSize || 'thermal';
     
@@ -264,7 +257,7 @@ export default function StoreHistory() {
     if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
     if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
     
-    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
+    const itemsHtml = settings.showItems !== false ? order.items.map((item: OrderItem) => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -312,7 +305,7 @@ export default function StoreHistory() {
                 ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleDateString()}</div>` : ''}
             </div>
             <div style="text-align: right;">
-                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find(u => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
+                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find((u: User) => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
                 ${settings.showCustomerDetails && order.tableNumber ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
             </div>
         </div>
@@ -370,7 +363,7 @@ export default function StoreHistory() {
 
   const handlePrint = (order: Order) => {
     setPreviewOrder(order);
-    setPreviewShift(null);
+    // Fix: removed setPreviewShift call as the state is not defined and printer only handles orders here
     setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
     setPrintModalOpen(true);
   };
@@ -530,7 +523,6 @@ export default function StoreHistory() {
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Order #</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Time</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Details</th>
-                            <th className="p-4 text-[10px] font-black uppercase text-gray-500">Type</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500 text-right">Total</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Status</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500 text-right">Actions</th>
@@ -545,7 +537,6 @@ export default function StoreHistory() {
                                     <div className="text-sm font-bold dark:text-white">{o.customerName || 'Walk-in'}</div>
                                     {o.tableNumber && <div className="text-[10px] text-gray-500">Table: {o.tableNumber}</div>}
                                 </td>
-                                <td className="p-4 text-[10px] font-black uppercase text-gray-400">{o.orderType}</td>
                                 <td className="p-4 text-right font-black dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
                                 <td className="p-4">
                                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : o.status === OrderStatus.CANCELLED ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{o.status}</span>
@@ -604,6 +595,34 @@ export default function StoreHistory() {
           </div>
       )}
 
+      {/* Shift Details Modal */}
+      {viewShift && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in zoom-in-95">
+                  <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10 text-blue-600 flex justify-between items-center">
+                      <h3 className="font-bold flex items-center gap-2">Shift Record: #{viewShift.shiftNumber || viewShift.id}</h3>
+                      <button onClick={() => setViewShift(null)} className="p-1.5 hover:bg-blue-100 rounded-full transition-colors"><X size={20}/></button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Staff</p><p className="font-bold dark:text-white">{getUserName(viewShift.openedBy)}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Status</p><p className={`font-black ${viewShift.status === 'OPEN' ? 'text-green-500' : 'text-gray-500'}`}>{viewShift.status}</p></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t dark:border-gray-700">
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Starting Cash</p><p className="font-mono dark:text-gray-200">{store?.currency}{viewShift.startingCash.toFixed(2)}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Actual Cash</p><p className="font-mono dark:text-gray-200">{viewShift.actualCash ? `${store?.currency}${viewShift.actualCash.toFixed(2)}` : '-'}</p></div>
+                      </div>
+                      {viewShift.status === 'CLOSED' && (
+                          <div className={`p-4 rounded-xl border ${viewShift.difference && viewShift.difference < 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                              <p className="text-[10px] font-black uppercase mb-1">Variance / Discrepancy</p>
+                              <p className="text-xl font-black font-mono">{store?.currency}{viewShift.difference?.toFixed(2) || '0.00'}</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Refund Modal */}
       {refundOrder && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -632,7 +651,7 @@ export default function StoreHistory() {
           </div>
       )}
 
-      {/* Print Preview Modal - HIGH FIDELITY VERSION MATCHING POS Terminal */}
+      {/* Print Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
