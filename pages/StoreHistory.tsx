@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
@@ -176,32 +177,75 @@ export default function StoreHistory() {
   const getUserName = (id: number) => { return users.find(u => u.id === id)?.name || 'Unknown'; };
 
   const getPaidAmount = (order: Order) => {
-      return order.transactions?.reduce((acc, t) => {
+      // Robust detection: if order is completed but has no transaction history (legacy data), 
+      // assume it was paid in full to allow refunds.
+      const txs = order.transactions || [];
+      if (txs.length === 0 && order.status === OrderStatus.COMPLETED) {
+          return Math.round((order.total || 0) * 100) / 100;
+      }
+
+      const amount = txs.reduce((acc, t) => {
           if (t.type === 'PAYMENT') return acc + t.amount;
-          if (t.type === 'REVERSAL') return acc - t.amount;
+          if (t.type === 'REVERSAL' || t.type === 'REFUND' || t.type === 'CANCELLATION') return acc - t.amount;
           return acc;
-      }, 0) || 0;
+      }, 0);
+
+      // Round to 2 decimals to handle floating point precision
+      return Math.round(amount * 100) / 100;
   };
 
   const openRefundModal = (order: Order) => {
       setRefundOrder(order);
       setRefundMode('FULL');
-      setRefundAmount(order.total.toFixed(2));
+      // For Full Refund, we set it to exactly what the calculated paid amount is
+      const paid = getPaidAmount(order);
+      setRefundAmount(paid.toFixed(2));
       setRefundReason('');
   };
 
   const handleProcessRefund = async () => {
       if (!activeStoreId || !user || !refundOrder) return;
-      const amountToRefund = parseFloat(refundAmount);
+      
       const paidAmount = getPaidAmount(refundOrder);
-      if (isNaN(amountToRefund) || amountToRefund <= 0) { alert("Please enter a valid refund amount."); return; }
-      if (amountToRefund > paidAmount) { alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); return; }
+      
+      // CRITICAL FIX: If full refund is selected, ignore UI string to avoid rounding mismatches
+      const amountToRefund = refundMode === 'FULL' 
+        ? paidAmount 
+        : Math.round((parseFloat(refundAmount) || 0) * 100) / 100;
+      
+      if (isNaN(amountToRefund) || amountToRefund <= 0) { 
+        alert("Please enter a valid refund amount."); 
+        return; 
+      }
+      
+      // Use EPSILON (0.01) for comparison to handle rounding differences in the DB
+      // Standard currency logic: allow up to 1 cent discrepancy
+      if (amountToRefund > (paidAmount + 0.0101)) { 
+        alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); 
+        return; 
+      }
+
       const transaction: Transaction = {
-          id: uuid(), type: 'REVERSAL', amount: amountToRefund, timestamp: Date.now(), performedBy: user.id, note: `Refund (${refundMode}): ${refundReason}`
+          id: uuid(), 
+          type: 'REVERSAL', 
+          amount: amountToRefund, 
+          timestamp: Date.now(), 
+          performedBy: user.id, 
+          note: `Refund (${refundMode}): ${refundReason}`
       };
+
       let newStatus = refundOrder.status;
-      if (refundMode === 'FULL' || (paidAmount - amountToRefund) <= 0.01) { newStatus = OrderStatus.RETURNED; }
-      const updatedOrder: Order = { ...refundOrder, status: newStatus, transactions: [...(refundOrder.transactions || []), transaction] };
+      // If the remaining balance is tiny (rounding margin), treat as full return
+      if (refundMode === 'FULL' || Math.abs(paidAmount - amountToRefund) < 0.011) { 
+          newStatus = OrderStatus.RETURNED; 
+      }
+
+      const updatedOrder: Order = { 
+        ...refundOrder, 
+        status: newStatus, 
+        transactions: [...(refundOrder.transactions || []), transaction] 
+      };
+
       await db.updateOrder(activeStoreId, updatedOrder);
       await loadData();
       setRefundOrder(null);
@@ -579,7 +623,7 @@ export default function StoreHistory() {
                   <div className="p-6 space-y-4">
                       <p className="text-sm text-gray-500">Refunding Order <span className="font-bold text-gray-800 dark:text-white">#{refundOrder.orderNumber}</span> for <span className="font-black text-blue-600">{store?.currency}{refundOrder.total.toFixed(2)}</span>.</p>
                       <div className="flex gap-2 p-1 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                          <button onClick={() => {setRefundMode('FULL'); setRefundAmount(refundOrder.total.toFixed(2));}} className={`flex-1 py-2 text-xs font-bold rounded-md ${refundMode === 'FULL' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-400'}`}>Full Refund</button>
+                          <button onClick={() => {setRefundMode('FULL'); const paid = getPaidAmount(refundOrder); setRefundAmount(paid.toFixed(2));}} className={`flex-1 py-2 text-xs font-bold rounded-md ${refundMode === 'FULL' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-400'}`}>Full Refund</button>
                           <button onClick={() => setRefundMode('PARTIAL')} className={`flex-1 py-2 text-xs font-bold rounded-md ${refundMode === 'PARTIAL' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-400'}`}>Partial</button>
                       </div>
                       <div className="space-y-1">

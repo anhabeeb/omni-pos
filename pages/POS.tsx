@@ -360,14 +360,14 @@ export default function POS() {
   const totals = useMemo(() => {
       const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const dPercent = discountPercent || 0;
-      const discountAmount = (subtotal * dPercent) / 100;
+      const discountAmount = Math.round(((subtotal * dPercent) / 100) * 100) / 100;
       const subtotalAfterDiscount = subtotal - discountAmount;
       
       const taxRate = store?.taxRate || 0;
       const serviceChargeRate = store?.serviceChargeRate || 0;
       
-      const serviceCharge = (orderType === OrderType.DINE_IN) ? (subtotalAfterDiscount * serviceChargeRate) / 100 : 0;
-      const tax = ((subtotalAfterDiscount + serviceCharge) * taxRate) / 100;
+      const serviceCharge = (orderType === OrderType.DINE_IN) ? Math.round(((subtotalAfterDiscount * serviceChargeRate) / 100) * 100) / 100 : 0;
+      const tax = Math.round((((subtotalAfterDiscount + serviceCharge) * taxRate) / 100) * 100) / 100;
       
       return { 
           subtotal, 
@@ -375,7 +375,7 @@ export default function POS() {
           subtotalAfterDiscount,
           tax, 
           serviceCharge, 
-          total: subtotalAfterDiscount + tax + serviceCharge 
+          total: Math.round((subtotalAfterDiscount + tax + serviceCharge) * 100) / 100 
       };
   }, [cart, store, orderType, discountPercent]);
 
