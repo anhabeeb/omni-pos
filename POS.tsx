@@ -1,31 +1,24 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
-import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User, Permission } from '../types';
+import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
-  Search, Trash2, Plus, Minus, CreditCard, Banknote, 
-  X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
-  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play, StickyNote,
+  Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
+  ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play,
   Maximize2,
   Hash,
   FileImage,
   Percent,
   MapPin,
   Loader2,
-  Activity,
   Tag,
-  UserSquare,
-  LogOut,
-  LayoutDashboard,
-  ChevronDown,
   ArrowRight,
   Split,
   User as UserIcon,
-  Building2,
-  FileText
+  Banknote,
+  CreditCard
 } from 'lucide-react';
-// @ts-ignore - Fixing missing member errors in react-router-dom
+// @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 
@@ -77,11 +70,10 @@ export default function POS() {
   // Split Payment State
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [splitPayment1, setSplitPayment1] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string }>({ method: 'CASH', amount: '' });
-  const [splitPayment2, setSplitPayment2] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string }>({ method: 'CARD', amount: '' });
+  const [splitPayment2, setSplitPayment2] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string }>({ method: 'CASH', amount: '' });
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
-  // State for paper size selector in preview
   const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
   
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -96,7 +88,6 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Fix: Added missing formatAddress helper function
   const formatAddress = (c: Customer) => {
     if (c.type === 'INDIVIDUAL') {
         return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
@@ -193,43 +184,43 @@ export default function POS() {
           db.getNextOrderNumber(currentStoreId)
       ]);
 
-      const s = sList.find(st => st.id === currentStoreId);
+      const s = sList.find((st: Store) => st.id === currentStoreId);
       setStores(sList);
       setStore(s || null);
-      setProducts(pList.filter(p => p.isAvailable));
-      setCategories(cList.sort((a,b) => (a.orderId || 0) - (b.orderId || 0)));
+      setProducts(pList.filter((p: Product) => p.isAvailable));
+      setCategories(cList.sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
       setCustomers(custs);
       setUsers(uList);
       setNextOrderNum(orderNum);
       setShift(activeShift || null);
 
-      setActiveOrders(allOrders.filter(o => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a,b) => b.createdAt - a.createdAt));
-      setHeldOrders(allOrders.filter(o => o.status === OrderStatus.ON_HOLD).sort((a,b) => b.createdAt - a.createdAt));
+      setActiveOrders(allOrders.filter((o: Order) => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setHeldOrders(allOrders.filter((o: Order) => o.status === OrderStatus.ON_HOLD).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       
       const history = activeShift 
-        ? allOrders.filter(o => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
-        : allOrders.filter(o => o.status === OrderStatus.COMPLETED).slice(-20);
+        ? allOrders.filter((o: Order) => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
+        : allOrders.filter((o: Order) => o.status === OrderStatus.COMPLETED).slice(-20);
       
-      setHistoryOrders(history.sort((a,b) => b.createdAt - a.createdAt));
+      setHistoryOrders(history.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
   };
 
   const addToCart = (product: Product) => {
       if (!shift) { showToast("Register is closed. Please open shift first.", "ERROR"); setIsShiftModalOpen(true); return; }
-      setCart(prev => {
-          const existing = prev.find(item => item.productId === product.id);
-          if (existing) return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      setCart((prev: OrderItem[]) => {
+          const existing = prev.find((item: OrderItem) => item.productId === product.id);
+          if (existing) return prev.map((item: OrderItem) => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
           return [...prev, { productId: product.id, productName: product.name, price: product.price, quantity: 1 }];
       });
   };
 
   const updateQuantity = (productId: number, delta: number) => {
-      setCart(prev => prev.map(item => {
+      setCart((prev: OrderItem[]) => prev.map((item: OrderItem) => {
           if (item.productId === productId) {
               const newQty = Math.max(0, item.quantity + delta);
               return { ...item, quantity: newQty };
           }
           return item;
-      }).filter(item => item.quantity > 0));
+      }).filter((item: OrderItem) => item.quantity > 0));
   };
 
   const resetOrderUI = () => {
@@ -262,7 +253,7 @@ export default function POS() {
     if (order.tableNumber) setTableNumber(order.tableNumber);
     if (order.note) setOrderNote(order.note);
     if (order.customerName) {
-        const found = customers.find(c => c.name === order.customerName);
+        const found = customers.find((c: Customer) => c.name === order.customerName);
         if (found) { setSelectedCustomer(found); setCustomerSearch(found.name); }
         else setCustomerSearch(order.customerName);
     }
@@ -358,7 +349,7 @@ export default function POS() {
   };
 
   const totals = useMemo(() => {
-      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const subtotal = cart.reduce((sum: number, item: OrderItem) => sum + (item.price * item.quantity), 0);
       const dPercent = discountPercent || 0;
       const discountAmount = (subtotal * dPercent) / 100;
       const subtotalAfterDiscount = subtotal - discountAmount;
@@ -386,7 +377,7 @@ export default function POS() {
       setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitMode(false);
       setSplitPayment1({ method: 'CASH', amount: '' });
-      setSplitPayment2({ method: 'CARD', amount: '' });
+      setSplitPayment2({ method: 'CASH', amount: '' });
       setIsPaymentModalOpen(true);
   };
 
@@ -395,7 +386,7 @@ export default function POS() {
       setOrderToSettle(order); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
       setIsSplitMode(false);
       setSplitPayment1({ method: 'CASH', amount: '' });
-      setSplitPayment2({ method: 'CARD', amount: '' });
+      setSplitPayment2({ method: 'CASH', amount: '' });
       setIsPaymentModalOpen(true);
   };
 
@@ -502,7 +493,7 @@ export default function POS() {
     if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
     if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
     
-    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
+    const itemsHtml = settings.showItems !== false ? order.items.map((item: OrderItem) => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -550,7 +541,7 @@ export default function POS() {
                 ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleDateString()}</div>` : ''}
             </div>
             <div style="text-align: right;">
-                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find(u => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
+                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find((u: User) => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
                 ${settings.showCustomerDetails && order.tableNumber ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
             </div>
         </div>
@@ -668,7 +659,7 @@ export default function POS() {
     return '320px'; // thermal width
   };
 
-  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
+  const filteredCustomers = customers.filter((c: Customer) => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
   const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name); setShowCustomerResults(false); };
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
@@ -707,7 +698,7 @@ export default function POS() {
   };
 
   const calculateDenomTotal = () => { 
-    return DENOMINATIONS.reduce((sum, d) => {
+    return DENOMINATIONS.reduce((sum: number, d: number) => {
       const count = denominations[d] || 0;
       return sum + (d * count);
     }, 0);
@@ -769,7 +760,7 @@ export default function POS() {
 
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
-          {productList.map(product => (
+          {productList.map((product: Product) => (
               <button 
                   key={product.id} 
                   onClick={() => addToCart(product)} 
@@ -779,7 +770,7 @@ export default function POS() {
                       className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
                       style={{ height: `${4 * menuScale}rem` }}
                   >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Utensils size={20 * menuScale}/>}
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={product.name} /> : <Utensils size={20 * menuScale}/>}
                       <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
                           <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
                             <Plus size={14}/>
@@ -817,7 +808,7 @@ export default function POS() {
                     { id: 'ACTIVE', label: 'ACTIVE', count: activeOrders.length, badgeColor: 'bg-yellow-400 text-yellow-900' },
                     { id: 'HELD', label: 'HELD', count: heldOrders.length, badgeColor: 'bg-orange-500 text-white' },
                     { id: 'HISTORY', label: 'HISTORY' }
-                  ].map(tab => (
+                  ].map((tab: { id: string, label: string, count?: number, badgeColor?: string }) => (
                       <button 
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id as any)}
@@ -865,7 +856,7 @@ export default function POS() {
                               >
                                   All Items
                               </button>
-                              {categories.map(cat => (
+                              {categories.map((cat: Category) => (
                                   <button 
                                       key={cat.id}
                                       onClick={() => setSelectedCategoryId(cat.id)}
@@ -877,7 +868,7 @@ export default function POS() {
                           </div>
 
                           <div className="flex-1 pr-2 overflow-y-auto custom-scrollbar">
-                              {renderProductGrid(products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
+                              {renderProductGrid(products.filter((p: Product) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
                           </div>
                       </div>
 
@@ -896,7 +887,7 @@ export default function POS() {
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                       {activeTab === 'ACTIVE' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {activeOrders.map(order => (
+                              {activeOrders.map((order: Order) => (
                                   <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-[2rem] border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
                                       <div className="flex justify-between items-start mb-2 border-b border-gray-50 dark:border-gray-700 pb-2">
                                           <div>
@@ -907,7 +898,7 @@ export default function POS() {
                                       </div>
                                       <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
                                       <div className="space-y-1 mb-4 flex-1">
-                                          {order.items.slice(0, 3).map((it, idx) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
+                                          {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
                                       </div>
                                       <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
@@ -924,7 +915,7 @@ export default function POS() {
                           </div>
                       ) : activeTab === 'HELD' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {heldOrders.map(order => (
+                              {heldOrders.map((order: Order) => (
                                   <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
                                       <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                           <div>
@@ -954,7 +945,7 @@ export default function POS() {
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                                      {historyOrders.map(order => (
+                                      {historyOrders.map((order: Order) => (
                                           <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
@@ -992,7 +983,7 @@ export default function POS() {
               </div>
 
               <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">
-                  {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map(t => (
+                  {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (
                       <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
                           {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}
                       </button>
@@ -1008,7 +999,7 @@ export default function POS() {
                           type="text" placeholder="Find Customer..." 
                           className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" 
                           value={customerSearch} 
-                          onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
                           onFocus={() => setShowCustomerResults(true)} 
                       />
                       <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
@@ -1017,7 +1008,7 @@ export default function POS() {
                       
                       {showCustomerResults && customerSearch && !selectedCustomer && (
                           <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
-                              {filteredCustomers.map(c => (
+                              {filteredCustomers.map((c: Customer) => (
                                   <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
                                       <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name[0]}</div>
                                       <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
@@ -1034,7 +1025,7 @@ export default function POS() {
                           </div>
                           <select className="flex-1 bg-transparent text-xs font-black uppercase tracking-widest outline-none dark:text-white py-2" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
                               <option value="">Table Number</option>
-                              {Array.from({length: store?.numberOfTables || 0}, (_, i) => (i + 1).toString()).map(num => <option key={num} value={num}>Table {num}</option>)}
+                              {Array.from({length: store?.numberOfTables || 0}, (_: any, i: number) => (i + 1).toString()).map((num: string) => <option key={num} value={num}>Table {num}</option>)}
                           </select>
                       </div>
                   )}
@@ -1047,7 +1038,7 @@ export default function POS() {
                       <ShoppingBag size={64} strokeWidth={1} className="opacity-20" />
                       <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4 text-gray-300 dark:text-gray-700">Cart Empty</p>
                   </div>
-              ) : cart.map(item => (
+              ) : cart.map((item: OrderItem) => (
                   <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-2 duration-200 bg-white dark:bg-gray-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
                       <div className="flex-1 pr-4">
                           <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-tight mb-1 truncate max-w-[150px]">{item.productName}</div>
@@ -1082,7 +1073,7 @@ export default function POS() {
                                   <span className="text-red-500 font-black">-{store?.currency}{totals.discountAmount.toFixed(2)}</span>
                               )}
                               <button 
-                                  onClick={(e) => { e.stopPropagation(); setShowDiscountPresets(!showDiscountPresets); }}
+                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setShowDiscountPresets(!showDiscountPresets); }}
                                   className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-all ${discountPercent > 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100'}`}
                               >
                                   <Percent size={12}/>
@@ -1097,7 +1088,7 @@ export default function POS() {
                                   <button onClick={() => { setDiscountPercent(0); setShowDiscountPresets(false); }} className="text-[10px] font-black text-red-500 uppercase hover:underline">Reset</button>
                               </div>
                               <div className="grid grid-cols-4 gap-2 mb-4">
-                                  {DISCOUNT_PRESETS.map(p => (
+                                  {DISCOUNT_PRESETS.map((p: number) => (
                                       <button key={p} onClick={() => { setDiscountPercent(p); setShowDiscountPresets(false); }} className={`py-2.5 rounded-xl text-xs font-black border transition-all ${discountPercent === p ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:border-blue-300'}`}>{p}%</button>
                                   ))}
                               </div>
@@ -1109,8 +1100,8 @@ export default function POS() {
                                           type="number" placeholder="Enter %" 
                                           className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-500/10"
                                           value={discountPercent || ''}
-                                          onChange={e => setDiscountPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                                          onClick={e => e.stopPropagation()}
+                                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDiscountPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                       />
                                       <div className="absolute right-4 top-3 text-gray-400 font-black text-sm">%</div>
                                   </div>
@@ -1185,7 +1176,7 @@ export default function POS() {
                                     <div className="flex justify-between items-center mb-3">
                                         <span className="text-[10px] font-black uppercase text-purple-600">Part 1</span>
                                         <div className="flex gap-1">
-                                            {['CASH', 'CARD', 'TRANSFER'].map(m => (
+                                            {['CASH', 'CARD', 'TRANSFER'].map((m: string) => (
                                                 <button key={m} onClick={() => setSplitPayment1({...splitPayment1, method: m as any})} className={`px-2 py-1 rounded text-[9px] font-black border ${splitPayment1.method === m ? 'bg-purple-600 text-white border-purple-600' : 'text-gray-400'}`}>{m}</button>
                                             ))}
                                         </div>
@@ -1194,14 +1185,14 @@ export default function POS() {
                                         type="number" step="0.01" placeholder="Enter amount..." 
                                         className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
                                         value={splitPayment1.amount}
-                                        onChange={e => setSplitPayment1({...splitPayment1, amount: e.target.value})}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment1({...splitPayment1, amount: e.target.value})}
                                     />
                                 </div>
                                 <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border-2 border-purple-100 dark:border-purple-900/30">
                                     <div className="flex justify-between items-center mb-3">
                                         <span className="text-[10px] font-black uppercase text-purple-600">Part 2</span>
                                         <div className="flex gap-1">
-                                            {['CASH', 'CARD', 'TRANSFER'].map(m => (
+                                            {['CASH', 'CARD', 'TRANSFER'].map((m: string) => (
                                                 <button key={m} onClick={() => setSplitPayment2({...splitPayment2, method: m as any})} className={`px-2 py-1 rounded text-[9px] font-black border ${splitPayment2.method === m ? 'bg-purple-600 text-white border-purple-600' : 'text-gray-400'}`}>{m}</button>
                                             ))}
                                         </div>
@@ -1210,7 +1201,7 @@ export default function POS() {
                                         type="number" step="0.01" placeholder="Remaining balance..." 
                                         className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
                                         value={splitPayment2.amount}
-                                        onChange={e => setSplitPayment2({...splitPayment2, amount: e.target.value})}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment2({...splitPayment2, amount: e.target.value})}
                                     />
                                 </div>
                             </div>
@@ -1220,7 +1211,7 @@ export default function POS() {
                                     { id: 'CASH', icon: Banknote, label: 'Cash Payment', sub: 'Standard currency' },
                                     { id: 'CARD', icon: CreditCard, label: 'Credit/Debit Card', sub: 'External terminal' },
                                     { id: 'TRANSFER', icon: RefreshCcw, label: 'Bank Transfer', sub: 'Direct verification' }
-                                ].map(method => (
+                                ].map((method: { id: string, icon: any, label: string, sub: string }) => (
                                     <button 
                                         key={method.id}
                                         onClick={() => setPaymentMethod(method.id as any)}
@@ -1254,7 +1245,7 @@ export default function POS() {
                                                 className="w-full pl-10 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 text-xl font-black dark:text-white"
                                                 placeholder="0.00"
                                                 value={amountTendered}
-                                                onChange={e => { setAmountTendered(e.target.value); setPaymentError(''); }}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setAmountTendered(e.target.value); setPaymentError(''); }}
                                               />
                                           </div>
                                       </div>
@@ -1298,10 +1289,10 @@ export default function POS() {
                       </div>
                       
                       <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1 rounded-xl border dark:border-gray-700 shadow-sm">
-                          {(['thermal', 'a4', 'a5', 'letter'] as const).map((size) => (
+                          {(['thermal', 'a4', 'a5', 'letter'] as const).map((size: string) => (
                               <button
                                   key={size}
-                                  onClick={() => setPreviewPaperSize(size)}
+                                  onClick={() => setPreviewPaperSize(size as any)}
                                   className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${previewPaperSize === size ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                               >
                                   {size}
@@ -1329,7 +1320,7 @@ export default function POS() {
           </div>
       )}
 
-      {/* Customer Full Modal (Updated to match StoreCustomers UI) */}
+      {/* Customer Full Modal (Quick Registration) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1364,8 +1355,8 @@ export default function POS() {
                                 <input 
                                     placeholder="e.g. Acme Corp" 
                                     className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500"
-                                    value={newCustData.companyName}
-                                    onChange={e => setNewCustData({...newCustData, companyName: e.target.value})}
+                                    value={newCustData.companyName || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, companyName: e.target.value})}
                                     required={newCustData.type === 'COMPANY'}
                                 />
                               </div>
@@ -1374,8 +1365,8 @@ export default function POS() {
                                 <input 
                                     placeholder="e.g. 123-456-789" 
                                     className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
-                                    value={newCustData.tin}
-                                    onChange={e => setNewCustData({...newCustData, tin: e.target.value})}
+                                    value={newCustData.tin || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, tin: e.target.value})}
                                 />
                               </div>
                           </div>
@@ -1387,8 +1378,8 @@ export default function POS() {
                             <input 
                                 placeholder="Full Name" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                value={newCustData.name}
-                                onChange={e => setNewCustData({...newCustData, name: e.target.value})}
+                                value={newCustData.name || ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, name: e.target.value})}
                                 required
                             />
                           </div>
@@ -1398,8 +1389,8 @@ export default function POS() {
                             <input 
                                 placeholder="Phone Number" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                                value={newCustData.phone}
-                                onChange={e => setNewCustData({...newCustData, phone: e.target.value})}
+                                value={newCustData.phone || ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, phone: e.target.value})}
                                 required
                             />
                           </div>
@@ -1417,8 +1408,8 @@ export default function POS() {
                                     <input 
                                         placeholder="e.g. Rose Villa" 
                                         className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newCustData.houseName}
-                                        onChange={e => setNewCustData({...newCustData, houseName: e.target.value})}
+                                        value={newCustData.houseName || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, houseName: e.target.value})}
                                     />
                                   </div>
                                   <div>
@@ -1426,8 +1417,8 @@ export default function POS() {
                                     <input 
                                         placeholder="e.g. Orchid Magu" 
                                         className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newCustData.streetName}
-                                        onChange={e => setNewCustData({...newCustData, streetName: e.target.value})}
+                                        value={newCustData.streetName || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, streetName: e.target.value})}
                                     />
                                   </div>
                               </div>
@@ -1439,8 +1430,8 @@ export default function POS() {
                                         <input 
                                             placeholder="e.g. Trade Centre, 4th Floor" 
                                             className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.buildingName}
-                                            onChange={e => setNewCustData({...newCustData, buildingName: e.target.value})}
+                                            value={newCustData.buildingName || ''}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, buildingName: e.target.value})}
                                         />
                                       </div>
                                       <div>
@@ -1448,8 +1439,8 @@ export default function POS() {
                                         <input 
                                             placeholder="e.g. Main Street" 
                                             className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.street}
-                                            onChange={e => setNewCustData({...newCustData, street: e.target.value})}
+                                            value={newCustData.street || ''}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, street: e.target.value})}
                                         />
                                       </div>
                                   </div>
@@ -1459,8 +1450,8 @@ export default function POS() {
                                         <input 
                                             placeholder="e.g. Male'" 
                                             className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.island}
-                                            onChange={e => setNewCustData({...newCustData, island: e.target.value})}
+                                            value={newCustData.island || ''}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, island: e.target.value})}
                                         />
                                       </div>
                                       <div>
@@ -1468,8 +1459,8 @@ export default function POS() {
                                         <input 
                                             placeholder="e.g. Maldives" 
                                             className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.country}
-                                            onChange={e => setNewCustData({...newCustData, country: e.target.value})}
+                                            value={newCustData.country || ''}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, country: e.target.value})}
                                         />
                                       </div>
                                   </div>
@@ -1504,14 +1495,14 @@ export default function POS() {
                       <div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-800">
                           <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">{shift ? 'Closing Cash Count' : 'Starting Float Count'}</p>
                           <div className="grid grid-cols-3 gap-3">
-                              {DENOMINATIONS.slice(0, 6).map(d => (
+                              {DENOMINATIONS.slice(0, 6).map((d: number) => (
                                   <div key={d} className="flex flex-col gap-1.5">
                                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">{store?.currency}{d}</span>
                                       <input 
                                           type="number" min="0" placeholder="0"
                                           className="w-full p-3 bg-white dark:bg-gray-800 border-none rounded-xl text-xs font-black dark:text-white text-center outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm"
                                           value={denominations[d] || ''}
-                                          onChange={e => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}
+                                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}
                                       />
                                   </div>
                               ))}
