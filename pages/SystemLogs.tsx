@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '../services/db';
 import { Store, SystemActivity, UserRole } from '../types';
@@ -6,21 +5,15 @@ import {
   ScrollText, 
   Store as StoreIcon, 
   Search, 
-  Terminal, 
   Clock, 
   User as UserIcon, 
-  Activity,
   Globe,
   RefreshCw,
   AlertTriangle,
   Database,
-  Filter,
-  ArrowRight,
   Calendar,
-  X,
-  ChevronDown
+  X
 } from 'lucide-react';
-// Fix: useAuth should be imported from AuthContext
 import { useAuth } from '../AuthContext';
 
 const getActionColor = (action: string) => {
@@ -60,8 +53,9 @@ export default function SystemLogs() {
 
   useEffect(() => {
     loadData();
-    window.addEventListener('db_change_any', loadData);
-    return () => window.removeEventListener('db_change_any', loadData);
+    const handleUpdate = () => loadData();
+    window.addEventListener('db_change_any', handleUpdate);
+    return () => window.removeEventListener('db_change_any', handleUpdate);
   }, []);
 
   const getTimeRange = () => {
@@ -159,7 +153,6 @@ export default function SystemLogs() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-            {/* Date Range Selector */}
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all group">
                 <Calendar size={16} className="ml-2 text-gray-400 group-focus-within:text-blue-500" />
                 <select 
@@ -183,7 +176,6 @@ export default function SystemLogs() {
                 )}
             </div>
 
-            {/* Global Search Bar */}
             <div className="relative group min-w-[280px]">
                 <Search className="absolute left-3 top-2.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input 
@@ -244,4 +236,58 @@ export default function SystemLogs() {
                                       <div className="w-5 h-5 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
                                           <UserIcon size={12} />
                                       </div>
-                                      
+                                      <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">{act.userName}</span>
+                                  </div>
+                              </div>
+                          </div>
+                      ))
+                  )}
+              </div>
+          </div>
+
+          {/* Store Specific Logs */}
+          {stores.map(st => (
+              <div key={st.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-[600px]">
+                  <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-xl">
+                              <StoreIcon size={20} />
+                          </div>
+                          <h2 className="font-black text-xs uppercase tracking-widest dark:text-white truncate max-w-[150px]">{st.name}</h2>
+                      </div>
+                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">STORE #{st.id}</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+                      {getStoreActivities(st.id).length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 space-y-2">
+                              <Database size={32} />
+                              <p className="text-xs font-bold uppercase tracking-widest">No branch activity</p>
+                          </div>
+                      ) : (
+                          getStoreActivities(st.id).map(act => (
+                              <div key={act.id} className="p-4 border-b dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group relative">
+                                  <div className="flex justify-between items-start mb-1.5">
+                                      <span className={`text-[10px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded bg-gray-50 dark:bg-gray-700/50 ${getActionColor(act.action)}`}>{act.action}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
+                                          <Clock size={10} /> {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                      </span>
+                                  </div>
+                                  <p className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-relaxed mb-3">{act.description}</p>
+                                  <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                          <div className="w-5 h-5 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
+                                              <UserIcon size={12} />
+                                          </div>
+                                          <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">{act.userName}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </div>
+          ))}
+      </div>
+    </div>
+  );
+}
