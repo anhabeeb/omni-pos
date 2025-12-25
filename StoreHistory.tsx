@@ -1,14 +1,10 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-// @ts-ignore
 import { useParams } from 'react-router-dom';
-// @ts-ignore
-import { useAuth } from '../App';
-// @ts-ignore
+import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
-// @ts-ignore
 import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
-  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
+  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash, Hash, Clock, ArrowRight, ShoppingBag
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
@@ -25,9 +21,6 @@ export default function StoreHistory() {
   const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterOrderType] = useState('ALL');
-  const [filterPaymentMethod] = useState('ALL');
-
   const [shiftSearch, setShiftSearch] = useState('');
   const [shiftStatusFilter] = useState('ALL');
 
@@ -53,13 +46,13 @@ export default function StoreHistory() {
   const loadData = async () => {
     if (activeStoreId) {
       const allOrders = await db.getOrders(activeStoreId);
-      setOrders(allOrders.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setOrders((allOrders as Order[]).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       const allShifts = await db.getRegisterShifts(activeStoreId);
-      setShifts(allShifts.sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
+      setShifts((allShifts as RegisterShift[]).sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
       const usersData = await db.getUsers();
-      setUsers(usersData);
+      setUsers(usersData as User[]);
       const stores = await db.getStores();
-      const s = stores.find((st: Store) => st.id === activeStoreId) || null;
+      const s = (stores as Store[]).find((st: Store) => st.id === activeStoreId) || null;
       setStore(s);
     }
   };
@@ -145,6 +138,7 @@ export default function StoreHistory() {
         result = result.filter((o: Order) => 
             o.orderNumber.toString().includes(term) ||
             (o.customerName?.toLowerCase() || '').includes(term) ||
+            (o.customerPhone?.toString() || '').includes(term) ||
             (o.tableNumber?.toLowerCase() || '').includes(term)
         );
     }
@@ -168,6 +162,11 @@ export default function StoreHistory() {
   }, [shifts, dateRange, customStart, customEnd, shiftStatusFilter, shiftSearch]);
 
   const getUserName = (id: number) => { return users.find((u: User) => u.id === id)?.name || 'Unknown'; };
+  const getShiftNumber = (id?: number) => { 
+      if (!id) return '-';
+      const s = shifts.find(s => s.id === id);
+      return s ? `#${s.shiftNumber}` : '-';
+  };
 
   const getPaidAmount = (order: Order) => {
       return order.transactions?.reduce((acc: number, t: Transaction) => {
@@ -177,7 +176,13 @@ export default function StoreHistory() {
       }, 0) || 0;
   };
 
-  const openRefundModal = (order: Order) => {
+  const openRefundModal = async (order: Order) => {
+      if (!activeStoreId) return;
+      const activeShift = await db.getActiveShift(activeStoreId);
+      if (!activeShift) {
+          alert("Action Blocked: You cannot process refunds while the register is closed. Please open a shift first.");
+          return;
+      }
       setRefundOrder(order);
       setRefundMode('FULL');
       setRefundAmount(order.total.toFixed(2));
@@ -367,7 +372,7 @@ export default function StoreHistory() {
             backgroundColor: 'white',
             cacheBust: true,
             pixelRatio: 2
-        });
+          });
 
         const link = document.createElement('a');
         link.download = `receipt-${previewOrder.orderNumber}.jpg`;
@@ -392,6 +397,12 @@ export default function StoreHistory() {
     if (previewOrder) return generateReceiptHtml(previewOrder, false, previewPaperSize); 
     return ''; 
   }, [previewOrder, store, users, previewPaperSize]);
+
+  // Derive orders for the viewed shift
+  const shiftOrders = useMemo(() => {
+    if (!viewShift) return [];
+    return orders.filter(o => o.shiftId === viewShift.id);
+  }, [viewShift, orders]);
 
   return (
     <div className="space-y-6">
@@ -484,8 +495,9 @@ export default function StoreHistory() {
                 <table className="w-full text-left">
                     <thead className="bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
                         <tr>
+                            <th className="p-4 text-[10px] font-black uppercase text-gray-500">Shift</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Order #</th>
-                            <th className="p-4 text-[10px] font-black uppercase text-gray-500">Time</th>
+                            <th className="p-4 text-[10px] font-black uppercase text-gray-500">Date & Time</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Details</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500 text-right">Total</th>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Status</th>
@@ -495,10 +507,14 @@ export default function StoreHistory() {
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {filteredOrders.map((o: Order) => (
                             <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td className="p-4"><span className="text-[10px] font-black px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">{getShiftNumber(o.shiftId)}</span></td>
                                 <td className="p-4 font-mono font-bold text-blue-600">#{o.orderNumber}</td>
-                                <td className="p-4 text-xs dark:text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                                 <td className="p-4">
-                                    <div className="text-sm font-bold dark:text-white">{o.customerName || 'Walk-in'}</div>
+                                    <div className="text-[11px] font-bold dark:text-white leading-tight">{new Date(o.createdAt).toLocaleDateString()}</div>
+                                    <div className="text-[10px] text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                </td>
+                                <td className="p-4">
+                                    <div className="text-sm font-bold dark:text-white">{o.customerName || o.customerPhone || 'Walk-in'}</div>
                                     {o.tableNumber && <div className="text-[10px] text-gray-500">Table: {o.tableNumber}</div>}
                                 </td>
                                 <td className="p-4 text-right font-black dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
@@ -528,28 +544,57 @@ export default function StoreHistory() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
                   <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
-                      <h3 className="font-bold dark:text-white">Order Details: #{viewOrder.orderNumber}</h3>
+                      <div className="flex items-center gap-3">
+                        <ShoppingBag className="text-blue-600" size={20}/>
+                        <h3 className="font-bold dark:text-white uppercase tracking-tighter">Order Details: #{viewOrder.orderNumber}</h3>
+                      </div>
                       <button onClick={() => setViewOrder(null)} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={20}/></button>
                   </div>
                   <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
                       <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="space-y-1">
-                              <p className="text-gray-400 font-bold uppercase text-[10px]">Customer</p>
-                              <p className="font-bold dark:text-white">{viewOrder.customerName || 'Walk-in'}</p>
+                              <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Customer Context</p>
+                              <p className="font-bold dark:text-white uppercase text-blue-600">{viewOrder.customerName || viewOrder.customerPhone || 'Anonymous Walk-in'}</p>
+                              {viewOrder.tableNumber && <p className="text-[10px] font-black text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded w-fit">TABLE: {viewOrder.tableNumber}</p>}
                           </div>
                           <div className="space-y-1 text-right">
-                              <p className="text-gray-400 font-bold uppercase text-[10px]">Date & Time</p>
+                              <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Audit Trail</p>
                               <p className="font-bold dark:text-white">{new Date(viewOrder.createdAt).toLocaleString()}</p>
+                              <p className="text-[10px] font-black text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded w-fit ml-auto">REGISTER SHIFT {getShiftNumber(viewOrder.shiftId)}</p>
                           </div>
                       </div>
                       <table className="w-full text-left">
                           <thead className="border-b dark:border-gray-700"><tr className="text-[10px] font-black uppercase text-gray-500"><th className="pb-2">Item</th><th className="pb-2 text-center">Qty</th><th className="pb-2 text-right">Price</th><th className="pb-2 text-right">Total</th></tr></thead>
                           <tbody className="divide-y dark:divide-gray-700">
                               {viewOrder.items.map((it: OrderItem, i: number) => (
-                                  <tr key={i}><td className="py-2 text-sm dark:text-gray-200">{it.productName}</td><td className="py-2 text-center text-sm font-bold dark:text-gray-400">{it.quantity}</td><td className="py-2 text-right text-sm dark:text-gray-400">{store?.currency}{it.price.toFixed(2)}</td><td className="py-2 text-right text-sm font-black dark:text-white">{store?.currency}{(it.price * it.quantity).toFixed(2)}</td></tr>
+                                  <tr key={i}><td className="py-2 text-sm dark:text-gray-200 font-bold">{it.productName}</td><td className="py-2 text-center text-sm font-black dark:text-gray-400">x{it.quantity}</td><td className="py-2 text-right text-sm dark:text-gray-400">{store?.currency}{it.price.toFixed(2)}</td><td className="py-2 text-right text-sm font-black dark:text-white">{store?.currency}{(it.price * it.quantity).toFixed(2)}</td></tr>
                               ))}
                           </tbody>
                       </table>
+
+                      <div className="space-y-3">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b dark:border-gray-700 pb-1">Payment Transactions</p>
+                        {viewOrder.transactions?.map((t: Transaction, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${t.type === 'PAYMENT' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{t.type}</span>
+                                        <span className="font-bold dark:text-gray-200">{t.method || 'CASH'}</span>
+                                    </div>
+                                    {t.referenceNumber && (
+                                        <div className="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400 font-bold mt-1">
+                                            <Hash size={12}/> Ref: {t.referenceNumber}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-black dark:text-white">{store?.currency}{t.amount.toFixed(2)}</div>
+                                    <div className="text-[9px] text-gray-400 uppercase">{new Date(t.timestamp).toLocaleTimeString()}</div>
+                                </div>
+                            </div>
+                        ))}
+                      </div>
+
                       <div className="flex flex-col items-end gap-1 pt-4 border-t dark:border-gray-700">
                           <div className="w-48 flex justify-between text-sm text-gray-500"><span>Subtotal:</span><span>{store?.currency}{viewOrder.subtotal.toFixed(2)}</span></div>
                           <div className="w-48 flex justify-between font-black text-xl dark:text-white border-t-2 border-gray-100 dark:border-gray-700 pt-2 mt-1"><span>TOTAL:</span><span>{store?.currency}{viewOrder.total.toFixed(2)}</span></div>
@@ -562,26 +607,65 @@ export default function StoreHistory() {
       {/* Shift Details Modal */}
       {viewShift && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in zoom-in-95">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in zoom-in-95">
                   <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10 text-blue-600 flex justify-between items-center">
-                      <h3 className="font-bold flex items-center gap-2">Shift Record: #{viewShift.shiftNumber || viewShift.id}</h3>
+                      <div className="flex items-center gap-3">
+                        <Clock size={20}/>
+                        <h3 className="font-bold uppercase tracking-tighter">Register Audit: Shift #{viewShift.shiftNumber}</h3>
+                      </div>
                       <button onClick={() => setViewShift(null)} className="p-1.5 hover:bg-blue-100 rounded-full transition-colors"><X size={20}/></button>
                   </div>
-                  <div className="p-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Staff</p><p className="font-bold dark:text-white">{getUserName(viewShift.openedBy)}</p></div>
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Status</p><p className={`font-black ${viewShift.status === 'OPEN' ? 'text-green-500' : 'text-gray-500'}`}>{viewShift.status}</p></div>
+                  <div className="p-8 space-y-8 overflow-y-auto max-h-[85vh] custom-scrollbar">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Staff Member</p><p className="font-bold dark:text-white text-lg">{getUserName(viewShift.openedBy)}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Session Status</p><p className={`font-black uppercase text-lg ${viewShift.status === 'OPEN' ? 'text-green-500' : 'text-gray-500'}`}>{viewShift.status}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Opened At</p><p className="font-bold dark:text-white">{new Date(viewShift.openedAt).toLocaleString()}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Closed At</p><p className="font-bold dark:text-white">{viewShift.closedAt ? new Date(viewShift.closedAt).toLocaleString() : 'ACTIVE SESSION'}</p></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t dark:border-gray-700">
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Starting Cash</p><p className="font-mono dark:text-gray-200">{store?.currency}{viewShift.startingCash.toFixed(2)}</p></div>
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Actual Cash</p><p className="font-mono dark:text-gray-200">{viewShift.actualCash ? `${store?.currency}${viewShift.actualCash.toFixed(2)}` : '-'}</p></div>
-                      </div>
-                      {viewShift.status === 'CLOSED' && (
-                          <div className={`p-4 rounded-xl border ${viewShift.difference && viewShift.difference < 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
-                              <p className="text-[10px] font-black uppercase mb-1">Variance / Discrepancy</p>
-                              <p className="text-xl font-black font-mono">{store?.currency}{viewShift.difference?.toFixed(2) || '0.00'}</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Starting Cash</p><p className="text-xl font-black font-mono dark:text-gray-200">{store?.currency}{viewShift.startingCash.toFixed(2)}</p></div>
+                          <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Final Actual Count</p><p className="text-xl font-black font-mono dark:text-gray-200">{viewShift.actualCash ? `${store?.currency}${viewShift.actualCash.toFixed(2)}` : '-'}</p></div>
+                          <div className={`p-4 rounded-xl border-2 flex flex-col justify-center ${viewShift.difference && viewShift.difference < 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                              <p className="text-[10px] font-black uppercase tracking-widest mb-0.5">Variance / Discrepancy</p>
+                              <p className="text-2xl font-black font-mono">{store?.currency}{viewShift.difference?.toFixed(2) || '0.00'}</p>
                           </div>
-                      )}
+                      </div>
+
+                      {/* Sales Recorded in this Shift */}
+                      <div className="space-y-4">
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b dark:border-gray-700 pb-2">Sales Log for this Shift</h4>
+                          {shiftOrders.length === 0 ? (
+                              <div className="py-10 text-center text-gray-400 italic font-bold">No sales recorded during this session.</div>
+                          ) : (
+                              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl overflow-hidden">
+                                  <table className="w-full text-left">
+                                      <thead className="bg-gray-50 dark:bg-gray-900 text-[10px] font-black uppercase text-gray-500 border-b dark:border-gray-700">
+                                          <tr>
+                                              <th className="p-3">Time</th>
+                                              <th className="p-3">Ticket</th>
+                                              <th className="p-3">Customer/Table</th>
+                                              <th className="p-3 text-right">Amount</th>
+                                              <th className="p-3 text-right">Status</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody className="divide-y dark:divide-gray-700">
+                                          {shiftOrders.map(o => (
+                                              <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                                  <td className="p-3 text-xs font-bold text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                                                  <td className="p-3 font-mono font-black text-blue-600 text-xs">#{o.orderNumber}</td>
+                                                  <td className="p-3 text-xs font-bold uppercase truncate max-w-[150px]">{o.customerName || `Table ${o.tableNumber}` || 'Walk-in'}</td>
+                                                  <td className="p-3 text-right font-black text-xs dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
+                                                  <td className="p-3 text-right">
+                                                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{o.status}</span>
+                                                  </td>
+                                              </tr>
+                                          ))}
+                                      </tbody>
+                                  </table>
+                              </div>
+                          )}
+                      </div>
                   </div>
               </div>
           </div>
@@ -615,7 +699,6 @@ export default function StoreHistory() {
           </div>
       )}
 
-      {/* Print Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
