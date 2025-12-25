@@ -18,7 +18,7 @@ import {
   Banknote,
   CreditCard
 } from 'lucide-react';
-// @ts-ignore - Fixing missing member errors in react-router-dom
+// @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 
@@ -74,7 +74,6 @@ export default function POS() {
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
-  // State for paper size selector in preview
   const [previewPaperSize, setPreviewPaperSize] = useState<'thermal' | 'a4' | 'a5' | 'letter'>('thermal');
   
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
@@ -89,7 +88,6 @@ export default function POS() {
 
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Fix: Added missing formatAddress helper function
   const formatAddress = (c: Customer) => {
     if (c.type === 'INDIVIDUAL') {
         return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
@@ -495,7 +493,7 @@ export default function POS() {
     if (paperSize === 'a5') { width = '148mm'; pageSize = 'A5'; }
     if (paperSize === 'letter') { width = '8.5in'; pageSize = 'letter'; }
     
-    const itemsHtml = settings.showItems !== false ? order.items.map(item => {
+    const itemsHtml = settings.showItems !== false ? order.items.map((item: OrderItem) => {
         const hasSecondaryLine = settings.showQuantity !== false || settings.showUnitPrice !== false;
         return `
             <tr style="border-bottom: 1px solid #eee;">
@@ -661,7 +659,7 @@ export default function POS() {
     return '320px'; // thermal width
   };
 
-  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
+  const filteredCustomers = customers.filter((c: Customer) => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
   const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name); setShowCustomerResults(false); };
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
@@ -700,7 +698,7 @@ export default function POS() {
   };
 
   const calculateDenomTotal = () => { 
-    return DENOMINATIONS.reduce((sum, d) => {
+    return DENOMINATIONS.reduce((sum: number, d: number) => {
       const count = denominations[d] || 0;
       return sum + (d * count);
     }, 0);
@@ -762,7 +760,7 @@ export default function POS() {
 
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
-          {productList.map(product => (
+          {productList.map((product: Product) => (
               <button 
                   key={product.id} 
                   onClick={() => addToCart(product)} 
@@ -858,7 +856,7 @@ export default function POS() {
                               >
                                   All Items
                               </button>
-                              {categories.map(cat => (
+                              {categories.map((cat: Category) => (
                                   <button 
                                       key={cat.id}
                                       onClick={() => setSelectedCategoryId(cat.id)}
@@ -870,7 +868,7 @@ export default function POS() {
                           </div>
 
                           <div className="flex-1 pr-2 overflow-y-auto custom-scrollbar">
-                              {renderProductGrid(products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
+                              {renderProductGrid(products.filter((p: Product) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategoryId === 'ALL' || p.categoryId === selectedCategoryId)))}
                           </div>
                       </div>
 
@@ -889,7 +887,7 @@ export default function POS() {
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                       {activeTab === 'ACTIVE' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {activeOrders.map(order => (
+                              {activeOrders.map((order: Order) => (
                                   <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-[2rem] border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
                                       <div className="flex justify-between items-start mb-2 border-b border-gray-50 dark:border-gray-700 pb-2">
                                           <div>
@@ -917,7 +915,7 @@ export default function POS() {
                           </div>
                       ) : activeTab === 'HELD' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {heldOrders.map(order => (
+                              {heldOrders.map((order: Order) => (
                                   <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
                                       <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                           <div>
@@ -926,7 +924,7 @@ export default function POS() {
                                           </div>
                                           <span className={`text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest`}>ON HOLD</span>
                                       </div>
-                                      <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
+                                      <p className="text-11px font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
                                       <div className="mt-auto flex gap-2">
                                           <button onClick={(e) => { e.stopPropagation(); handleActivateOrder(order); }} className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"><Play size={12}/> Activate</button>
                                       </div>
@@ -947,7 +945,7 @@ export default function POS() {
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                                      {historyOrders.map(order => (
+                                      {historyOrders.map((order: Order) => (
                                           <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
@@ -1010,7 +1008,7 @@ export default function POS() {
                       
                       {showCustomerResults && customerSearch && !selectedCustomer && (
                           <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
-                              {filteredCustomers.map(c => (
+                              {filteredCustomers.map((c: Customer) => (
                                   <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
                                       <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name[0]}</div>
                                       <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
@@ -1040,7 +1038,7 @@ export default function POS() {
                       <ShoppingBag size={64} strokeWidth={1} className="opacity-20" />
                       <p className="font-black uppercase tracking-[0.3em] text-[10px] mt-4 text-gray-300 dark:text-gray-700">Cart Empty</p>
                   </div>
-              ) : cart.map(item => (
+              ) : cart.map((item: OrderItem) => (
                   <div key={item.productId} className="flex items-center justify-between group animate-in slide-in-from-right-2 duration-200 bg-white dark:bg-gray-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
                       <div className="flex-1 pr-4">
                           <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-tight mb-1 truncate max-w-[150px]">{item.productName}</div>
@@ -1314,7 +1312,7 @@ export default function POS() {
                       <button onClick={handleSaveAsJpg} className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 transition-all">
                           <FileImage size={18}/> Save to Media
                       </button>
-                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
+                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
                           Execute Print
                       </button>
                   </div>
@@ -1380,6 +1378,7 @@ export default function POS() {
                             <input 
                                 placeholder="Full Name" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                // Fix: Changed editingCustomer to newCustData
                                 value={newCustData.name}
                                 onChange={e => setNewCustData({...newCustData, name: e.target.value})}
                                 required
@@ -1391,6 +1390,7 @@ export default function POS() {
                             <input 
                                 placeholder="Phone Number" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                // Fix: Changed editingCustomer to newCustData
                                 value={newCustData.phone}
                                 onChange={e => setNewCustData({...newCustData, phone: e.target.value})}
                                 required
@@ -1519,7 +1519,7 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
                               <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (

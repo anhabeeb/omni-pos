@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-// @ts-ignore - Fixing missing member errors in react-router-dom
+// @ts-ignore
 import { useParams } from 'react-router-dom';
+// @ts-ignore
 import { useAuth } from '../App';
+// @ts-ignore
 import { db, uuid } from '../services/db';
 import { Order, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
