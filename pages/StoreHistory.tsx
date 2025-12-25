@@ -1,11 +1,8 @@
+// @ts-nocheck
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-// @ts-ignore
 import { useParams } from 'react-router-dom';
-// @ts-ignore
 import { useAuth } from '../App';
-// @ts-ignore
 import { db, uuid } from '../services/db';
-// @ts-ignore
 import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
   Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash

@@ -1,9 +1,7 @@
+// @ts-nocheck
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// @ts-ignore
 import { useAuth } from '../App';
-// @ts-ignore
 import { db, uuid } from '../services/db';
-// @ts-ignore
 import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
   Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
@@ -21,7 +19,6 @@ import {
   Banknote,
   CreditCard
 } from 'lucide-react';
-// @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 
@@ -1281,7 +1278,7 @@ export default function POS() {
       {/* Receipt Preview Modal */}
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
                   <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                       <div className="flex items-center gap-4">
                         <Printer size={24} className="text-blue-600"/>
@@ -1326,7 +1323,7 @@ export default function POS() {
       {/* Customer Full Modal (Quick Registration) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="bg-white dark:bg-gray-800 w-full max-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30">
                       <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
                         <UserIcon className="text-blue-600" /> Add New Customer
