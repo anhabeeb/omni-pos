@@ -46,6 +46,8 @@ export default function SystemLogs() {
         ]);
         setStores(sData);
         setActivities(aData);
+    } catch (err) {
+        console.error("Failed to load logs:", err);
     } finally {
         setTimeout(() => setIsRefreshing(false), 500);
     }
