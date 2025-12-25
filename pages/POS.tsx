@@ -186,11 +186,11 @@ export default function POS() {
           db.getNextOrderNumber(currentStoreId)
       ]);
 
-      const s = sList.find(st => st.id === currentStoreId);
+      const s = sList.find((st: Store) => st.id === currentStoreId);
       setStores(sList);
       setStore(s || null);
-      setProducts(pList.filter(p => p.isAvailable));
-      setCategories(cList.sort((a,b) => (a.orderId || 0) - (b.orderId || 0)));
+      setProducts(pList.filter((p: Product) => p.isAvailable));
+      setCategories(cList.sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
       setCustomers(custs);
       setUsers(uList);
       setNextOrderNum(orderNum);
@@ -1314,7 +1314,7 @@ export default function POS() {
                       <button onClick={handleSaveAsJpg} className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-blue-50 transition-all">
                           <FileImage size={18}/> Save to Media
                       </button>
-                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
+                      <button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
                           Execute Print
                       </button>
                   </div>
@@ -1519,7 +1519,7 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
                               <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (

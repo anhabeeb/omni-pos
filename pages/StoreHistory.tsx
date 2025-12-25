@@ -424,7 +424,7 @@ export default function StoreHistory() {
             {dateRange === 'CUSTOM' && (
                 <div className="flex items-center gap-2">
                     <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="p-2 text-xs border rounded-lg bg-white dark:bg-gray-700 dark:text-white" />
-                    <span className="text-gray-400">to</span>
+                    <span className="text-gray-400">-</span>
                     <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="p-2 text-xs border rounded-lg bg-white dark:bg-gray-700 dark:text-white" />
                 </div>
             )}
