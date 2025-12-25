@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Split,
   User as UserIcon,
-  // Fix: Added missing Banknote and CreditCard icon imports
   Banknote,
   CreditCard
 } from 'lucide-react';
@@ -1520,7 +1519,7 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
                               <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (
