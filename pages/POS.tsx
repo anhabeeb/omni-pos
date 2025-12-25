@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from './../App';
-import { db, uuid } from './../services/db';
-import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from './../types';
+// @ts-ignore
+import { useAuth } from '../App';
+// @ts-ignore
+import { db, uuid } from '../services/db';
+// @ts-ignore
+import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
   Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
   ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play,
@@ -18,6 +21,7 @@ import {
   Banknote,
   CreditCard
 } from 'lucide-react';
+// @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 
@@ -25,7 +29,7 @@ const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2, 1];
 const DISCOUNT_PRESETS = [5, 10, 15, 20];
 
 export default function POS() {
-  const { user, currentStoreId, switchStore } = useAuth();
+  const { user, currentStoreId, switchStore, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
 
   const [store, setStore] = useState<Store | null>(null);
@@ -1005,7 +1009,7 @@ export default function POS() {
                       
                       {showCustomerResults && customerSearch && !selectedCustomer && (
                           <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
-                              {filteredCustomers.map((c: Customer) => (
+                              {(filteredCustomers as Customer[]).map((c: Customer) => (
                                   <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
                                       <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name[0]}</div>
                                       <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
