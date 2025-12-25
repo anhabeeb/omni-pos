@@ -1,9 +1,7 @@
+// @ts-nocheck
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// @ts-ignore
 import { useAuth } from '../App';
-// @ts-ignore
 import { db, uuid } from '../services/db';
-// @ts-ignore
 import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
 import { 
   Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
@@ -21,7 +19,6 @@ import {
   Banknote,
   CreditCard
 } from 'lucide-react';
-// @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
 

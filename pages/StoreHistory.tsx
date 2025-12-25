@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAuth } from './../App';
-import { db, uuid } from './../services/db';
-import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from './../types';
+import { useAuth } from '../App';
+import { db, uuid } from '../services/db';
+import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
   Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
 } from 'lucide-react';
@@ -363,7 +363,7 @@ export default function StoreHistory() {
             backgroundColor: 'white',
             cacheBust: true,
             pixelRatio: 2
-        });
+          });
 
         const link = document.createElement('a');
         link.download = `receipt-${previewOrder.orderNumber}.jpg`;
