@@ -1,9 +1,8 @@
-// @ts-nocheck
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAuth } from '../App';
-import { db, uuid } from '../services/db';
-import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
+import { useAuth } from './../App';
+import { db, uuid } from './../services/db';
+import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from './../types';
 import { 
   Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
 } from 'lucide-react';
@@ -50,13 +49,13 @@ export default function StoreHistory() {
   const loadData = async () => {
     if (activeStoreId) {
       const allOrders = await db.getOrders(activeStoreId);
-      setOrders(allOrders.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setOrders((allOrders as Order[]).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       const allShifts = await db.getRegisterShifts(activeStoreId);
-      setShifts(allShifts.sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
+      setShifts((allShifts as RegisterShift[]).sort((a: RegisterShift, b: RegisterShift) => b.openedAt - a.openedAt));
       const usersData = await db.getUsers();
-      setUsers(usersData);
+      setUsers(usersData as User[]);
       const stores = await db.getStores();
-      const s = stores.find((st: Store) => st.id === activeStoreId) || null;
+      const s = (stores as Store[]).find((st: Store) => st.id === activeStoreId) || null;
       setStore(s);
     }
   };
