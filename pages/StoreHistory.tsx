@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../App';
 import { db, uuid } from '../services/db';
-import { Order, OrderType, OrderStatus, Store, UserRole, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
+import { Order, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
   Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
 } from 'lucide-react';
@@ -145,10 +145,8 @@ export default function StoreHistory() {
             (o.tableNumber?.toLowerCase() || '').includes(term)
         );
     }
-    if (filterOrderType !== 'ALL') { result = result.filter((o: Order) => o.orderType === filterOrderType); }
-    if (filterPaymentMethod !== 'ALL') { result = result.filter((o: Order) => o.paymentMethod === filterPaymentMethod); }
     return result;
-  }, [orders, dateRange, customStart, customEnd, searchTerm, filterOrderType, filterPaymentMethod]);
+  }, [orders, dateRange, customStart, customEnd, searchTerm]);
 
   const filteredShifts = useMemo(() => {
       let result = shifts;
@@ -196,32 +194,37 @@ export default function StoreHistory() {
       if (!activeStoreId || !user || !refundOrder) return;
       
       const paidAmount = getPaidAmount(refundOrder);
-      const amountToRefund = refundMode === 'FULL' 
-        ? paidAmount 
-        : Math.round((parseFloat(refundAmount) || 0) * 100) / 100;
-      
-      if (isNaN(amountToRefund) || amountToRefund <= 0) { 
-        alert("Please enter a valid refund amount."); 
-        return; 
+      let amountToRefundValue = 0;
+
+      if (refundMode === 'FULL') {
+          // For Full refund, we ignore the UI input to avoid string/float rounding issues
+          amountToRefundValue = paidAmount;
+      } else {
+          amountToRefundValue = Math.round((parseFloat(refundAmount) || 0) * 100) / 100;
+          // Tolerance for partial refunds
+          if (amountToRefundValue > (paidAmount + 0.011)) { 
+              alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); 
+              return; 
+          }
       }
       
-      // tolerance of 0.05 to handle rounding discrepancies
-      if (amountToRefund > (paidAmount + 0.051)) { 
-        alert(`Cannot refund more than the paid amount (${store?.currency || '$'}${paidAmount.toFixed(2)})`); 
+      if (isNaN(amountToRefundValue) || amountToRefundValue <= 0) { 
+        alert("Please enter a valid refund amount."); 
         return; 
       }
 
       const transaction: Transaction = {
           id: uuid(), 
           type: 'REVERSAL', 
-          amount: amountToRefund, 
+          amount: amountToRefundValue, 
           timestamp: Date.now(), 
           performedBy: user.id, 
           note: `Refund (${refundMode}): ${refundReason}`
       };
 
       let newStatus = refundOrder.status;
-      if (refundMode === 'FULL' || Math.abs(paidAmount - amountToRefund) < 0.051) { 
+      // Use epsilon comparison for full return status trigger
+      if (refundMode === 'FULL' || Math.abs(paidAmount - amountToRefundValue) < 0.011) { 
           newStatus = OrderStatus.RETURNED; 
       }
 
@@ -363,7 +366,6 @@ export default function StoreHistory() {
 
   const handlePrint = (order: Order) => {
     setPreviewOrder(order);
-    // Fix: removed setPreviewShift call as the state is not defined and printer only handles orders here
     setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
     setPrintModalOpen(true);
   };
