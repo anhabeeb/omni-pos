@@ -16,7 +16,9 @@ import {
   Split,
   User as UserIcon,
   Banknote,
-  CreditCard
+  CreditCard,
+  ShoppingCart,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -161,7 +163,7 @@ export default function POS() {
           try {
               const cust = JSON.parse(savedCust);
               setSelectedCustomer(cust);
-              if (cust) setCustomerSearch(cust.name);
+              if (cust) setCustomerSearch(cust.name || cust.phone);
           } catch(e) { /* ignore */ }
       }
       if (savedTable) setTableNumber(savedTable);
@@ -403,7 +405,7 @@ export default function POS() {
           }
           
           if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
-              setPaymentError("Reference number is mandatory for split Card/Transfer payments.");
+              setPaymentError("Reference number is mandatory for non-cash split payments.");
               return;
           }
 
@@ -421,7 +423,7 @@ export default function POS() {
           }
           
           if (paymentMethod !== 'CASH' && !paymentRef) {
-              setPaymentError("Reference number is mandatory for Card/Transfer payments.");
+              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
               return;
           }
 
@@ -670,8 +672,8 @@ export default function POS() {
     return '320px'; // thermal width
   };
 
-  const filteredCustomers = customers.filter((c: Customer) => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
-  const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name); setShowCustomerResults(false); };
+  const filteredCustomers = customers.filter((c: Customer) => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
+  const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name || c.phone); setShowCustomerResults(false); };
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
       e.preventDefault(); 
@@ -679,12 +681,12 @@ export default function POS() {
       
       const type = newCustData.type || 'INDIVIDUAL';
       if (type === 'INDIVIDUAL') {
-          if (!newCustData.phone || !newCustData.address) {
-              showToast("Phone and Address are mandatory for individuals.", "ERROR");
+          if (!newCustData.phone || !newCustData.houseName || !newCustData.island) {
+              showToast("Phone, House/Building, and Island are mandatory.", "ERROR");
               return;
           }
       } else {
-          if (!newCustData.name || !newCustData.companyName || !newCustData.tin || !newCustData.phone || !newCustData.address) {
+          if (!newCustData.name || !newCustData.companyName || !newCustData.tin || !newCustData.phone || !newCustData.buildingName || !newCustData.island) {
               showToast("All fields are mandatory for companies.", "ERROR");
               return;
           }
@@ -698,7 +700,6 @@ export default function POS() {
               finalData.tin = undefined;
               finalData.buildingName = undefined;
               finalData.street = undefined;
-              finalData.island = undefined;
               finalData.country = undefined;
           }
 
@@ -935,7 +936,7 @@ export default function POS() {
                       ) : activeTab === 'HELD' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                               {heldOrders.map((order: Order) => (
-                                  <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
+                                  <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
                                       <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                           <div>
                                               <h3 className="font-black text-orange-600 text-base tracking-tighter uppercase leading-none">#{order.orderNumber}</h3>
@@ -1376,7 +1377,7 @@ export default function POS() {
 
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30">
                       <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
                         <UserIcon className="text-blue-600" /> Add New Customer
@@ -1572,11 +1573,11 @@ export default function POS() {
                   <p className="text-gray-400 font-bold text-sm mb-10 leading-relaxed uppercase tracking-widest max-w-xs mx-auto">This will audit all tallies and lock the terminal until a new float is provided.</p>
                   
                   <div className="grid grid-cols-2 gap-6 mb-10">
-                      <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 text-center">
+                      <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 text-center">
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected In Drawer</p>
                           <p className="text-2xl font-black text-white tracking-tighter">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p>
                       </div>
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-800 text-center">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-700 text-center">
                           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Actual Cash Logged</p>
                           <p className="text-2xl font-black text-blue-700 dark:text-blue-100 tracking-tighter">{store?.currency}{calculateDenomTotal().toFixed(2)}</p>
                       </div>
