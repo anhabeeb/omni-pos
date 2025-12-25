@@ -8,7 +8,8 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
-import { DollarSign, ShoppingBag, Percent, TrendingUp, Users, Clock, Package, CreditCard, User as UserIcon, Calendar, Printer, CalendarCheck, X, BarChart3, PieChart as PieIcon, Download, FileImage, List } from 'lucide-react';
+// Fix: Added FileText to the lucide-react imports
+import { DollarSign, ShoppingBag, Percent, TrendingUp, Users, Clock, Package, CreditCard, User as UserIcon, Calendar, Printer, CalendarCheck, X, BarChart3, PieChart as PieIcon, Download, FileImage, List, FileBarChart, FileText } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -17,7 +18,7 @@ type DetailType = 'SALES_TREND' | 'TOP_PRODUCTS' | 'CATEGORY_SALES' | 'PAYMENT_M
 
 export default function StoreReports() {
   const { user, currentStoreId } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentView = searchParams.get('view') || 'SUMMARY';
   
   const [orders, setOrders] = useState<Order[]>([]);
@@ -187,7 +188,7 @@ export default function StoreReports() {
               methods[o.paymentMethod].count += 1;
           }
       });
-      return Object.entries(methods).map(([name, data]) => ({ name, value: data.value, count: data.count }));
+      return Object.entries(methods).map(([name, data]) => ({ name: name, value: data.value, count: data.count }));
   }, [filteredOrders]);
 
   const summaryMetrics = useMemo(() => {
@@ -352,6 +353,10 @@ export default function StoreReports() {
 
   const eodStats = useMemo(() => generateEODStats(), [orders, dateRange, customStart, customEnd, shifts]);
 
+  const setView = (view: 'SUMMARY' | 'EOD') => {
+      setSearchParams({ view });
+  };
+
   const renderDetailModal = () => {
     if (!activeDetail) return null;
 
@@ -498,95 +503,224 @@ export default function StoreReports() {
                 <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Reports & Analytics</h1>
                 <p className="text-gray-500 dark:text-gray-400">{store?.name} Overview</p>
             </div>
-            <div className="flex items-center gap-2">
-                <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="pl-3 pr-8 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500">
-                    <option value="TODAY">Today</option>
-                    <option value="YESTERDAY">Yesterday</option>
-                    <option value="WEEK">Last 7 Days</option>
-                    <option value="MONTH">Last 30 Days</option>
-                    <option value="YEAR">Last Year</option>
-                    <option value="ALL">All Time</option>
-                    <option value="CUSTOM">Custom Range</option>
-                </select>
+            
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="flex bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mr-2">
+                    <button 
+                        onClick={() => setView('SUMMARY')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-tight transition-all ${currentView === 'SUMMARY' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                    >
+                        <BarChart3 size={14}/> Summary
+                    </button>
+                    <button 
+                        onClick={() => setView('EOD')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-tight transition-all ${currentView === 'EOD' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                    >
+                        <CalendarCheck size={14}/> EOD Report
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <Calendar size={18} className="ml-1 text-gray-400" />
+                    <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="bg-transparent text-xs font-black uppercase tracking-widest outline-none dark:text-white pr-2 cursor-pointer">
+                        <option value="TODAY">Today</option>
+                        <option value="YESTERDAY">Yesterday</option>
+                        <option value="WEEK">Last 7 Days</option>
+                        <option value="MONTH">Last 30 Days</option>
+                        <option value="YEAR">Last Year</option>
+                        <option value="ALL">All Time</option>
+                        <option value="CUSTOM">Custom Range</option>
+                    </select>
+                </div>
+
                 {dateRange === 'CUSTOM' && (
-                    <div className="flex items-center gap-1 bg-white dark:bg-gray-700 p-1 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="text-xs border-0 rounded p-1 bg-white dark:bg-gray-600 dark:text-white outline-none"/>
-                        <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="text-xs border-0 rounded p-1 bg-white dark:bg-gray-600 dark:text-white outline-none"/>
+                    <div className="flex items-center gap-1 bg-white dark:bg-gray-700 p-1.5 rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm">
+                        <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="text-[10px] font-bold border-0 rounded p-1 bg-white dark:bg-gray-600 dark:text-white outline-none"/>
+                        <span className="text-gray-400 text-xs">-</span>
+                        <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="text-[10px] font-bold border-0 rounded p-1 bg-white dark:bg-gray-600 dark:text-white outline-none"/>
                     </div>
                 )}
             </div>
         </div>
 
         {currentView === 'EOD' ? (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold flex items-center gap-2 dark:text-white"><CalendarCheck className="text-blue-600"/> End of Day Summary</h2>
-                    <button onClick={handleOpenPrintPreview} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-lg"><Printer size={18}/> Print Preview</button>
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 pb-6 border-b dark:border-gray-700">
+                    <div>
+                        <h2 className="text-2xl font-black flex items-center gap-3 dark:text-white uppercase tracking-tighter">
+                            <CalendarCheck size={28} className="text-blue-600"/> End of Day Analysis
+                        </h2>
+                        <p className="text-sm text-gray-400 font-bold mt-1 uppercase tracking-widest">
+                            {dateRange === 'TODAY' ? 'Current operational day overview' : `Report for period ending ${new Date().toLocaleDateString()}`}
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleSaveAsJpg} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-5 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-all font-black text-xs uppercase tracking-widest">
+                            <FileImage size={18}/> Export Image
+                        </button>
+                        <button onClick={handleOpenPrintPreview} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all font-black text-xs uppercase tracking-widest active:scale-[0.98]">
+                            <Printer size={18}/> Print Report
+                        </button>
+                    </div>
                 </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                    <div className="bg-white dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
-                        <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Net Sales (Subtotal)</div>
-                        <div className="text-xl font-black text-blue-900 dark:text-blue-100 mt-1">{store?.currency}{eodStats.totalNetSales.toFixed(2)}</div>
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/30 flex flex-col justify-between group hover:border-blue-500 transition-colors">
+                        <div>
+                            <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Net Sales</div>
+                            <div className="text-2xl font-black text-blue-900 dark:text-blue-100 tracking-tighter">{store?.currency}{eodStats.totalNetSales.toFixed(2)}</div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-900/30 flex justify-between items-center text-[10px] font-black uppercase text-blue-500">
+                            <span>Before Tax</span>
+                            <DollarSign size={12}/>
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800">
-                        <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Total GST</div>
-                        <div className="text-xl font-black text-purple-900 dark:text-purple-100 mt-1">{store?.currency}{eodStats.totalTax.toFixed(2)}</div>
+                    <div className="bg-purple-50/50 dark:bg-purple-900/10 p-5 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 flex flex-col justify-between group hover:border-purple-500 transition-colors">
+                        <div>
+                            <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">Tax Collected</div>
+                            <div className="text-2xl font-black text-purple-900 dark:text-purple-100 tracking-tighter">{store?.currency}{eodStats.totalTax.toFixed(2)}</div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-purple-100 dark:border-purple-900/30 flex justify-between items-center text-[10px] font-black uppercase text-purple-500">
+                            <span>GST 6%</span>
+                            <Percent size={12}/>
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                        <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Total SC</div>
-                        <div className="text-xl font-black text-indigo-900 dark:text-indigo-100 mt-1">{store?.currency}{eodStats.totalServiceCharge.toFixed(2)}</div>
+                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/30 flex flex-col justify-between group hover:border-indigo-500 transition-colors">
+                        <div>
+                            <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Service Charge</div>
+                            <div className="text-2xl font-black text-indigo-900 dark:text-indigo-100 tracking-tighter">{store?.currency}{eodStats.totalServiceCharge.toFixed(2)}</div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-indigo-900/30 flex justify-between items-center text-[10px] font-black uppercase text-indigo-500">
+                            <span>10% SC</span>
+                            <Users size={12}/>
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-green-900/20 p-4 rounded-xl border border-green-100 dark:border-green-800">
-                        <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Gross Revenue</div>
-                        <div className="text-xl font-black text-green-900 dark:text-green-100 mt-1">{store?.currency}{eodStats.totalGrossRevenue.toFixed(2)}</div>
+                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-5 rounded-[2rem] border border-emerald-100 dark:border-emerald-900/30 flex flex-col justify-between group hover:border-emerald-500 transition-colors">
+                        <div>
+                            <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Gross Revenue</div>
+                            <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 tracking-tighter">{store?.currency}{eodStats.totalGrossRevenue.toFixed(2)}</div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-emerald-100 dark:border-emerald-900/30 flex justify-between items-center text-[10px] font-black uppercase text-emerald-500">
+                            <span>Post-Tax</span>
+                            <TrendingUp size={12}/>
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800">
-                        <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest">Cash Variance</div>
-                        <div className="text-xl font-black text-red-900 dark:text-red-100 mt-1">{store?.currency}{eodStats.shifts.totalVariance.toFixed(2)}</div>
+                    <div className={`p-5 rounded-[2rem] border flex flex-col justify-between group transition-colors ${eodStats.shifts.totalVariance < 0 ? 'bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 hover:border-red-500' : 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30 hover:border-green-500'}`}>
+                        <div>
+                            <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${eodStats.shifts.totalVariance < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>Variance</div>
+                            <div className={`text-2xl font-black tracking-tighter ${eodStats.shifts.totalVariance < 0 ? 'text-red-900 dark:text-red-100' : 'text-emerald-900 dark:text-emerald-100'}`}>
+                                {store?.currency}{eodStats.shifts.totalVariance.toFixed(2)}
+                            </div>
+                        </div>
+                        <div className={`mt-4 pt-4 border-t flex justify-between items-center text-[10px] font-black uppercase ${eodStats.shifts.totalVariance < 0 ? 'border-red-100 dark:border-red-900/30 text-red-500' : 'border-green-100 dark:border-green-900/30 text-green-500'}`}>
+                            <span>Drawer Shift</span>
+                            <CreditCard size={12}/>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-10">
+                    <div className="space-y-6">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4">Payment Methods Volume</h3>
+                        <div className="space-y-4">
+                            {paymentMethodData.map((d, i) => (
+                                <div key={i} className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${d.name === 'CASH' ? 'bg-blue-100 text-blue-600' : d.name === 'CARD' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                        <CreditCard size={20}/>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-black text-xs uppercase dark:text-white">{d.name}</span>
+                                            <span className="font-mono text-xs font-black dark:text-gray-400">{d.count} Trans.</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden mr-4">
+                                                <div className="h-full bg-blue-600 rounded-full" style={{width: `${(d.value / eodStats.totalGrossRevenue * 100) || 0}%`}}></div>
+                                            </div>
+                                            <span className="font-black text-sm text-blue-600 tracking-tighter whitespace-nowrap">{store?.currency}{d.value.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-900/30 p-8 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-700">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-6">Drawer Reconciliation Stats</h3>
+                        <div className="space-y-5">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-gray-500 uppercase tracking-tight">Active Shifts</span>
+                                <span className="text-sm font-black dark:text-white">{eodStats.shifts.count}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-gray-500 uppercase tracking-tight">Opening Float</span>
+                                <span className="text-sm font-black dark:text-white">{store?.currency}{eodStats.shifts.totalOpening.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-gray-500 uppercase tracking-tight">Expected Drawer</span>
+                                <span className="text-sm font-black dark:text-white">{store?.currency}{eodStats.shifts.totalExpected.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-4 border-t dark:border-gray-700">
+                                <span className="text-sm font-black text-blue-600 uppercase tracking-widest">Actual Counted</span>
+                                <span className="text-xl font-black text-blue-600 tracking-tighter">{store?.currency}{eodStats.shifts.totalActual.toFixed(2)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         ) : (
             <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-bold text-gray-400 uppercase">Revenue</p>
-                        <h3 className="text-xl font-bold dark:text-white mt-1">{store?.currency}{summaryMetrics.revenue.toFixed(2)}</h3>
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 group hover:border-blue-500 transition-colors">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Gross Revenue</p>
+                        <h3 className="text-2xl font-black dark:text-white mt-1 tracking-tighter">{store?.currency}{summaryMetrics.revenue.toFixed(2)}</h3>
+                        <div className="mt-2 flex items-center gap-1 text-blue-500 font-bold text-[10px] uppercase">
+                            <TrendingUp size={10}/> Post-Tax
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-bold text-gray-400 uppercase">Profit</p>
-                        <h3 className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{store?.currency}{summaryMetrics.profit.toFixed(2)}</h3>
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 group hover:border-emerald-500 transition-colors">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Profit</p>
+                        <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tracking-tighter">{store?.currency}{summaryMetrics.profit.toFixed(2)}</h3>
+                        <div className="mt-2 flex items-center gap-1 text-emerald-500 font-bold text-[10px] uppercase">
+                            <ShoppingBag size={10}/> Net Items
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-bold text-gray-400 uppercase">Margin</p>
-                        <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{summaryMetrics.margin.toFixed(1)}%</h3>
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 group hover:border-purple-500 transition-colors">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Avg. Margin</p>
+                        <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 tracking-tighter">{summaryMetrics.margin.toFixed(1)}%</h3>
+                        <div className="mt-2 flex items-center gap-1 text-purple-500 font-bold text-[10px] uppercase">
+                            <Percent size={10}/> Profit Ratio
+                        </div>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-bold text-gray-400 uppercase">Orders</p>
-                        <h3 className="text-xl font-bold text-orange-600 dark:text-orange-400 mt-1">{filteredOrders.length}</h3>
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 group hover:border-orange-500 transition-colors">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sales Count</p>
+                        <h3 className="text-2xl font-black text-orange-600 dark:text-orange-400 mt-1 tracking-tighter">{filteredOrders.length}</h3>
+                        <div className="mt-2 flex items-center gap-1 text-orange-500 font-bold text-[10px] uppercase">
+                            <FileText size={10}/> Completed
+                        </div>
                     </div>
                 </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 uppercase tracking-wider"><TrendingUp size={16}/> Sales Trend</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><TrendingUp size={16} className="text-blue-500"/> Sales Trend</h3>
                             <button onClick={() => setActiveDetail('SALES_TREND')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-blue-600 transition-colors" title="View Details"><List size={16}/></button>
                         </div>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={salesTrendData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                    <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                    <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                                    <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 700}} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{fontSize: 10, fontWeight: 700}} axisLine={false} tickLine={false} />
+                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 700 }} />
+                                    <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={3} dot={{r: 4, fill: '#3b82f6'}} activeDot={{r: 6}} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 uppercase tracking-wider"><BarChart3 size={16}/> Top Selling Products</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><Package size={16} className="text-emerald-500"/> Top Selling Products</h3>
                             <button onClick={() => setActiveDetail('TOP_PRODUCTS')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-blue-600 transition-colors" title="View Details"><List size={16}/></button>
                         </div>
                         <div className="h-64">
@@ -594,8 +728,8 @@ export default function StoreReports() {
                                 <BarChart data={topProductsData} layout="vertical">
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
                                     <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                                    <Tooltip />
+                                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10, fontWeight: 700}} axisLine={false} tickLine={false} />
+                                    <Tooltip contentStyle={{borderRadius: '12px', fontWeight: 700}} />
                                     <Bar dataKey="qty" fill="#10b981" radius={[0, 4, 4, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
@@ -603,7 +737,7 @@ export default function StoreReports() {
                     </div>
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 uppercase tracking-wider"><PieIcon size={16}/> Category Sales</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><PieIcon size={16} className="text-purple-500"/> Category Distribution</h3>
                             <button onClick={() => setActiveDetail('CATEGORY_SALES')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-blue-600 transition-colors" title="View Details"><List size={16}/></button>
                         </div>
                         <div className="h-64 flex items-center">
@@ -612,15 +746,15 @@ export default function StoreReports() {
                                     <Pie data={categoryDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                         {categoryDistributionData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                     </Pie>
-                                    <Tooltip formatter={(value: number) => `${store?.currency}${value.toFixed(2)}`} />
-                                    <Legend />
+                                    <Tooltip formatter={(value: number) => `${store?.currency}${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', fontWeight: 700}} />
+                                    <Legend iconType="circle" />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 uppercase tracking-wider"><CreditCard size={16}/> Payment Breakdown</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><CreditCard size={16} className="text-amber-500"/> Payment Methods</h3>
                             <button onClick={() => setActiveDetail('PAYMENT_METHODS')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-blue-600 transition-colors" title="View Details"><List size={16}/></button>
                         </div>
                         <div className="h-64">
@@ -629,7 +763,7 @@ export default function StoreReports() {
                                     <Pie data={paymentMethodData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}>
                                         {paymentMethodData.map((entry, index) => <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b'][index % 3]} />)}
                                     </Pie>
-                                    <Tooltip formatter={(value: number) => `${store?.currency}${value.toFixed(2)}`} />
+                                    <Tooltip formatter={(value: number) => `${store?.currency}${value.toFixed(2)}`} contentStyle={{borderRadius: '12px', fontWeight: 700}} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
@@ -639,21 +773,27 @@ export default function StoreReports() {
         )}
 
         {printModalOpen && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
-                <div className="bg-white dark:bg-gray-800 w-full max-w-2xl h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
-                        <h3 className="font-bold dark:text-white flex items-center gap-2"><Printer size={18}/> Print Preview</h3>
-                        <button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+                <div className="bg-white dark:bg-gray-800 w-full max-w-2xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                    <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                        <h2 className="text-xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">
+                            <Printer size={24} className="text-blue-600"/> Report Print Preview
+                        </h2>
+                        <button onClick={() => setPrintModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+                            <X size={24} className="text-gray-400" />
+                        </button>
                     </div>
-                    <div className="flex-1 bg-gray-50 dark:bg-gray-900 p-8 flex justify-center overflow-auto">
-                        <div className="bg-white shadow-lg h-fit">
+                    <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto custom-scrollbar">
+                        <div className="bg-white shadow-2xl h-fit rounded p-1 border">
                             <iframe srcDoc={previewHtml} className="w-[300px] md:w-[400px] h-[600px] border-none" title="Preview Frame" />
                         </div>
                     </div>
-                    <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-white dark:bg-gray-800">
-                        <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-gray-300 font-bold">Cancel</button>
-                        <button onClick={handleSaveAsJpg} className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg font-bold hover:bg-blue-50 flex items-center gap-2"><FileImage size={18}/> Save as Image</button>
-                        <button onClick={handleFinalPrint} className="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg">Print Report</button>
+                    <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-white dark:bg-gray-900">
+                        <button onClick={() => setPrintModalOpen(false)} className="px-6 py-2 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-gray-300 font-black text-[10px] uppercase tracking-widest">Cancel</button>
+                        <button onClick={handleSaveAsJpg} className="px-5 py-2 border-2 border-blue-600 text-blue-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 flex items-center gap-2 transition-all">
+                            <FileImage size={18}/> Save to Media
+                        </button>
+                        <button onClick={handleFinalPrint} className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-[0.98]">Execute Print</button>
                     </div>
                 </div>
             </div>
