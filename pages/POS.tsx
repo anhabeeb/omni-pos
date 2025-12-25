@@ -1,8 +1,7 @@
-// @ts-nocheck
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../App';
-import { db, uuid } from '../services/db';
-import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from '../types';
+import { useAuth } from './../App';
+import { db, uuid } from './../services/db';
+import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from './../types';
 import { 
   Search, Trash2, Plus, X, Utensils, ShoppingBag, Lock, Unlock, RefreshCcw, 
   ChefHat, DollarSign, CheckCircle, UserPlus, Edit, PauseCircle, Printer, AlertCircle, Info, Play,
@@ -26,10 +25,9 @@ const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2, 1];
 const DISCOUNT_PRESETS = [5, 10, 15, 20];
 
 export default function POS() {
-  const { user, currentStoreId, switchStore, logout, hasPermission } = useAuth();
+  const { user, currentStoreId, switchStore } = useAuth();
   const navigate = useNavigate();
 
-  const [stores, setStores] = useState<Store[]>([]);
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -184,22 +182,21 @@ export default function POS() {
           db.getNextOrderNumber(currentStoreId)
       ]);
 
-      const s = sList.find((st: Store) => st.id === currentStoreId);
-      setStores(sList);
+      const s = (sList as Store[]).find((st: Store) => st.id === currentStoreId);
       setStore(s || null);
-      setProducts(pList.filter((p: Product) => p.isAvailable));
-      setCategories(cList.sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
-      setCustomers(custs);
-      setUsers(uList);
-      setNextOrderNum(orderNum);
-      setShift(activeShift || null);
+      setProducts((pList as Product[]).filter((p: Product) => p.isAvailable));
+      setCategories((cList as Category[]).sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
+      setCustomers(custs as Customer[]);
+      setUsers(uList as User[]);
+      setNextOrderNum(orderNum as string);
+      setShift(activeShift as RegisterShift | null);
 
-      setActiveOrders(allOrders.filter((o: Order) => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
-      setHeldOrders(allOrders.filter((o: Order) => o.status === OrderStatus.ON_HOLD).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setActiveOrders((allOrders as Order[]).filter((o: Order) => [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY].includes(o.status)).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
+      setHeldOrders((allOrders as Order[]).filter((o: Order) => o.status === OrderStatus.ON_HOLD).sort((a: Order, b: Order) => b.createdAt - a.createdAt));
       
       const history = activeShift 
-        ? allOrders.filter((o: Order) => o.shiftId === activeShift.id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
-        : allOrders.filter((o: Order) => o.status === OrderStatus.COMPLETED).slice(-20);
+        ? (allOrders as Order[]).filter((o: Order) => o.shiftId === (activeShift as RegisterShift).id && [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.RETURNED].includes(o.status)) 
+        : (allOrders as Order[]).filter((o: Order) => o.status === OrderStatus.COMPLETED).slice(-20);
       
       setHistoryOrders(history.sort((a: Order, b: Order) => b.createdAt - a.createdAt));
   };
@@ -1517,7 +1514,7 @@ export default function POS() {
                       {shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}
 
                       <div className="flex gap-4">
-                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="flex-1 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
+                          <button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-800">Discard</button>
                           {shift ? (
                               <button type="button" onClick={initiateCloseShift} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-[0.98]">Execute Closure</button>
                           ) : (
