@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore
-import { useAuth } from './../App';
+import { useAuth } from '../../App';
 // @ts-ignore
-import { db, uuid } from './../services/db';
+import { db, uuid } from '../../services/db';
 // @ts-ignore
 import { Product, Category, Order, OrderItem, OrderType, OrderStatus, Store, RegisterShift, Transaction, Customer, User } from './../types';
 import { 
