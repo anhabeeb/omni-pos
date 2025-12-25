@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../services/db';
-import { Order, OrderStatus, Product, User, Category, RegisterShift, PrintSettings } from '../types';
+import { Order, OrderStatus, Product, User, Category, RegisterShift, PrintSettings, Transaction } from '../types';
 // @ts-ignore
 import { useSearchParams } from 'react-router-dom';
 import { 
@@ -10,7 +10,7 @@ import {
 import { 
   DollarSign, ShoppingBag, Percent, TrendingUp, Users, Clock, Package, 
   CreditCard, User as UserIcon, Calendar, Printer, CalendarCheck, X, 
-  BarChart3, PieChart as PieIcon, Download, FileImage, List, FileBarChart, FileText 
+  BarChart3, PieChart as PieIcon, Download, FileImage, List, FileBarChart, FileText, Hash
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
@@ -235,8 +235,21 @@ export default function StoreReports() {
       const dayShifts = shifts.filter(s => s.closedAt && s.closedAt >= start && s.closedAt <= end);
       
       const payments: Record<string, number> = { CASH: 0, CARD: 0, TRANSFER: 0 };
+      const nonCashReferences: { ticket: string, method: string, ref: string, amount: number }[] = [];
+
       completedOrders.forEach(o => {
           if (o.paymentMethod) payments[o.paymentMethod] = (payments[o.paymentMethod] || 0) + o.total;
+          
+          o.transactions?.forEach(t => {
+              if (t.type === 'PAYMENT' && t.method && t.method !== 'CASH' && t.referenceNumber) {
+                  nonCashReferences.push({
+                      ticket: o.orderNumber,
+                      method: t.method,
+                      ref: t.referenceNumber,
+                      amount: t.amount
+                  });
+              }
+          });
       });
 
       const fixedOpeningFloat = store?.minStartingCash || 0;
@@ -256,6 +269,7 @@ export default function StoreReports() {
           totalServiceCharge,
           totalNetSales, 
           payments,
+          nonCashReferences,
           shifts: { 
               count: dayShifts.length, 
               totalOpening: fixedOpeningFloat, 
@@ -282,6 +296,9 @@ export default function StoreReports() {
         .row { display: flex; justify-content: space-between; margin-bottom: 4px; } 
         .total { font-weight: bold; border-top: 1px solid #000; padding-top: 5px; margin-top: 5px; }
         .highlight { background: #f9f9f9; padding: 2px 4px; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th { text-align: left; font-size: 9px; border-bottom: 1px solid #000; padding: 4px 2px; }
+        td { font-size: 10px; padding: 4px 2px; border-bottom: 1px solid #eee; }
       </style></head>
       <body ${isAutoPrint ? 'onload="window.print(); window.close();"' : ''}>
         <div class="header">
@@ -300,6 +317,25 @@ export default function StoreReports() {
 
         <div class="section-title">Payment Methods</div>
         ${Object.entries(stats.payments).map(([m, a]) => `<div class="row"><span>${m}</span><span>${currency}${(a as number).toFixed(2)}</span></div>`).join('')}
+
+        ${stats.nonCashReferences.length > 0 ? `
+            <div class="section-title">Non-Cash Reconciliation Log</div>
+            <table>
+                <thead>
+                    <tr><th>Ticket</th><th>Method</th><th>Reference</th><th align="right">Amount</th></tr>
+                </thead>
+                <tbody>
+                    ${stats.nonCashReferences.map((r: any) => `
+                        <tr>
+                            <td>#${r.ticket}</td>
+                            <td>${r.method}</td>
+                            <td style="font-mono">${r.ref}</td>
+                            <td align="right">${currency}${r.amount.toFixed(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        ` : ''}
 
         <div class="section-title">Drawer Reconciliation</div>
         <div class="row"><span>Opening Float (Fixed)</span><span>${currency}${stats.shifts.totalOpening.toFixed(2)}</span></div>
@@ -683,6 +719,38 @@ export default function StoreReports() {
                         </div>
                     </div>
                 </div>
+
+                {eodStats.nonCashReferences.length > 0 && (
+                    <div className="mt-12 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                         <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Hash size={16} className="text-blue-600" /> Non-Cash Transaction Detail Log
+                            </h3>
+                         </div>
+                         <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
+                                    <tr className="text-[9px] font-black uppercase text-gray-400">
+                                        <th className="p-4">Ticket ID</th>
+                                        <th className="p-4">Method</th>
+                                        <th className="p-4">Reference Number</th>
+                                        <th className="p-4 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y dark:divide-gray-700">
+                                    {eodStats.nonCashReferences.map((r: any, idx: number) => (
+                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                            <td className="p-4 font-mono font-bold text-blue-600 text-xs">#{r.ticket}</td>
+                                            <td className="p-4"><span className="text-[10px] font-black uppercase bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">{r.method}</span></td>
+                                            <td className="p-4 font-mono text-sm font-black dark:text-gray-200">{r.ref}</td>
+                                            <td className="p-4 text-right font-black dark:text-white">{store?.currency}{r.amount.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                         </div>
+                    </div>
+                )}
             </div>
         ) : (
             <>

@@ -4,7 +4,7 @@ import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
 import { Order, OrderType, OrderStatus, Store, Transaction, RegisterShift, User, PrintSettings, OrderItem } from '../types';
 import { 
-  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash
+  Calendar, Printer, RotateCcw, X, Search, FileImage, History as HistoryIcon, Eye, Trash, Hash
 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 
@@ -141,6 +141,7 @@ export default function StoreHistory() {
         result = result.filter((o: Order) => 
             o.orderNumber.toString().includes(term) ||
             (o.customerName?.toLowerCase() || '').includes(term) ||
+            (o.customerPhone?.toString() || '').includes(term) ||
             (o.tableNumber?.toLowerCase() || '').includes(term)
         );
     }
@@ -173,7 +174,13 @@ export default function StoreHistory() {
       }, 0) || 0;
   };
 
-  const openRefundModal = (order: Order) => {
+  const openRefundModal = async (order: Order) => {
+      if (!activeStoreId) return;
+      const activeShift = await db.getActiveShift(activeStoreId);
+      if (!activeShift) {
+          alert("Action Blocked: You cannot process refunds while the register is closed. Please open a shift first.");
+          return;
+      }
       setRefundOrder(order);
       setRefundMode('FULL');
       setRefundAmount(order.total.toFixed(2));
@@ -494,7 +501,7 @@ export default function StoreHistory() {
                                 <td className="p-4 font-mono font-bold text-blue-600">#{o.orderNumber}</td>
                                 <td className="p-4 text-xs dark:text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                                 <td className="p-4">
-                                    <div className="text-sm font-bold dark:text-white">{o.customerName || 'Walk-in'}</div>
+                                    <div className="text-sm font-bold dark:text-white">{o.customerName || o.customerPhone || 'Walk-in'}</div>
                                     {o.tableNumber && <div className="text-[10px] text-gray-500">Table: {o.tableNumber}</div>}
                                 </td>
                                 <td className="p-4 text-right font-black dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
@@ -531,7 +538,7 @@ export default function StoreHistory() {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="space-y-1">
                               <p className="text-gray-400 font-bold uppercase text-[10px]">Customer</p>
-                              <p className="font-bold dark:text-white">{viewOrder.customerName || 'Walk-in'}</p>
+                              <p className="font-bold dark:text-white">{viewOrder.customerName || viewOrder.customerPhone || 'Walk-in'}</p>
                           </div>
                           <div className="space-y-1 text-right">
                               <p className="text-gray-400 font-bold uppercase text-[10px]">Date & Time</p>
@@ -546,6 +553,31 @@ export default function StoreHistory() {
                               ))}
                           </tbody>
                       </table>
+
+                      {/* Display Transactions with References */}
+                      <div className="space-y-3">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b dark:border-gray-700 pb-1">Payment Transactions</p>
+                        {viewOrder.transactions?.map((t: Transaction, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${t.type === 'PAYMENT' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{t.type}</span>
+                                        <span className="font-bold dark:text-gray-200">{t.method || 'CASH'}</span>
+                                    </div>
+                                    {t.referenceNumber && (
+                                        <div className="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400 font-bold mt-1">
+                                            <Hash size={12}/> Ref: {t.referenceNumber}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-black dark:text-white">{store?.currency}{t.amount.toFixed(2)}</div>
+                                    <div className="text-[9px] text-gray-400 uppercase">{new Date(t.timestamp).toLocaleTimeString()}</div>
+                                </div>
+                            </div>
+                        ))}
+                      </div>
+
                       <div className="flex flex-col items-end gap-1 pt-4 border-t dark:border-gray-700">
                           <div className="w-48 flex justify-between text-sm text-gray-500"><span>Subtotal:</span><span>{store?.currency}{viewOrder.subtotal.toFixed(2)}</span></div>
                           <div className="w-48 flex justify-between font-black text-xl dark:text-white border-t-2 border-gray-100 dark:border-gray-700 pt-2 mt-1"><span>TOTAL:</span><span>{store?.currency}{viewOrder.total.toFixed(2)}</span></div>

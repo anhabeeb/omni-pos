@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
@@ -20,7 +19,6 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
-  // Fix: Added missing X icon import
   X
 } from 'lucide-react';
 import { utils, writeFile, read } from 'xlsx';
@@ -48,7 +46,8 @@ export default function StoreCustomers() {
     buildingName: '',
     street: '',
     island: '',
-    country: ''
+    country: '',
+    address: ''
   });
 
   useEffect(() => {
@@ -68,12 +67,32 @@ export default function StoreCustomers() {
     setCustomers(await db.getCustomers(numericStoreId));
   };
 
+  const validateForm = () => {
+    const type = editingCustomer.type || 'INDIVIDUAL';
+    if (type === 'INDIVIDUAL') {
+        const hasAddress = editingCustomer.houseName || editingCustomer.streetName || editingCustomer.address;
+        if (!editingCustomer.phone || !hasAddress) {
+            alert("Phone and Address are mandatory for individual customers.");
+            return false;
+        }
+    } else {
+        const hasAddress = editingCustomer.buildingName || editingCustomer.street || editingCustomer.address;
+        if (!editingCustomer.name || !editingCustomer.companyName || !editingCustomer.tin || !editingCustomer.phone || !hasAddress) {
+            alert("All fields (Name, Company, TIN, Phone, Address) are mandatory for company accounts.");
+            return false;
+        }
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || !editingCustomer.name || isSaving) return;
+    if (!storeId || isSaving) return;
+    if (!validateForm()) return;
+    
     const numericStoreId = Number(storeId);
-
     const finalCustomer = { ...editingCustomer };
+    
     if (finalCustomer.type === 'INDIVIDUAL') {
         finalCustomer.companyName = undefined;
         finalCustomer.tin = undefined;
@@ -112,7 +131,8 @@ export default function StoreCustomers() {
         buildingName: '',
         street: '',
         island: '',
-        country: ''
+        country: '',
+        address: ''
     });
   };
 
@@ -148,7 +168,7 @@ export default function StoreCustomers() {
     }
 
     const exportData = customers.map(c => ({
-        'Name': c.name,
+        'Name': c.name || '',
         'Phone': c.phone,
         'Type': c.type,
         'Company Name': c.companyName || '',
@@ -245,7 +265,7 @@ export default function StoreCustomers() {
                     address: row['Additional Address']
                 };
 
-                if (newCust.name && newCust.phone) {
+                if (newCust.phone) {
                     await db.addCustomer(numericStoreId, newCust as Customer);
                     addedCount++;
                 }
@@ -263,7 +283,7 @@ export default function StoreCustomers() {
 
   const filteredCustomers = customers.filter(c => {
     const term = searchTerm.toLowerCase();
-    const nameMatch = c.name.toLowerCase().includes(term);
+    const nameMatch = (c.name || '').toLowerCase().includes(term);
     const phoneMatch = c.phone.includes(term);
     const companyMatch = c.companyName?.toLowerCase().includes(term);
     return nameMatch || phoneMatch || companyMatch;
@@ -368,7 +388,7 @@ export default function StoreCustomers() {
                 <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors group">
                     <td className="p-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{index + 1}</td>
                     <td className="p-4">
-                    <div className="font-bold text-gray-900 dark:text-white">{customer.name}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">{customer.name || 'Anonymous Individual'}</div>
                     {customer.type === 'COMPANY' && customer.companyName && (
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
                             <Building2 size={10} /> {customer.companyName}
@@ -451,12 +471,13 @@ export default function StoreCustomers() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN)</label>
+                        <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN) *</label>
                         <input 
                             placeholder="e.g. 123-456-789" 
-                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
                             value={editingCustomer.tin}
                             onChange={e => setEditingCustomer({...editingCustomer, tin: e.target.value})}
+                            required={editingCustomer.type === 'COMPANY'}
                         />
                       </div>
                   </div>
@@ -464,13 +485,13 @@ export default function StoreCustomers() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name *</label>
+                    <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name {editingCustomer.type === 'COMPANY' ? '*' : '(Optional)'}</label>
                     <input 
                         placeholder="Full Name" 
                         className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
                         value={editingCustomer.name}
                         onChange={e => setEditingCustomer({...editingCustomer, name: e.target.value})}
-                        required
+                        required={editingCustomer.type === 'COMPANY'}
                     />
                   </div>
                   
@@ -488,14 +509,15 @@ export default function StoreCustomers() {
 
               <div className="border-t dark:border-gray-700 pt-6">
                   <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                      <MapPin size={14} /> Address Information
+                      <MapPin size={14} /> Address Information *
                   </h3>
                   
                   {editingCustomer.type === 'INDIVIDUAL' ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">House Name / Building</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">House Name / Building *</label>
                             <input 
+                                required
                                 placeholder="e.g. Rose Villa" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                                 value={editingCustomer.houseName}
@@ -503,8 +525,9 @@ export default function StoreCustomers() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name *</label>
                             <input 
+                                required
                                 placeholder="e.g. Orchid Magu" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                                 value={editingCustomer.streetName}
@@ -516,8 +539,9 @@ export default function StoreCustomers() {
                       <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / Floor</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / Floor *</label>
                                 <input 
+                                    required
                                     placeholder="e.g. Trade Centre, 4th Floor" 
                                     className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                                     value={editingCustomer.buildingName}
@@ -525,8 +549,9 @@ export default function StoreCustomers() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street *</label>
                                 <input 
+                                    required
                                     placeholder="e.g. Main Street" 
                                     className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                                     value={editingCustomer.street}
@@ -536,8 +561,9 @@ export default function StoreCustomers() {
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll *</label>
                                 <input 
+                                    required
                                     placeholder="e.g. Male'" 
                                     className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                                     value={editingCustomer.island}
@@ -545,12 +571,12 @@ export default function StoreCustomers() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Country</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Additional Details</label>
                                 <input 
-                                    placeholder="e.g. Maldives" 
+                                    placeholder="e.g. Near Market" 
                                     className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editingCustomer.country}
-                                    onChange={e => setEditingCustomer({...editingCustomer, country: e.target.value})}
+                                    value={editingCustomer.address}
+                                    onChange={e => setEditingCustomer({...editingCustomer, address: e.target.value})}
                                 />
                               </div>
                           </div>

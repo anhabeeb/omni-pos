@@ -227,6 +227,7 @@ export interface Transaction {
   timestamp: number;
   performedBy: number;
   note?: string;
+  referenceNumber?: string;
   tenderedAmount?: number;
   changeAmount?: number;
 }

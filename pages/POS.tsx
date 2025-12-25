@@ -63,12 +63,13 @@ export default function POS() {
   const [orderToSettle, setOrderToSettle] = useState<Order | null>(null); 
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER'>('CASH');
   const [amountTendered, setAmountTendered] = useState('');
+  const [paymentRef, setPaymentRef] = useState('');
   const [paymentError, setPaymentError] = useState('');
 
   // Split Payment State
   const [isSplitMode, setIsSplitMode] = useState(false);
-  const [splitPayment1, setSplitPayment1] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string }>({ method: 'CASH', amount: '' });
-  const [splitPayment2, setSplitPayment2] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string }>({ method: 'CASH', amount: '' });
+  const [splitPayment1, setSplitPayment1] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string, ref: string }>({ method: 'CASH', amount: '', ref: '' });
+  const [splitPayment2, setSplitPayment2] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string, ref: string }>({ method: 'CASH', amount: '', ref: '' });
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
@@ -371,19 +372,19 @@ export default function POS() {
       if (cart.length === 0) return;
       if (!validateOrderRequirements()) return;
 
-      setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
+      setOrderToSettle(null); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentRef(''); setPaymentError(''); 
       setIsSplitMode(false);
-      setSplitPayment1({ method: 'CASH', amount: '' });
-      setSplitPayment2({ method: 'CASH', amount: '' });
+      setSplitPayment1({ method: 'CASH', amount: '', ref: '' });
+      setSplitPayment2({ method: 'CASH', amount: '', ref: '' });
       setIsPaymentModalOpen(true);
   };
 
   const handleQuickSettle = (order: Order, e?: React.MouseEvent) => {
       if (e) e.stopPropagation();
-      setOrderToSettle(order); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentError(''); 
+      setOrderToSettle(order); setPaymentMethod('CASH'); setAmountTendered(''); setPaymentRef(''); setPaymentError(''); 
       setIsSplitMode(false);
-      setSplitPayment1({ method: 'CASH', amount: '' });
-      setSplitPayment2({ method: 'CASH', amount: '' });
+      setSplitPayment1({ method: 'CASH', amount: '', ref: '' });
+      setSplitPayment2({ method: 'CASH', amount: '', ref: '' });
       setIsPaymentModalOpen(true);
   };
 
@@ -400,11 +401,17 @@ export default function POS() {
               setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
               return;
           }
+          
+          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
+              setPaymentError("Reference number is mandatory for split Card/Transfer payments.");
+              return;
+          }
+
           transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, timestamp: Date.now(), performedBy: user.id
+              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
           });
           transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, timestamp: Date.now(), performedBy: user.id
+              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
           });
       } else {
           const tendered = parseFloat(amountTendered) || 0;
@@ -412,8 +419,15 @@ export default function POS() {
               setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
               return; 
           }
+          
+          if (paymentMethod !== 'CASH' && !paymentRef) {
+              setPaymentError("Reference number is mandatory for Card/Transfer payments.");
+              return;
+          }
+
           transactions.push({
               id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
+              referenceNumber: paymentRef,
               timestamp: Date.now(), performedBy: user.id, 
               tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
               changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
@@ -661,7 +675,21 @@ export default function POS() {
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
       e.preventDefault(); 
-      if (!currentStoreId || !newCustData.name || isSaving) return;
+      if (!currentStoreId || isSaving) return;
+      
+      const type = newCustData.type || 'INDIVIDUAL';
+      if (type === 'INDIVIDUAL') {
+          if (!newCustData.phone || !newCustData.address) {
+              showToast("Phone and Address are mandatory for individuals.", "ERROR");
+              return;
+          }
+      } else {
+          if (!newCustData.name || !newCustData.companyName || !newCustData.tin || !newCustData.phone || !newCustData.address) {
+              showToast("All fields are mandatory for companies.", "ERROR");
+              return;
+          }
+      }
+
       setIsSaving(true);
       try {
           const finalData = { ...newCustData };
@@ -672,14 +700,11 @@ export default function POS() {
               finalData.street = undefined;
               finalData.island = undefined;
               finalData.country = undefined;
-          } else {
-              finalData.houseName = undefined;
-              finalData.streetName = undefined;
           }
 
           const added = await db.addCustomer(currentStoreId, { ...finalData, id: 0, storeId: currentStoreId } as Customer); 
           setSelectedCustomer(added); 
-          setCustomerSearch(added.name); 
+          setCustomerSearch(added.name || added.phone); 
           setIsCustomerModalOpen(false); 
           resetNewCustForm();
           showToast("Customer Added", "SUCCESS");
@@ -890,7 +915,7 @@ export default function POS() {
                                           </div>
                                           <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
                                       </div>
-                                      <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</div>
+                                      <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : (order.customerName || order.customerPhone || 'Walk-in')}</div>
                                       <div className="space-y-1 mb-4 flex-1">
                                           {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
@@ -910,7 +935,7 @@ export default function POS() {
                       ) : activeTab === 'HELD' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                               {heldOrders.map((order: Order) => (
-                                  <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-orange-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
+                                  <div key={order.id} className="bg-orange-50/30 dark:bg-orange-900/10 p-4 rounded-[2rem] border border-orange-100 dark:border-orange-800 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer" onClick={() => resumeOrder(order)}>
                                       <div className="flex justify-between items-start mb-2 border-b border-orange-100 dark:border-orange-800 pb-2">
                                           <div>
                                               <h3 className="font-black text-orange-600 text-base tracking-tighter uppercase leading-none">#{order.orderNumber}</h3>
@@ -918,7 +943,7 @@ export default function POS() {
                                           </div>
                                           <span className={`text-[8px] font-black uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-lg tracking-widest`}>ON HOLD</span>
                                       </div>
-                                      <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || 'Standard Order'}</p>
+                                      <p className="text-[11px] font-black text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-tighter">{order.customerName || order.customerPhone || 'Standard Order'}</p>
                                       <div className="mt-auto flex gap-2">
                                           <button onClick={(e) => { e.stopPropagation(); handleActivateOrder(order); }} className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"><Play size={12}/> Activate</button>
                                       </div>
@@ -943,7 +968,7 @@ export default function POS() {
                                           <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
-                                              <td className="p-3 text-[11px] font-bold dark:text-gray-400 truncate max-w-[150px] uppercase">{order.customerName || `Walk-in`}</td>
+                                              <td className="p-3 text-[11px] font-bold dark:text-gray-400 truncate max-w-[150px] uppercase">{order.customerName || order.customerPhone || `Walk-in`}</td>
                                               <td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
                                               <td className="p-3 text-right">
                                                   <button onClick={() => {setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button>
@@ -1003,8 +1028,8 @@ export default function POS() {
                           <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
                               {(filteredCustomers as Customer[]).map((c: Customer) => (
                                   <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
-                                      <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name[0]}</div>
-                                      <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
+                                      <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name ? c.name[0] : '#'}</div>
+                                      <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name || c.phone}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
                                   </button>
                               ))}
                           </div>
@@ -1173,12 +1198,22 @@ export default function POS() {
                                             ))}
                                         </div>
                                     </div>
-                                    <input 
-                                        type="number" step="0.01" placeholder="Enter amount..." 
-                                        className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
-                                        value={splitPayment1.amount}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment1({...splitPayment1, amount: e.target.value})}
-                                    />
+                                    <div className="space-y-3">
+                                        <input 
+                                            type="number" step="0.01" placeholder="Enter amount..." 
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
+                                            value={splitPayment1.amount}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment1({...splitPayment1, amount: e.target.value})}
+                                        />
+                                        {splitPayment1.method !== 'CASH' && (
+                                            <input 
+                                                type="text" placeholder="Reference Number *" 
+                                                className="w-full p-2.5 bg-purple-50 dark:bg-gray-900 border-2 border-purple-100 dark:border-purple-900 rounded-xl font-bold text-xs outline-none focus:border-purple-500"
+                                                value={splitPayment1.ref}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment1({...splitPayment1, ref: e.target.value})}
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border-2 border-purple-100 dark:border-purple-900/30">
                                     <div className="flex justify-between items-center mb-3">
@@ -1189,12 +1224,22 @@ export default function POS() {
                                             ))}
                                         </div>
                                     </div>
-                                    <input 
-                                        type="number" step="0.01" placeholder="Remaining balance..." 
-                                        className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
-                                        value={splitPayment2.amount}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment2({...splitPayment2, amount: e.target.value})}
-                                    />
+                                    <div className="space-y-3">
+                                        <input 
+                                            type="number" step="0.01" placeholder="Remaining balance..." 
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-black text-lg outline-none"
+                                            value={splitPayment2.amount}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment2({...splitPayment2, amount: e.target.value})}
+                                        />
+                                        {splitPayment2.method !== 'CASH' && (
+                                            <input 
+                                                type="text" placeholder="Reference Number *" 
+                                                className="w-full p-2.5 bg-purple-50 dark:bg-gray-900 border-2 border-purple-100 dark:border-purple-900 rounded-xl font-bold text-xs outline-none focus:border-purple-500"
+                                                value={splitPayment2.ref}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSplitPayment2({...splitPayment2, ref: e.target.value})}
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                           ) : (
@@ -1206,7 +1251,7 @@ export default function POS() {
                                 ].map((method: { id: string, icon: any, label: string, sub: string }) => (
                                     <button 
                                         key={method.id}
-                                        onClick={() => setPaymentMethod(method.id as any)}
+                                        onClick={() => { setPaymentMethod(method.id as any); setPaymentRef(''); }}
                                         className={`flex items-center gap-5 p-5 rounded-[2rem] border-2 transition-all group ${paymentMethod === method.id ? 'bg-blue-600 border-blue-600 text-white shadow-2xl shadow-blue-600/40' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:border-blue-200'}`}
                                     >
                                         <div className={`p-3 rounded-2xl transition-colors ${paymentMethod === method.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-700 group-hover:bg-blue-50'}`}>
@@ -1249,6 +1294,24 @@ export default function POS() {
                                           </p>
                                       </div>
                                   </>
+                              )}
+
+                              {!isSplitMode && (paymentMethod === 'CARD' || paymentMethod === 'TRANSFER') && (
+                                  <div className="space-y-3">
+                                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Reference Number *</label>
+                                      <div className="relative">
+                                          <Hash className="absolute left-4 top-4 text-gray-300" size={18}/>
+                                          <input 
+                                            autoFocus
+                                            type="text" 
+                                            className="w-full pl-10 pr-4 py-4 bg-blue-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 text-lg font-bold dark:text-white"
+                                            placeholder="Enter Ref/TXN ID"
+                                            value={paymentRef}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPaymentRef(e.target.value); setPaymentError(''); }}
+                                          />
+                                      </div>
+                                      <p className="text-[9px] text-gray-400 font-bold uppercase italic">* Required for {paymentMethod} settlement</p>
+                                  </div>
                               )}
                               
                               {paymentError && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest ml-1 animate-pulse">{paymentError}</p>}
@@ -1351,12 +1414,13 @@ export default function POS() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN)</label>
+                                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN) *</label>
                                 <input 
                                     placeholder="e.g. 123-456-789" 
                                     className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
                                     value={newCustData.tin || ''}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, tin: e.target.value})}
+                                    required={newCustData.type === 'COMPANY'}
                                 />
                               </div>
                           </div>
@@ -1364,18 +1428,18 @@ export default function POS() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name *</label>
+                            <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name {newCustData.type === 'COMPANY' ? '*' : '(Optional)'}</label>
                             <input 
                                 placeholder="Full Name" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
                                 value={newCustData.name || ''}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, name: e.target.value})}
-                                required
+                                required={newCustData.type === 'COMPANY'}
                             />
                           </div>
                           
                           <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Phone Number *</label>
+                            <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Phone Number *</label>
                             <input 
                                 placeholder="Phone Number" 
                                 className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
@@ -1388,74 +1452,54 @@ export default function POS() {
 
                       <div className="border-t dark:border-gray-700 pt-6">
                           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                              <MapPin size={14} /> Address Information
+                              <MapPin size={14} /> Address Information *
                           </h3>
                           
-                          {newCustData.type === 'INDIVIDUAL' ? (
+                          <div className="space-y-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">House Name / Building</label>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / House *</label>
                                     <input 
-                                        placeholder="e.g. Rose Villa" 
+                                        required
+                                        placeholder="e.g. Trade Centre" 
                                         className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newCustData.houseName || ''}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, houseName: e.target.value})}
+                                        value={newCustData.type === 'INDIVIDUAL' ? newCustData.houseName : newCustData.buildingName}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData(newCustData.type === 'INDIVIDUAL' ? {...newCustData, houseName: e.target.value} : {...newCustData, buildingName: e.target.value})}
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name</label>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street *</label>
                                     <input 
-                                        placeholder="e.g. Orchid Magu" 
+                                        required
+                                        placeholder="e.g. Main Street" 
                                         className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newCustData.streetName || ''}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, streetName: e.target.value})}
+                                        value={newCustData.type === 'INDIVIDUAL' ? newCustData.streetName : newCustData.street}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData(newCustData.type === 'INDIVIDUAL' ? {...newCustData, streetName: e.target.value} : {...newCustData, street: e.target.value})}
                                     />
                                   </div>
                               </div>
-                          ) : (
-                              <div className="space-y-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / Floor</label>
-                                        <input 
-                                            placeholder="e.g. Trade Centre, 4th Floor" 
-                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.buildingName || ''}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, buildingName: e.target.value})}
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street</label>
-                                        <input 
-                                            placeholder="e.g. Main Street" 
-                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.street || ''}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, street: e.target.value})}
-                                        />
-                                      </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll *</label>
+                                    <input 
+                                        required
+                                        placeholder="e.g. Male'" 
+                                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={newCustData.island || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, island: e.target.value})}
+                                    />
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll</label>
-                                        <input 
-                                            placeholder="e.g. Male'" 
-                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.island || ''}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, island: e.target.value})}
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Country</label>
-                                        <input 
-                                            placeholder="e.g. Maldives" 
-                                            className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newCustData.country || ''}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, country: e.target.value})}
-                                        />
-                                      </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Additional Details</label>
+                                    <input 
+                                        placeholder="e.g. Apt 4B" 
+                                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={newCustData.address || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCustData({...newCustData, address: e.target.value})}
+                                    />
                                   </div>
                               </div>
-                          )}
+                          </div>
                       </div>
 
                       <div className="flex gap-4 pt-4 border-t dark:border-gray-700">

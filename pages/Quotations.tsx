@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 // @ts-ignore - Fixing missing member errors in react-router-dom
 import { useParams } from 'react-router-dom';
@@ -181,7 +180,7 @@ export default function Quotations() {
       const customerBlock = (settings.showCustomerDetails && (quote.customerName || quote.customerPhone || quote.customerTin)) ? `
           <div style="margin-bottom: 30px; text-align: left; padding: 15px; border: 1px solid #eee; border-radius: 8px; background: #fafafa;">
               <div style="font-weight: bold; text-transform: uppercase; font-size: 11px; color: #888; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Quotation For:</div>
-              <div style="font-size: 18px; font-weight: bold;">${quote.customerName}</div>
+              ${quote.customerName ? `<div style="font-size: 18px; font-weight: bold;">${quote.customerName}</div>` : ''}
               ${quote.customerAddress ? `<div style="font-size: 13px; margin-top: 5px; color: #444;"><strong>Address:</strong> ${quote.customerAddress}</div>` : ''}
               ${quote.customerPhone ? `<div style="font-size: 13px; color: #444;"><strong>Phone:</strong> ${quote.customerPhone}</div>` : ''}
               ${quote.customerTin ? `<div style="font-size: 13px; color: #444;"><strong>TIN:</strong> ${quote.customerTin}</div>` : ''}
@@ -321,7 +320,7 @@ export default function Quotations() {
                               <tr key={q.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                   <td className="p-4 text-sm">{new Date(q.createdAt).toLocaleDateString()}</td>
                                   <td className="p-4 font-mono font-bold text-blue-600">#{q.quotationNumber}</td>
-                                  <td className="p-4 font-bold truncate max-w-[200px]">{q.customerName}</td>
+                                  <td className="p-4 font-bold truncate max-w-[200px]">{q.customerName || q.customerPhone || 'Anonymous'}</td>
                                   <td className="p-4 text-right font-black">{store?.currency}{q.total.toFixed(2)}</td>
                                   <td className="p-4 text-right"><button onClick={() => handlePrint(q)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Printer size={18}/></button></td>
                               </tr>
@@ -357,7 +356,7 @@ export default function Quotations() {
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Recipient Customer</label>
                       <select className="w-full p-2.5 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 font-bold outline-none" value={selectedCustomer?.id || ''} onChange={e => setSelectedCustomer(customers.find(c => c.id === Number(e.target.value)) || null)}>
                           <option value="">Select Customer...</option>
-                          {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {customers.map(c => <option key={c.id} value={c.id}>{c.name || c.phone}</option>)}
                       </select>
                   </div>
                   
