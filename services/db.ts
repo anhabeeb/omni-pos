@@ -7,6 +7,16 @@ const CLOUDFLARE_CONFIG = {
 
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
+// Device Fingerprinting for Session Locking
+const getDeviceId = () => {
+    let id = localStorage.getItem(DB_PREFIX + 'device_id');
+    if (!id) {
+        id = uuid();
+        localStorage.setItem(DB_PREFIX + 'device_id', id);
+    }
+    return id;
+};
+
 const getItem = <T>(key: string, defaultValue: T): T => {
     try {
         const data = localStorage.getItem(DB_PREFIX + key);
@@ -55,7 +65,7 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
     const cleanData = { ...data };
     
     // Type normalization for IDs
-    if (cleanData.id) cleanData.id = Number(cleanData.id);
+    if (cleanData.id && typeof cleanData.id !== 'string') cleanData.id = Number(cleanData.id);
     if (cleanData.storeId) cleanData.storeId = Number(cleanData.storeId);
     if (cleanData.createdAt) cleanData.createdAt = Number(cleanData.createdAt);
     
@@ -276,6 +286,8 @@ export const db = {
                 if (data.employees) setItem('global_employees', data.employees);
                 if (data.global_permissions) setItem('global_permissions', data.global_permissions);
                 if (data.system_activities) setItem('global_activities', data.system_activities);
+                // Hydrate live sessions from cloud to tracker
+                if (data.sessions) setItem('global_sessions', data.sessions);
                 
                 const stores = data.stores || [];
                 for (const s of stores) {
@@ -542,24 +554,48 @@ export const db = {
     },
 
     getActiveSessions: async () => getItem<ActiveSession[]>('global_sessions', []),
-    updateHeartbeat: async (u: number, s: number | null) => {
-        let list = await db.getActiveSessions();
+    updateHeartbeat: async (userObj: User, s: number | null) => {
         const now = Date.now();
-        const sess = { userId: u, userName: 'User', role: UserRole.CASHIER, storeId: s, lastActive: now } as ActiveSession;
-        const idx = list.findIndex(i => i.userId === u);
+        const currentDeviceId = getDeviceId();
+        
+        // Local state update for responsiveness
+        let list = await db.getActiveSessions();
+        const sess: ActiveSession = { 
+            userId: userObj.id, 
+            userName: userObj.name, 
+            role: userObj.role, 
+            storeId: s, 
+            lastActive: now,
+            deviceId: currentDeviceId 
+        } as ActiveSession;
+        
+        const idx = list.findIndex(i => i.userId === userObj.id);
         if (idx >= 0) list[idx] = sess; else list.push(sess);
-        setItem('global_sessions', list.filter(i => now - i.lastActive < 300000));
+        
+        // Filter out sessions older than 5 minutes (300,000ms)
+        const activeList = list.filter(i => now - i.lastActive < 300000);
+        setItem('global_sessions', activeList);
+
+        // Sync to cloud sessions table
+        // Use INSERT OR REPLACE on the cloud side keyed by userId
+        addToSyncQueue('INSERT', 'sessions', sess);
     },
     removeSession: async (u: number) => {
         let list = await db.getActiveSessions();
         setItem('global_sessions', list.filter(i => i.userId !== u));
+        addToSyncQueue('DELETE', 'sessions', { userId: u });
     },
     remoteLogin: async (u: string, p: string) => {
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'REMOTE_LOGIN', username: u, password: p })
+                body: JSON.stringify({ 
+                    action: 'REMOTE_LOGIN', 
+                    username: u, 
+                    password: p,
+                    deviceId: getDeviceId() 
+                })
             });
             const result = await response.json();
             return result;

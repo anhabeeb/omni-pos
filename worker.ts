@@ -1,4 +1,3 @@
-
 /**
  * OmniPOS Standard Cloudflare Worker
  * Updated for Numerical ID Schema and Robust Error Handling
@@ -37,7 +36,7 @@ export default {
           let payload: any;
           try { payload = await request.json(); } catch (e) { return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400); }
 
-          const { action, table, data, username, password } = payload;
+          const { action, table, data, username, password, deviceId } = payload;
 
           if (action === 'INIT_SCHEMA') {
             try {
@@ -53,7 +52,7 @@ export default {
                 "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
                 "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
                 "CREATE TABLE IF NOT EXISTS `inventory` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-                "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
+                "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, userName TEXT, role TEXT, storeId INTEGER, lastActive INTEGER, deviceId TEXT)",
                 "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
               ];
               
@@ -71,7 +70,8 @@ export default {
                 { table: 'stores', column: 'useInventory', type: 'INTEGER' },
                 { table: 'users', column: 'phoneNumber', type: 'TEXT' },
                 { table: 'users', column: 'email', type: 'TEXT' },
-                { table: 'orders', column: 'items', type: 'TEXT' }
+                { table: 'orders', column: 'items', type: 'TEXT' },
+                { table: 'sessions', column: 'deviceId', type: 'TEXT' }
               ];
 
               for (const m of migrations) {
@@ -91,6 +91,27 @@ export default {
             const { results } = await DB.prepare("SELECT * FROM `users` WHERE `username` = ? AND `password` = ?").bind(username, password).run();
             if (results && results.length > 0) {
               const user = results[0];
+              const userId = user.id;
+
+              // CONCURRENCY CHECK: Check if an active session exists on a DIFFERENT device
+              const { results: sessionResults } = await DB.prepare("SELECT * FROM `sessions` WHERE `userId` = ?").bind(userId).run();
+              if (sessionResults && sessionResults.length > 0) {
+                const activeSession = sessionResults[0];
+                const now = Date.now();
+                // If last heartbeat was within the last 120 seconds (2 minutes) and on a different device, lock them out
+                if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
+                  return jsonResponse({ 
+                    success: false, 
+                    error: `User is already active on another device (${activeSession.deviceId}). Please logout from other devices first.` 
+                  }, 403);
+                }
+              }
+
+              // Proceed with login, update session record
+              await DB.prepare("INSERT OR REPLACE INTO `sessions` (userId, userName, role, storeId, lastActive, deviceId) VALUES (?, ?, ?, ?, ?, ?)")
+                .bind(userId, user.name, user.role, null, Date.now(), deviceId || 'unknown')
+                .run();
+
               if (typeof user.storeIds === 'string') {
                 try { user.storeIds = JSON.parse(user.storeIds); } catch(e) { user.storeIds = []; }
               }
@@ -100,7 +121,7 @@ export default {
           }
 
           if (action === 'FETCH_HYDRATION_DATA') {
-            const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
+            const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities', 'sessions'];
             const result: Record<string, any[]> = {};
             for (const t of tables) {
                 try {
@@ -133,9 +154,9 @@ export default {
                 if (val === undefined) return null;
                 
                 const numericFields = [
-                  'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
+                  'id', 'userId', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
                   'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
-                  'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables', 'useKOT', 'useInventory'
+                  'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables', 'useKOT', 'useInventory', 'lastActive'
                 ];
                 
                 if (numericFields.includes(k)) {
@@ -160,7 +181,11 @@ export default {
           
           if (action === 'DELETE') {
             if (!data) return jsonResponse({ success: false, error: 'No data provided for deletion' }, 400);
-            const pk = table === 'global_permissions' ? 'role' : 'id';
+            // Default PK is 'id', but some tables use special keys
+            let pk = 'id';
+            if (table === 'global_permissions') pk = 'role';
+            if (table === 'sessions') pk = 'userId';
+            
             if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
             
             try {

@@ -554,7 +554,7 @@ export const App = () => {
 
   useEffect(() => {
       if (!user) return;
-      const beat = () => db.updateHeartbeat(user.id, currentStoreId);
+      const beat = () => db.updateHeartbeat(user, currentStoreId);
       beat();
       const interval = setInterval(beat, 30000);
       return () => clearInterval(interval);
