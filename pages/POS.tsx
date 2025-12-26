@@ -979,6 +979,7 @@ export default function POS() {
                                           <div className="flex gap-1.5">
                                               <button onClick={(e) => { e.stopPropagation(); resumeOrder(order); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={14}/></button>
                                               <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-1.5 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-600 hover:text-white transition-all"><PauseCircle size={14}/></button>
+                                              <button onClick={(e) => { e.stopPropagation(); setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true); }} className="p-1.5 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-600 hover:text-white transition-all"><Printer size={14}/></button>
                                               <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><DollarSign size={14}/></button>
                                           </div>
                                           <span className="font-black text-base dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</span>
