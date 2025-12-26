@@ -295,6 +295,14 @@ export default function StoreHistory() {
         <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>Discount (${order.discountPercent}%):</span><span>-${currency}${order.discountAmount.toFixed(2)}</span></div>
     ` : '';
 
+    const serviceChargeBlock = order.serviceCharge && order.serviceCharge > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>Service Charge:</span><span>${currency}${order.serviceCharge.toFixed(2)}</span></div>
+    ` : '';
+
+    const taxBlock = order.tax && order.tax > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>GST (${store.taxRate}%):</span><span>${currency}${order.tax.toFixed(2)}</span></div>
+    ` : '';
+
     return `
     <!DOCTYPE html>
     <html>
@@ -324,6 +332,8 @@ export default function StoreHistory() {
         <div class="totals">
             ${settings.showSubtotal !== false ? `<div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${currency}${order.subtotal.toFixed(2)}</span></div>` : ''}
             ${discountBlock}
+            ${serviceChargeBlock}
+            ${taxBlock}
             ${settings.showTotal !== false ? `<div style="display: flex; justify-content: space-between;" class="total-row"><span>TOTAL:</span><span>${currency}${order.total.toFixed(2)}</span></div>` : ''}
         </div>
         <div class="footer">${settings.footerText || 'Thank you!'}</div>

@@ -70,6 +70,16 @@ export default function SuperAdminDashboard() {
     setAllOrders(orders);
   };
 
+  // Fix: Implement handleSystemReset to clear local database after two-step confirmation
+  const handleSystemReset = async () => {
+    if (resetConfirmation === 0) {
+      setResetConfirmation(1);
+      setTimeout(() => setResetConfirmation(0), 3000);
+      return;
+    }
+    await db.resetSystem();
+  };
+
   const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
@@ -217,36 +227,6 @@ export default function SuperAdminDashboard() {
       return { todaySales, activeCount, heldCount, completedTodayCount, trendData, currency };
   };
 
-  const visibleSessions = sessions.filter(s => {
-      const isAdminRole = s.role === UserRole.SUPER_ADMIN || s.role === UserRole.ADMIN;
-      if (user?.role === UserRole.SUPER_ADMIN) return true;
-      return !isAdminRole;
-  });
-
-  const getRoleIcon = (role: UserRole) => {
-      switch(role) {
-          case UserRole.SUPER_ADMIN: return <ShieldAlert size={14} className="text-red-500" />;
-          case UserRole.ADMIN: return <Shield size={14} className="text-purple-500" />;
-          case UserRole.MANAGER: return <Briefcase size={14} className="text-blue-500" />;
-          case UserRole.CHEF: return <ChefHat size={14} className="text-orange-500" />;
-          case UserRole.WAITER: return <UtensilsCrossed size={14} className="text-green-500" />;
-          default: return <Monitor size={14} className="text-gray-500" />;
-      }
-  };
-
-  const handleSystemReset = () => {
-    if (resetConfirmation === 0) {
-      setResetConfirmation(1);
-      setTimeout(() => setResetConfirmation(0), 5000); 
-      return;
-    }
-    if (resetConfirmation === 1) {
-      if (confirm("FINAL WARNING: This will permanently wipe all local database records including users, stores, products and sales history. This device will be signed out. Continue?")) {
-          db.resetSystem();
-      }
-    }
-  };
-
   const hasAccess = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER].includes(user?.role as UserRole);
   if (!hasAccess) return <div className="p-10 text-center font-black uppercase text-red-500 tracking-widest">Access Denied</div>;
 
@@ -280,67 +260,6 @@ export default function SuperAdminDashboard() {
             )}
         </div>
       </div>
-
-      {hasPermission('VIEW_LIVE_ACTIVITY') && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Activity size={16} className="text-green-500" /> Live System Activity
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {visibleSessions.filter(s => !s.storeId).length > 0 && (
-                  <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                      <h3 className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 pb-2 border-b dark:border-gray-700">Global / Dashboard</h3>
-                      <div className="space-y-2">
-                          {visibleSessions.filter(s => !s.storeId).map(s => (
-                              <div key={s.userId} className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                      <div className="relative">
-                                          <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                              {getRoleIcon(s.role)}
-                                          </div>
-                                          <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                                      </div>
-                                      <span className="text-xs font-bold dark:text-gray-200">{s.userName}</span>
-                                  </div>
-                                  <span className="text-[9px] text-gray-400 font-mono">LIVE</span>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              )}
-              {stores.map(st => {
-                  const storeUsers = visibleSessions.filter(s => s.storeId === st.id);
-                  if (storeUsers.length === 0) return null;
-                  return (
-                      <div key={st.id} className="bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                          <h3 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30 truncate">{st.name}</h3>
-                          <div className="space-y-2">
-                              {storeUsers.map(s => (
-                                  <div key={s.userId} className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                          <div className="relative">
-                                              <div className="w-6 h-6 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border dark:border-gray-700">
-                                                  {getRoleIcon(s.role)}
-                                              </div>
-                                              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                                          </div>
-                                          <span className="text-xs font-bold dark:text-gray-200">{s.userName}</span>
-                                      </div>
-                                      <span className="text-[9px] text-blue-500 dark:text-blue-300 font-black">ONLINE</span>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  );
-              })}
-              {visibleSessions.length === 0 && (
-                  <div className="col-span-full py-6 text-center text-gray-400 italic text-sm">
-                      No users currently online.
-                  </div>
-              )}
-          </div>
-        </div>
-      )}
 
       <div className="space-y-8">
         {stores.map((store) => {

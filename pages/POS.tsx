@@ -576,6 +576,14 @@ export default function POS() {
         <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>Discount (${order.discountPercent}%):</span><span>-${currency}${order.discountAmount.toFixed(2)}</span></div>
     ` : '';
 
+    const serviceChargeBlock = order.serviceCharge && order.serviceCharge > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>Service Charge:</span><span>${currency}${order.serviceCharge.toFixed(2)}</span></div>
+    ` : '';
+
+    const taxBlock = order.tax && order.tax > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin: 4px 0;"><span>GST (${store.taxRate}%):</span><span>${currency}${order.tax.toFixed(2)}</span></div>
+    ` : '';
+
     return `
     <!DOCTYPE html>
     <html>
@@ -605,6 +613,8 @@ export default function POS() {
         <div class="totals">
             ${settings.showSubtotal !== false ? `<div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${currency}${order.subtotal.toFixed(2)}</span></div>` : ''}
             ${discountBlock}
+            ${serviceChargeBlock}
+            ${taxBlock}
             ${settings.showTotal !== false ? `<div style="display: flex; justify-content: space-between;" class="total-row"><span>TOTAL:</span><span>${currency}${order.total.toFixed(2)}</span></div>` : ''}
         </div>
         <div class="footer">${settings.footerText || 'Thank you!'}</div>
@@ -1132,6 +1142,13 @@ export default function POS() {
                           </div>
                       )}
                   </div>
+
+                  {totals.serviceCharge > 0 && (
+                      <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                          <span>Service Charge</span>
+                          <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.serviceCharge.toFixed(2)}</span>
+                      </div>
+                  )}
 
                   <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                       <span>GST ({store?.taxRate}%)</span>
