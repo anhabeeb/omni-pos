@@ -120,7 +120,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
         <div className="p-6 border-b border-gray-50 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/30">
           <h2 className="text-xl font-black dark:text-white flex items-center gap-3">
             <UserCircle className="text-blue-600" /> User Profile
@@ -236,21 +236,29 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const storeMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const loadStores = async () => {
-      const data = await db.getStores();
-      if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN) setStores(data);
-      else if (user) setStores(data.filter(s => user.storeIds.includes(s.id)));
-    };
-    loadStores();
+  const loadStores = async () => {
+    const data = await db.getStores();
+    if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN) setStores(data);
+    else if (user) setStores(data.filter(s => user.storeIds.includes(s.id)));
+  };
 
+  useEffect(() => {
+    loadStores();
+    
+    const handleDbChange = () => loadStores();
+    window.addEventListener('db_change_any', handleDbChange);
+    
     const handleClickOutside = (event: MouseEvent) => {
       if (storeMenuRef.current && !storeMenuRef.current.contains(event.target as Node)) {
         setIsStoreMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+        window.removeEventListener('db_change_any', handleDbChange);
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
   }, [user]);
 
   const globalMenuItems = [
@@ -279,8 +287,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     ];
 
     return actions.filter(action => {
-        // @ts-ignore
-        if (action.featureFlag && store[action.featureFlag] === false) return false;
+        // @ts-ignore - Handle numeric 0/1 from SQLite or boolean false correctly
+        if (action.featureFlag && (store[action.featureFlag] === false || store[action.featureFlag] === 0)) return false;
         return true;
     });
   };
