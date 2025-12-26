@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
@@ -20,7 +19,8 @@ import {
   CreditCard,
   ShoppingCart,
   ChevronRight,
-  History
+  History,
+  Phone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -95,8 +95,7 @@ export default function POS() {
   const isKOTEnabled = useMemo(() => {
     if (!store) return true;
     const val = store.useKOT;
-    // Fix: cast val to any for robust comparison against falsey representations (false, 0, '0') as numeric/string types might be returned from DB/sync
-    if (val === false || (val as any) === 0 || (val as any) === '0') return false;
+    if (val === false || (val as any) === 0 || (val as any) === '0' || val === null || val === undefined) return false;
     return true;
   }, [store]);
 
@@ -331,11 +330,12 @@ export default function POS() {
           discountAmount: totals.discountAmount,
           tax: totals.tax, serviceCharge: totals.serviceCharge,
           total: totals.total, orderType, status: OrderStatus.PENDING, 
-          // Fix: Bypass KOT if disabled by setting status to SERVED immediately
+          // Fix: Bypass KOT if disabled by setting status to SERVED immediately (Paylater mode)
           kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
           tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
           note: orderNote, 
-          customerName: selectedCustomer?.name, 
+          // For companies, prioritize company name on the order ticket
+          customerName: (selectedCustomer?.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer?.name) || selectedCustomer?.name, 
           customerPhone: selectedCustomer?.phone, 
           customerTin: selectedCustomer?.tin,
           customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
@@ -482,7 +482,7 @@ export default function POS() {
                 discountAmount: localTotals.discountAmount,
                 tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
                 total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitMode ? undefined : paymentMethod, note: localNote, transactions, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
-                customerName: localCust?.name, 
+                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name, 
                 customerPhone: localCust?.phone, 
                 customerTin: localCust?.tin,
                 customerAddress: localCust ? formatAddress(localCust) : undefined,
@@ -940,7 +940,37 @@ export default function POS() {
                                           </div>
                                           <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
                                       </div>
-                                      <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter">{order.orderType} • {order.tableNumber ? `Table ${order.tableNumber}` : (order.customerName || order.customerPhone || 'Walk-in')}</div>
+                                      
+                                      <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter space-y-1.5">
+                                          <div className="flex items-center gap-2">
+                                              <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400">{order.orderType}</span>
+                                              {order.tableNumber && <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 px-1.5 py-0.5 rounded">Table {order.tableNumber}</span>}
+                                          </div>
+                                          
+                                          {(order.customerName || order.customerPhone) && (
+                                              <div className="bg-gray-50/50 dark:bg-gray-900/30 p-2 rounded-xl border border-gray-100 dark:border-gray-800 mt-1">
+                                                  <div className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                                                      <UserIcon size={10} className="text-blue-500" />
+                                                      {order.customerName}
+                                                  </div>
+                                                  {order.customerPhone && (
+                                                      <div className="flex items-center gap-1.5 text-gray-500 mt-0.5">
+                                                          <Phone size={10} /> {order.customerPhone}
+                                                      </div>
+                                                  )}
+                                                  {order.customerAddress && (
+                                                      <div className="flex items-start gap-1.5 text-gray-500 mt-0.5 leading-tight">
+                                                          <MapPin size={10} className="shrink-0 mt-0.5" />
+                                                          <span className="truncate">{order.customerAddress}</span>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          )}
+                                          {!order.customerName && !order.customerPhone && !order.tableNumber && (
+                                              <div className="text-gray-400 italic">Walk-in Order</div>
+                                          )}
+                                      </div>
+
                                       <div className="space-y-1 mb-4 flex-1">
                                           {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
@@ -1153,9 +1183,10 @@ export default function POS() {
                       )}
                   </div>
 
-                  {totals.serviceCharge > 0 && (
-                      <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                          <span>Service Charge</span>
+                  {/* Always show Service Charge field if configured in store settings for transparency */}
+                  {(totals.serviceCharge > 0 || (store?.serviceChargeRate && store.serviceChargeRate > 0)) && (
+                      <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 uppercase tracking-widest animate-in fade-in">
+                          <span>Service Charge {store?.serviceChargeRate ? `(${store.serviceChargeRate}%)` : ''}</span>
                           <span className="text-gray-900 dark:text-white font-black">{store?.currency}{totals.serviceCharge.toFixed(2)}</span>
                       </div>
                   )}
