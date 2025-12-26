@@ -287,8 +287,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     ];
 
     return actions.filter(action => {
-        // @ts-ignore - Handle numeric 0/1 from SQLite or boolean false correctly
-        if (action.featureFlag && (store[action.featureFlag] === false || store[action.featureFlag] === 0)) return false;
+        if (!action.featureFlag) return true;
+        // Robust check for false/0 (disabled) while allowing undefined/null/true/1 to show by default
+        // @ts-ignore
+        const val = store[action.featureFlag];
+        if (val === false || val === 0 || val === '0') return false;
         return true;
     });
   };
