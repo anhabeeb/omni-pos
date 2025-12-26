@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../AuthContext';
 import { db, uuid } from '../services/db';
@@ -89,6 +90,15 @@ export default function POS() {
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
 
   const exportRef = useRef<HTMLDivElement>(null);
+
+  // Robust check for KOT enablement handling boolean, numeric 0/1, and string "0"/"1" from DB
+  const isKOTEnabled = useMemo(() => {
+    if (!store) return true;
+    const val = store.useKOT;
+    // Fix: cast val to any for robust comparison against falsey representations (false, 0, '0') as numeric/string types might be returned from DB/sync
+    if (val === false || (val as any) === 0 || (val as any) === '0') return false;
+    return true;
+  }, [store]);
 
   const formatAddress = (c: Customer) => {
     if (c.type === 'INDIVIDUAL') {
@@ -313,14 +323,16 @@ export default function POS() {
       if (!validateOrderRequirements()) return;
       
       setIsSaving(true);
-      const isKOTEnabled = store?.useKOT !== false;
+      
       const newOrderData: Order = {
           id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
           items: [...cart], subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
           tax: totals.tax, serviceCharge: totals.serviceCharge,
-          total: totals.total, orderType, status: OrderStatus.PENDING, kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
+          total: totals.total, orderType, status: OrderStatus.PENDING, 
+          // Fix: Bypass KOT if disabled by setting status to SERVED immediately
+          kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
           tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
           note: orderNote, 
           customerName: selectedCustomer?.name, 
@@ -819,8 +831,6 @@ export default function POS() {
       </div>
   );
 
-  const isKOTEnabled = store?.useKOT !== false;
-
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-10.5rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -1166,7 +1176,7 @@ export default function POS() {
                       disabled={cart.length === 0} 
                       className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] disabled:opacity-30 ${isKOTEnabled ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xl shadow-orange-500/20'}`}
                   >
-                      {isKOTEnabled ? <><ChefHat size={18}/> KOT</> : <><History size={18}/> Pay Later</>}
+                      {isKOTEnabled ? <><ChefHat size={18}/> KOT</> : <><History size={18}/> Paylater</>}
                   </button>
                   <button 
                       onClick={handleCheckout} 
