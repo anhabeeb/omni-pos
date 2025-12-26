@@ -1,4 +1,3 @@
-
 import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem, SystemActivity } from '../types';
 
 const DB_PREFIX = 'omnipos_';
@@ -76,7 +75,6 @@ const processSyncQueue = async () => {
     isProcessingSync = true;
 
     try {
-        // Continuous loop to handle bulk additions during network requests
         while (true) {
             const currentQueue = getItem<any[]>('sync_queue', []);
             if (currentQueue.length === 0) break;
@@ -98,8 +96,6 @@ const processSyncQueue = async () => {
                     throw new Error(result.error || `Sync failed with status ${response.status}`);
                 }
 
-                // CRITICAL FIX: Re-read queue before saving back to prevent overwriting 
-                // items added during the 'await fetch' above.
                 const latestQueue = getItem<any[]>('sync_queue', []);
                 const updatedQueue = latestQueue.filter(t => t.id !== task.id);
                 setItem('sync_queue', updatedQueue);
@@ -110,7 +106,7 @@ const processSyncQueue = async () => {
                 lastSyncError = e.message;
                 currentSyncStatus = 'ERROR';
                 broadcastSyncUpdate();
-                break; // Halt and wait for retry or manual skip
+                break; 
             }
         }
     } finally {
@@ -126,11 +122,9 @@ const startBackgroundPolling = () => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         if (isEnabled && navigator.onLine) {
             const queue = getItem<any[]>('sync_queue', []);
-            // Pull only if no local changes are waiting to prevent conflicts
             if (queue.length === 0) {
                 await db.pullAllFromCloud();
             }
-            // Ensure processor is running
             processSyncQueue();
         }
     }, 30000); 
@@ -526,7 +520,11 @@ export const db = {
     getRolePermissions: async () => getItem<RolePermissionConfig[]>('global_permissions', []),
     updateRolePermissions: async (c: RolePermissionConfig) => {
         const list = await db.getRolePermissions();
-        setItem('global_permissions', list.map(item => item.role === c.role ? c : item));
+        const exists = list.some(item => item.role === c.role);
+        const newList = exists 
+            ? list.map(item => item.role === c.role ? c : item)
+            : [...list, c];
+        setItem('global_permissions', newList);
         addToSyncQueue('UPDATE', 'global_permissions', c);
     },
 

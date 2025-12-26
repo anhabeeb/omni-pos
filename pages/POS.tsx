@@ -18,7 +18,8 @@ import {
   Banknote,
   CreditCard,
   ShoppingCart,
-  ChevronRight
+  ChevronRight,
+  History
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -312,13 +313,14 @@ export default function POS() {
       if (!validateOrderRequirements()) return;
       
       setIsSaving(true);
+      const isKOTEnabled = store?.useKOT !== false;
       const newOrderData: Order = {
           id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
           items: [...cart], subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
           tax: totals.tax, serviceCharge: totals.serviceCharge,
-          total: totals.total, orderType, status: OrderStatus.PENDING, kitchenStatus: 'PENDING',
+          total: totals.total, orderType, status: OrderStatus.PENDING, kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
           tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
           note: orderNote, 
           customerName: selectedCustomer?.name, 
@@ -330,19 +332,19 @@ export default function POS() {
 
       resetOrderUI();
       setActiveTab('ACTIVE');
-      showToast("Sending order to kitchen...", "INFO");
+      showToast(isKOTEnabled ? "Sending order to kitchen..." : "Creating order record...", "INFO");
 
       try {
           const added = await db.addOrder(currentStoreId, newOrderData);
           db.logActivity({
             storeId: currentStoreId, userId: user.id, userName: user.name,
             action: 'ORDER_CREATE',
-            description: `New order #${added.orderNumber} sent to kitchen`
+            description: isKOTEnabled ? `New order #${added.orderNumber} sent to kitchen` : `New Pay-later order #${added.orderNumber} created`
           });
-          showToast("Order created & sent to kitchen.", "SUCCESS");
+          showToast(isKOTEnabled ? "Order created & sent to kitchen." : "Order recorded.", "SUCCESS");
       } catch (e) {
           console.error(e);
-          showToast("Order sent locally", "INFO");
+          showToast("Order saved locally", "INFO");
       } finally {
           setIsSaving(false);
       }
@@ -807,6 +809,8 @@ export default function POS() {
       </div>
   );
 
+  const isKOTEnabled = store?.useKOT !== false;
+
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-10.5rem)] overflow-hidden relative">
       <div ref={exportRef} style={{ position: 'fixed', left: '0', top: '0', zIndex: '-100', opacity: '1', pointerEvents: 'none', backgroundColor: 'white' }} />
@@ -1143,9 +1147,9 @@ export default function POS() {
                   <button 
                       onClick={handleSendToKitchen} 
                       disabled={cart.length === 0} 
-                      className="flex items-center justify-center gap-2 py-4 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-all active:scale-[0.98] disabled:opacity-30"
+                      className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] disabled:opacity-30 ${isKOTEnabled ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xl shadow-orange-500/20'}`}
                   >
-                      <ChefHat size={18}/> KOT
+                      {isKOTEnabled ? <><ChefHat size={18}/> KOT</> : <><History size={18}/> Pay Later</>}
                   </button>
                   <button 
                       onClick={handleCheckout} 

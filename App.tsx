@@ -125,7 +125,7 @@ const SyncIndicator = () => {
         if (status.status === 'DISABLED') return { icon: Cloud, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
         switch(status.status) {
             case 'CONNECTED': return { icon: Cloud, text: 'Synced', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/10' };
-            case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', spin: true };
+            case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-green-900/10', spin: true };
             case 'ERROR': return { icon: AlertCircle, text: 'Error', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/10' };
             default: return { icon: Cloud, text: 'Init', color: 'text-gray-500', bg: 'bg-gray-50' };
         }
@@ -374,27 +374,38 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   const globalMenuItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT] },
-    { label: 'System Logs', icon: ScrollText, path: '/logs', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { label: 'Employee Management', icon: UserSquare, path: '/employees', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-    { label: 'User & Access Management', icon: ShieldCheck, path: '/users', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-  ];
-
-  const getStoreActions = (storeId: number) => [
-    { label: 'POS Terminal', icon: ShoppingCart, path: '/pos', permission: 'POS_ACCESS' },
-    { label: 'KOT', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT' },
-    { label: 'Sales History', icon: History, path: `/store/${storeId}/history`, permission: 'VIEW_HISTORY' },
-    { label: 'Quotations', icon: FileText, path: `/store/${storeId}/quotations`, permission: 'VIEW_QUOTATIONS' },
-    { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
-    { label: 'Customers', icon: UserCircle, path: `/store/${storeId}/customers`, permission: 'MANAGE_CUSTOMERS' },
-    { label: 'Inventory', icon: Package, path: `/store/${storeId}/inventory`, permission: 'MANAGE_INVENTORY' },
-    { label: 'Menu', icon: MenuIcon, path: `/store/${storeId}/menu`, permission: 'MANAGE_INVENTORY' },
-    { label: 'Users', icon: Users, path: `/store/${storeId}/staff`, permission: 'MANAGE_STAFF' },
-    { label: 'Print Templates', icon: Printer, path: `/store/${storeId}/designer`, permission: 'MANAGE_PRINT_DESIGNER' },
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', permission: 'VIEW_REPORTS' as Permission },
+    { label: 'System Logs', icon: ScrollText, path: '/logs', permission: 'VIEW_LOGS' as Permission },
+    { label: 'Employee Management', icon: UserSquare, path: '/employees', permission: 'MANAGE_STAFF' as Permission },
+    { label: 'User & Access Management', icon: ShieldCheck, path: '/users', permission: 'MANAGE_STAFF' as Permission },
   ];
 
   const currentStore = stores.find(s => s.id === currentStoreId);
-  const storeActions = currentStoreId ? getStoreActions(currentStoreId) : [];
+
+  const getStoreActions = (store: Store | undefined) => {
+    if (!store) return [];
+    
+    const actions = [
+      { label: 'POS Terminal', icon: ShoppingCart, path: '/pos', permission: 'POS_ACCESS' },
+      { label: 'KOT', icon: ChefHat, path: '/kot', permission: 'VIEW_KOT', featureFlag: 'useKOT' },
+      { label: 'Sales History', icon: History, path: `/store/${store.id}/history`, permission: 'VIEW_HISTORY' },
+      { label: 'Quotations', icon: FileText, path: `/store/${store.id}/quotations`, permission: 'VIEW_QUOTATIONS' },
+      { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
+      { label: 'Customers', icon: UserCircle, path: `/store/${store.id}/customers`, permission: 'MANAGE_CUSTOMERS' },
+      { label: 'Inventory', icon: Package, path: `/store/${store.id}/inventory`, permission: 'MANAGE_INVENTORY', featureFlag: 'useInventory' },
+      { label: 'Menu', icon: MenuIcon, path: `/store/${store.id}/menu`, permission: 'MANAGE_INVENTORY' },
+      { label: 'Users', icon: Users, path: `/store/${store.id}/staff`, permission: 'MANAGE_STAFF' },
+      { label: 'Print Templates', icon: Printer, path: `/store/${store.id}/designer`, permission: 'MANAGE_PRINT_DESIGNER' },
+    ];
+
+    return actions.filter(action => {
+        // @ts-ignore
+        if (action.featureFlag && store[action.featureFlag] === false) return false;
+        return true;
+    });
+  };
+
+  const storeActions = getStoreActions(currentStore);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
@@ -408,7 +419,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </div>
 
           <nav className="hidden md:flex items-center gap-1">
-            {globalMenuItems.filter(item => !item.roles || item.roles.includes(user?.role as UserRole)).map((item) => (
+            {globalMenuItems.filter(item => hasPermission(item.permission)).map((item) => (
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
