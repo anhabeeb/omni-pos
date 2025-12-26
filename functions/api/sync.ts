@@ -1,4 +1,3 @@
-
 /**
  * CLOUDFLARE D1 DATABASE SYNC API
  */
@@ -49,7 +48,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
       return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
     }
 
-    const { action, table, data, username, password } = payload;
+    const { action, table, data, username, password, deviceId } = payload;
 
     if (action === 'PING') {
       try {
@@ -64,6 +63,27 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         const { results } = await DB.prepare("SELECT * FROM `users` WHERE `username` = ? AND `password` = ?").bind(username, password).run();
         if (results && results.length > 0) {
             const user = results[0];
+            const userId = user.id;
+
+            // CONCURRENCY CHECK: Check if an active session exists on a DIFFERENT device
+            const { results: sessionResults } = await DB.prepare("SELECT * FROM `sessions` WHERE `userId` = ?").bind(userId).run();
+            if (sessionResults && sessionResults.length > 0) {
+              const activeSession = sessionResults[0];
+              const now = Date.now();
+              // If last heartbeat was within the last 120 seconds and on a different device, lock them out
+              if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
+                return jsonResponse({ 
+                  success: false, 
+                  error: `User is already active on another device. Please logout from other devices first.` 
+                }, 403);
+              }
+            }
+
+            // Proceed with login, update session record
+            await DB.prepare("INSERT OR REPLACE INTO `sessions` (userId, userName, role, storeId, lastActive, deviceId) VALUES (?, ?, ?, ?, ?, ?)")
+              .bind(userId, user.name, user.role, null, Date.now(), deviceId || 'unknown')
+              .run();
+
             if (typeof user.storeIds === 'string') {
               try { user.storeIds = JSON.parse(user.storeIds); } catch(e) { user.storeIds = []; }
             }
@@ -74,7 +94,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
 
     if (action === 'INIT_SCHEMA') {
       const schema = [
-        "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
+        "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, useKOT INTEGER, useInventory INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
         "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
         "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
         "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
@@ -85,7 +105,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "CREATE TABLE IF NOT EXISTS `shifts` (id INTEGER PRIMARY KEY, shiftNumber INTEGER, storeId INTEGER, openedBy INTEGER, openedAt INTEGER, startingCash REAL, openingDenominations TEXT, status TEXT, closedAt INTEGER, closedBy INTEGER, expectedCash REAL, actualCash REAL, closingDenominations TEXT, difference REAL, totalCashSales REAL, totalCashRefunds REAL, heldOrdersCount INTEGER, notes TEXT)",
         "CREATE TABLE IF NOT EXISTS `global_permissions` (role TEXT PRIMARY KEY, permissions TEXT)",
         "CREATE TABLE IF NOT EXISTS `inventory` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, quantity REAL, unit TEXT, minLevel REAL)",
-        "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, lastActive INTEGER, status TEXT)",
+        "CREATE TABLE IF NOT EXISTS `sessions` (userId INTEGER PRIMARY KEY, userName TEXT, role TEXT, storeId INTEGER, lastActive INTEGER, deviceId TEXT)",
         "CREATE TABLE IF NOT EXISTS `system_activities` (id INTEGER PRIMARY KEY, storeId INTEGER, userId INTEGER, userName TEXT, action TEXT, description TEXT, timestamp INTEGER, metadata TEXT)"
       ];
       for (const q of schema) await DB.prepare(q).run();
@@ -96,9 +116,15 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
         "ALTER TABLE `stores` ADD COLUMN `city` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `province` TEXT",
         "ALTER TABLE `stores` ADD COLUMN `zipCode` TEXT",
+        "ALTER TABLE `stores` ADD COLUMN `useKOT` INTEGER",
+        "ALTER TABLE `stores` ADD COLUMN `useInventory` INTEGER",
         "ALTER TABLE `users` ADD COLUMN `phoneNumber` TEXT",
         "ALTER TABLE `users` ADD COLUMN `email` TEXT",
-        "ALTER TABLE `orders` ADD COLUMN `items` TEXT"
+        "ALTER TABLE `orders` ADD COLUMN `items` TEXT",
+        "ALTER TABLE `sessions` ADD COLUMN `userName` TEXT",
+        "ALTER TABLE `sessions` ADD COLUMN `role` TEXT",
+        "ALTER TABLE `sessions` ADD COLUMN `storeId` INTEGER",
+        "ALTER TABLE `sessions` ADD COLUMN `deviceId` TEXT"
       ];
       for (const m of migrations) {
         try { await DB.prepare(m).run(); } catch (e) { /* already exists */ }
@@ -108,7 +134,7 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     }
 
     if (action === 'FETCH_HYDRATION_DATA') {
-        const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities'];
+        const tables = ['stores', 'users', 'employees', 'products', 'categories', 'customers', 'orders', 'quotations', 'shifts', 'global_permissions', 'inventory', 'system_activities', 'sessions'];
         const result: any = {};
         for (const t of tables) {
             try {
@@ -140,9 +166,10 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
 
           // Type Coercion for Numeric Fields
           const numericFields = [
-            'id', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
+            'id', 'userId', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
             'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 
-            'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables'
+            'quantity', 'taxRate', 'serviceChargeRate', 'minLevel', 'minStartingCash', 'numberOfTables',
+            'lastActive', 'useKOT', 'useInventory'
           ];
           
           if (numericFields.includes(k)) {
@@ -164,7 +191,10 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
     
     if (action === 'DELETE') {
       if (!data) return jsonResponse({ success: false, error: 'No data provided for deletion' }, 400);
-      const pk = (table.includes('permission')) ? 'role' : 'id';
+      let pk = 'id';
+      if (table.includes('permission')) pk = 'role';
+      if (table === 'sessions') pk = 'userId';
+
       if (data[pk] === undefined) return jsonResponse({ success: false, error: `Primary key ${pk} missing in data` }, 400);
       
       try {

@@ -41,7 +41,7 @@ export default {
           if (action === 'INIT_SCHEMA') {
             try {
               const schema = [
-                "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, useKOT INTEGER, useInventory INTEGER, taxRate REAL, serviceChargeRate REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
+                "CREATE TABLE IF NOT EXISTS `stores` (id INTEGER PRIMARY KEY, name TEXT, currency TEXT, address TEXT, phone TEXT, tin TEXT, isActive INTEGER, useKOT INTEGER, useInventory INTEGER, taxRate REAL, serviceCharge REAL, minStartingCash REAL, numberOfTables INTEGER, printSettings TEXT, quotationSettings TEXT, eodSettings TEXT, buildingName TEXT, streetName TEXT, city TEXT, province TEXT, zipCode TEXT)",
                 "CREATE TABLE IF NOT EXISTS `users` (id INTEGER PRIMARY KEY, userNumber INTEGER, name TEXT, username TEXT, password TEXT, role TEXT, storeIds TEXT, phoneNumber TEXT, email TEXT)",
                 "CREATE TABLE IF NOT EXISTS `employees` (id INTEGER PRIMARY KEY, empId TEXT, fullName TEXT, dob TEXT, nationality TEXT, idNumber TEXT, phoneNumber TEXT, emergencyContactNumber TEXT, emergencyContactPerson TEXT, emergencyRelation TEXT, createdAt INTEGER)",
                 "CREATE TABLE IF NOT EXISTS `products` (id INTEGER PRIMARY KEY, storeId INTEGER, name TEXT, price REAL, cost REAL, categoryId INTEGER, isAvailable INTEGER, imageUrl TEXT, recipe TEXT)",
@@ -71,6 +71,9 @@ export default {
                 { table: 'users', column: 'phoneNumber', type: 'TEXT' },
                 { table: 'users', column: 'email', type: 'TEXT' },
                 { table: 'orders', column: 'items', type: 'TEXT' },
+                { table: 'sessions', column: 'userName', type: 'TEXT' },
+                { table: 'sessions', column: 'role', type: 'TEXT' },
+                { table: 'sessions', column: 'storeId', type: 'INTEGER' },
                 { table: 'sessions', column: 'deviceId', type: 'TEXT' }
               ];
 
@@ -98,11 +101,11 @@ export default {
               if (sessionResults && sessionResults.length > 0) {
                 const activeSession = sessionResults[0];
                 const now = Date.now();
-                // If last heartbeat was within the last 120 seconds (2 minutes) and on a different device, lock them out
+                // If last heartbeat was within the last 120 seconds and on a different device, lock them out
                 if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
                   return jsonResponse({ 
                     success: false, 
-                    error: `User is already active on another device (${activeSession.deviceId}). Please logout from other devices first.` 
+                    error: `User is already active on another device. Please logout from other devices first.` 
                   }, 403);
                 }
               }
