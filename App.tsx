@@ -61,14 +61,14 @@ import EmployeeManagement from './pages/EmployeeManagement';
 import SystemLogs from './pages/SystemLogs';
 
 const SyncIndicator = () => {
-    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean }>(db.getSyncStatus());
+    const [status, setStatus] = useState<{ status: SyncStatus, pendingCount: number, error?: string | null, lastPull: number, isBackendMissing?: boolean }>(db.getSyncStatus());
     const [isRepairing, setIsRepairing] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(false);
     const [isPulling, setIsPulling] = useState(false);
 
     useEffect(() => {
         const handleSyncUpdate = (e: any) => {
-            setStatus(e.detail as { status: SyncStatus, pendingCount: number, error?: string | null, isBackendMissing?: boolean });
+            setStatus(e.detail as { status: SyncStatus, pendingCount: number, error?: string | null, lastPull: number, isBackendMissing?: boolean });
         };
         window.addEventListener('db_sync_update', handleSyncUpdate);
         return () => window.removeEventListener('db_sync_update', handleSyncUpdate);
@@ -76,22 +76,14 @@ const SyncIndicator = () => {
 
     const handleRepairSchema = async () => {
         setIsRepairing(true);
-        try {
-            const response = await fetch('/api/sync', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'INIT_SCHEMA' })
-            });
-            const result = await response.json().catch(() => ({ success: false, error: "Cloud connection failed." }));
-            if (result.success) {
-                alert("Database schema verified and migrated!");
-                window.location.reload();
-            } else {
-                alert("Repair failed: " + (result.error || "Unknown error"));
-            }
-        } finally {
-            setIsRepairing(false);
+        const success = await db.repairSchema();
+        if (success) {
+            alert("Database schema verified and migrated!");
+            window.location.reload();
+        } else {
+            alert("Repair failed. Check your connection.");
         }
+        setIsRepairing(false);
     };
 
     const handleSkipTask = () => {
@@ -121,12 +113,15 @@ const SyncIndicator = () => {
 
     const toggleSync = () => db.setSyncEnabled(!db.isSyncEnabled());
 
+    const isStale = (Date.now() - status.lastPull) > 120000; // 2 minutes
+
     const getStatusConfig = () => {
-        if (status.status === 'DISABLED') return { icon: Cloud, text: 'Local', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
+        if (status.status === 'DISABLED') return { icon: Cloud, text: 'Local Only', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
+        if (status.status === 'OFFLINE' || isStale) return { icon: AlertCircle, text: 'Stale Data', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10 animate-pulse' };
         switch(status.status) {
-            case 'CONNECTED': return { icon: Cloud, text: 'Synced', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/10' };
-            case 'SYNCING': return { icon: RefreshCw, text: `Syncing`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-green-900/10', spin: true };
-            case 'ERROR': return { icon: AlertCircle, text: 'Error', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/10' };
+            case 'CONNECTED': return { icon: Cloud, text: 'Live', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/10' };
+            case 'SYNCING': return { icon: RefreshCw, text: `Updating`, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', spin: true };
+            case 'ERROR': return { icon: AlertCircle, text: 'Sync Error', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/10' };
             default: return { icon: Cloud, text: 'Init', color: 'text-gray-500', bg: 'bg-gray-50' };
         }
     };
@@ -145,31 +140,34 @@ const SyncIndicator = () => {
             
             <div className="absolute top-full right-0 mt-2 p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-[200] w-80 hidden group-hover:block animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between items-center mb-3">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Database Sync</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OmniSync Engine</p>
                     <button onClick={toggleSync} className={`text-[10px] font-black px-2 py-0.5 rounded transition-colors ${db.isSyncEnabled() ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                        {db.isSyncEnabled() ? 'STOP' : 'START'}
+                        {db.isSyncEnabled() ? 'DISABLE' : 'ENABLE'}
                     </button>
                 </div>
                 
                 {db.isSyncEnabled() && (
                     <div className="space-y-3">
+                        <div className="text-[10px] font-bold text-gray-500 mb-2">
+                            Last synced: {status.lastPull > 0 ? new Date(status.lastPull).toLocaleTimeString() : 'Never'}
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                             <button onClick={handleBootstrap} className="flex flex-col items-center justify-center gap-1 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70">
                                 <UploadCloud size={16} />
-                                <span className="text-[9px] font-black uppercase">Push All</span>
+                                <span className="text-[9px] font-black uppercase">Push Data</span>
                             </button>
                             <button onClick={handlePull} className="flex flex-col items-center justify-center gap-1 py-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70">
                                 <CloudDownload size={16} />
-                                <span className="text-[9px] font-black uppercase">Pull All</span>
+                                <span className="text-[9px] font-black uppercase">Force Update</span>
                             </button>
                         </div>
                         {status.error && (
                             <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30 overflow-hidden text-[10px]">
-                                <p className="font-black text-red-500 uppercase mb-1">Last Error:</p>
+                                <p className="font-black text-red-500 uppercase mb-1">Alert:</p>
                                 <p className="text-gray-600 dark:text-gray-300 font-medium leading-tight break-words">{status.error}</p>
                                 <div className="grid grid-cols-1 gap-2 mt-3">
                                     {isSchemaError && <button onClick={handleRepairSchema} className="w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded hover:bg-red-700 transition-colors"><Terminal size={12}/> Repair Schema</button>}
-                                    <button onClick={handleSkipTask} className="w-full flex items-center justify-center gap-2 py-1.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded hover:bg-orange-200 transition-colors"><FastForward size={12}/> Skip Task</button>
+                                    <button onClick={handleSkipTask} className="w-full flex items-center justify-center gap-2 py-1.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded hover:bg-orange-200 transition-colors"><FastForward size={12}/> Skip Entry</button>
                                 </div>
                             </div>
                         )}
@@ -556,7 +554,7 @@ export const App = () => {
       if (!user) return;
       const beat = () => db.updateHeartbeat(user, currentStoreId);
       beat();
-      const interval = setInterval(beat, 30000);
+      const interval = setInterval(beat, 25000); // Heartbeat slightly faster than cloud expiry
       return () => clearInterval(interval);
   }, [user, currentStoreId]);
 

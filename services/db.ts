@@ -1,13 +1,13 @@
 import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem, SystemActivity } from '../types';
 
 const DB_PREFIX = 'omnipos_';
+const SYSTEM_VERSION = '1.0.5'; // Increment this to force client reloads
 const CLOUDFLARE_CONFIG = {
     SYNC_ENDPOINT: '/api/sync' 
 };
 
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
-// Device Fingerprinting for Session Locking
 const getDeviceId = () => {
     let id = localStorage.getItem(DB_PREFIX + 'device_id');
     if (!id) {
@@ -43,7 +43,7 @@ const getNextId = (items: any[]): number => {
 export type SyncStatus = 'CONNECTED' | 'SYNCING' | 'OFFLINE' | 'ERROR' | 'TESTING' | 'DISABLED' | 'MOCKED';
 let currentSyncStatus: SyncStatus = 'CONNECTED';
 let lastSyncError: string | null = null;
-let isDatabaseReachable = false;
+let lastSuccessfulPull = Date.now();
 let isBackendMissing = false;
 let autoSyncInterval: any = null;
 
@@ -55,16 +55,27 @@ const broadcastSyncUpdate = () => {
             status: isEnabled ? (navigator.onLine ? currentSyncStatus : 'OFFLINE') : 'DISABLED', 
             pendingCount: queue.length,
             error: lastSyncError,
+            lastPull: lastSuccessfulPull,
             isBackendMissing
         } 
     }));
+};
+
+const checkSystemVersion = (serverVersion?: string) => {
+    if (serverVersion && serverVersion !== SYSTEM_VERSION) {
+        console.warn(`System update detected: ${SYSTEM_VERSION} -> ${serverVersion}. Reloading...`);
+        // Only reload if we aren't mid-transaction (queue is empty)
+        const queue = getItem<any[]>('sync_queue', []);
+        if (queue.length === 0) {
+            window.location.reload();
+        }
+    }
 };
 
 const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, data: any) => {
     const queue = getItem<any[]>('sync_queue', []);
     const cleanData = { ...data };
     
-    // Type normalization for IDs
     if (cleanData.id && typeof cleanData.id !== 'string') cleanData.id = Number(cleanData.id);
     if (cleanData.storeId) cleanData.storeId = Number(cleanData.storeId);
     if (cleanData.createdAt) cleanData.createdAt = Number(cleanData.createdAt);
@@ -97,12 +108,19 @@ const processSyncQueue = async () => {
                 const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(task)
+                    body: JSON.stringify({ ...task, clientVersion: SYSTEM_VERSION })
                 });
 
                 const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
                 
+                if (result.version) checkSystemVersion(result.version);
+
                 if (!response.ok || !result.success) {
+                    // Auto-repair if schema mismatch detected
+                    if (result.error?.toLowerCase().includes("column") || result.error?.toLowerCase().includes("table")) {
+                        console.error("Schema mismatch detected during sync. Triggering auto-repair...");
+                        await db.repairSchema();
+                    }
                     throw new Error(result.error || `Sync failed with status ${response.status}`);
                 }
 
@@ -128,16 +146,18 @@ const processSyncQueue = async () => {
 const startBackgroundPolling = () => {
     if (autoSyncInterval) clearInterval(autoSyncInterval);
     
+    // Increased frequency to 10s for high-fidelity multi-device updates
     autoSyncInterval = setInterval(async () => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         if (isEnabled && navigator.onLine) {
             const queue = getItem<any[]>('sync_queue', []);
-            if (queue.length === 0) {
+            // Pull if queue is idle or if last pull was long ago
+            if (queue.length === 0 || (Date.now() - lastSuccessfulPull > 60000)) {
                 await db.pullAllFromCloud();
             }
             processSyncQueue();
         }
-    }, 30000); 
+    }, 10000); 
 };
 
 export const db = {
@@ -168,32 +188,9 @@ export const db = {
             addToSyncQueue('INSERT', 'users', rootAdmin);
         }
 
-        const employees = getItem<Employee[]>('global_employees', []);
-        if (!employees.some(e => e.empId === 'SYSADMIN')) {
-            const adminEmp: Employee = {
-                id: 1,
-                empId: 'SYSADMIN',
-                fullName: 'System Administrator',
-                dob: '1970-01-01',
-                nationality: 'Internal',
-                idNumber: 'SYSTEM_ROOT',
-                phoneNumber: 'N/A',
-                emergencyContactNumber: 'N/A',
-                emergencyContactPerson: 'N/A',
-                emergencyRelation: 'N/A',
-                createdAt: Date.now()
-            };
-            setItem('global_employees', [adminEmp, ...employees]);
-            addToSyncQueue('INSERT', 'employees', adminEmp);
-        }
-
         window.addEventListener('online', () => {
             currentSyncStatus = 'CONNECTED';
             processSyncQueue();
-            broadcastSyncUpdate();
-        });
-
-        window.addEventListener('offline', () => {
             broadcastSyncUpdate();
         });
 
@@ -201,6 +198,18 @@ export const db = {
             processSyncQueue();
             startBackgroundPolling();
         }
+    },
+
+    repairSchema: async () => {
+        try {
+            const response = await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'INIT_SCHEMA' })
+            });
+            const result = await response.json();
+            return result.success;
+        } catch (e) { return false; }
     },
 
     resetSystem: async () => {
@@ -236,12 +245,13 @@ export const db = {
         }
     },
 
-    getSyncStatus: (): { status: SyncStatus, pendingCount: number, error: string | null, isBackendMissing: boolean } => {
+    getSyncStatus: (): { status: SyncStatus, pendingCount: number, error: string | null, isBackendMissing: boolean, lastPull: number } => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         return { 
             status: isEnabled ? (navigator.onLine ? currentSyncStatus : 'OFFLINE') : 'DISABLED', 
             pendingCount: getItem<any[]>('sync_queue', []).length, 
             error: lastSyncError, 
+            lastPull: lastSuccessfulPull,
             isBackendMissing 
         };
     },
@@ -265,20 +275,18 @@ export const db = {
     },
     isSyncEnabled: () => getItem<boolean>('sync_enabled', true),
 
-    verifyWriteAccess: async () => {
-        const ok = await db.testConnection();
-        return ok ? { success: true, message: 'Cloud connection active' } : { success: false, message: 'Cloud connection failed' };
-    },
-
     pullAllFromCloud: async () => {
         if (!navigator.onLine) return false;
         try {
             const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'FETCH_HYDRATION_DATA' })
+                body: JSON.stringify({ action: 'FETCH_HYDRATION_DATA', clientVersion: SYSTEM_VERSION })
             });
             const result = await response.json();
+            
+            if (result.version) checkSystemVersion(result.version);
+
             if (result.success) {
                 const data = result.data;
                 if (data.users) setItem('global_users', data.users);
@@ -286,7 +294,6 @@ export const db = {
                 if (data.employees) setItem('global_employees', data.employees);
                 if (data.global_permissions) setItem('global_permissions', data.global_permissions);
                 if (data.system_activities) setItem('global_activities', data.system_activities);
-                // Hydrate live sessions from cloud to tracker
                 if (data.sessions) setItem('global_sessions', data.sessions);
                 
                 const stores = data.stores || [];
@@ -300,6 +307,8 @@ export const db = {
                     if (data.inventory) setItem(`store_${id}_inventory`, data.inventory.filter((i:any) => i.storeId === id));
                     if (data.quotations) setItem(`store_${id}_quotations`, data.quotations.filter((q:any) => q.storeId === id));
                 }
+                lastSuccessfulPull = Date.now();
+                broadcastSyncUpdate();
                 return true;
             }
             return false;
@@ -558,7 +567,6 @@ export const db = {
         const now = Date.now();
         const currentDeviceId = getDeviceId();
         
-        // Local state update for responsiveness
         let list = await db.getActiveSessions();
         const sess: ActiveSession = { 
             userId: userObj.id, 
@@ -572,12 +580,8 @@ export const db = {
         const idx = list.findIndex(i => i.userId === userObj.id);
         if (idx >= 0) list[idx] = sess; else list.push(sess);
         
-        // Filter out sessions older than 5 minutes (300,000ms)
         const activeList = list.filter(i => now - i.lastActive < 300000);
         setItem('global_sessions', activeList);
-
-        // Sync to cloud sessions table
-        // Use INSERT OR REPLACE on the cloud side keyed by userId
         addToSyncQueue('INSERT', 'sessions', sess);
     },
     removeSession: async (u: number) => {
@@ -594,10 +598,12 @@ export const db = {
                     action: 'REMOTE_LOGIN', 
                     username: u, 
                     password: p,
-                    deviceId: getDeviceId() 
+                    deviceId: getDeviceId(),
+                    clientVersion: SYSTEM_VERSION
                 })
             });
             const result = await response.json();
+            if (result.version) checkSystemVersion(result.version);
             return result;
         } catch (e) {
             return { success: false, error: "System Offline" };

@@ -3,18 +3,20 @@
  * Updated for Numerical ID Schema and Robust Error Handling
  */
 
+const WORKER_VERSION = '1.0.5';
+
 interface Env {
   DB: any;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
 const jsonResponse = (data: any, status = 200) => {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify({ ...data, version: WORKER_VERSION }), {
     status,
     headers: { 
       'Content-Type': 'application/json',
       'X-OmniPOS-System': 'verified',
-      'X-OmniPOS-Verification': 'authorized',
+      'X-OmniPOS-Version': WORKER_VERSION,
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     }
@@ -96,12 +98,10 @@ export default {
               const user = results[0];
               const userId = user.id;
 
-              // CONCURRENCY CHECK: Check if an active session exists on a DIFFERENT device
               const { results: sessionResults } = await DB.prepare("SELECT * FROM `sessions` WHERE `userId` = ?").bind(userId).run();
               if (sessionResults && sessionResults.length > 0) {
                 const activeSession = sessionResults[0];
                 const now = Date.now();
-                // If last heartbeat was within the last 120 seconds and on a different device, lock them out
                 if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
                   return jsonResponse({ 
                     success: false, 
@@ -110,7 +110,6 @@ export default {
                 }
               }
 
-              // Proceed with login, update session record
               await DB.prepare("INSERT OR REPLACE INTO `sessions` (userId, userName, role, storeId, lastActive, deviceId) VALUES (?, ?, ?, ?, ?, ?)")
                 .bind(userId, user.name, user.role, null, Date.now(), deviceId || 'unknown')
                 .run();
@@ -184,7 +183,6 @@ export default {
           
           if (action === 'DELETE') {
             if (!data) return jsonResponse({ success: false, error: 'No data provided for deletion' }, 400);
-            // Default PK is 'id', but some tables use special keys
             let pk = 'id';
             if (table === 'global_permissions') pk = 'role';
             if (table === 'sessions') pk = 'userId';
