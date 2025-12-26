@@ -1,13 +1,14 @@
 import { Store, User, UserRole, Employee, Product, Category, Customer, Order, Quotation, RegisterShift, RolePermissionConfig, Permission, ActiveSession, OrderStatus, InventoryItem, SystemActivity } from '../types';
 
 const DB_PREFIX = 'omnipos_';
-const SYSTEM_VERSION = '1.0.5'; // Increment this to force client reloads
+const SYSTEM_VERSION = '1.0.6'; // Increment this to force client reloads
 const CLOUDFLARE_CONFIG = {
     SYNC_ENDPOINT: '/api/sync' 
 };
 
 export const uuid = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
+// Device Fingerprinting for Session Locking
 const getDeviceId = () => {
     let id = localStorage.getItem(DB_PREFIX + 'device_id');
     if (!id) {
@@ -63,8 +64,8 @@ const broadcastSyncUpdate = () => {
 
 const checkSystemVersion = (serverVersion?: string) => {
     if (serverVersion && serverVersion !== SYSTEM_VERSION) {
-        console.warn(`System update detected: ${SYSTEM_VERSION} -> ${serverVersion}. Reloading...`);
-        // Only reload if we aren't mid-transaction (queue is empty)
+        console.warn(`System update detected: ${SYSTEM_VERSION} -> ${serverVersion}. Reloading application...`);
+        // Only reload if we aren't mid-transaction
         const queue = getItem<any[]>('sync_queue', []);
         if (queue.length === 0) {
             window.location.reload();
@@ -116,9 +117,7 @@ const processSyncQueue = async () => {
                 if (result.version) checkSystemVersion(result.version);
 
                 if (!response.ok || !result.success) {
-                    // Auto-repair if schema mismatch detected
                     if (result.error?.toLowerCase().includes("column") || result.error?.toLowerCase().includes("table")) {
-                        console.error("Schema mismatch detected during sync. Triggering auto-repair...");
                         await db.repairSchema();
                     }
                     throw new Error(result.error || `Sync failed with status ${response.status}`);
@@ -146,13 +145,13 @@ const processSyncQueue = async () => {
 const startBackgroundPolling = () => {
     if (autoSyncInterval) clearInterval(autoSyncInterval);
     
-    // Increased frequency to 10s for high-fidelity multi-device updates
+    // 10-second high-frequency poll for auto-refresh
     autoSyncInterval = setInterval(async () => {
         const isEnabled = getItem<boolean>('sync_enabled', true);
         if (isEnabled && navigator.onLine) {
             const queue = getItem<any[]>('sync_queue', []);
-            // Pull if queue is idle or if last pull was long ago
-            if (queue.length === 0 || (Date.now() - lastSuccessfulPull > 60000)) {
+            // Pull cloud updates if local queue is clear
+            if (queue.length === 0) {
                 await db.pullAllFromCloud();
             }
             processSyncQueue();
@@ -582,6 +581,7 @@ export const db = {
         
         const activeList = list.filter(i => now - i.lastActive < 300000);
         setItem('global_sessions', activeList);
+        // Sync heartbeat directly keyed by userId to enforce global exclusivity
         addToSyncQueue('INSERT', 'sessions', sess);
     },
     removeSession: async (u: number) => {

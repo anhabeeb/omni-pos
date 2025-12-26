@@ -6,8 +6,10 @@ interface Env {
   DB: any;
 }
 
+const WORKER_VERSION = '1.0.6';
+
 const jsonResponse = (data: any, status = 200) => {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify({ ...data, version: WORKER_VERSION }), {
     status,
     headers: { 
       'Content-Type': 'application/json',
@@ -65,21 +67,19 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
             const user = results[0];
             const userId = user.id;
 
-            // CONCURRENCY CHECK: Check if an active session exists on a DIFFERENT device
+            // CONCURRENCY CHECK
             const { results: sessionResults } = await DB.prepare("SELECT * FROM `sessions` WHERE `userId` = ?").bind(userId).run();
             if (sessionResults && sessionResults.length > 0) {
               const activeSession = sessionResults[0];
               const now = Date.now();
-              // If last heartbeat was within the last 120 seconds and on a different device, lock them out
               if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
                 return jsonResponse({ 
                   success: false, 
-                  error: `User is already active on another device. Please logout from other devices first.` 
+                  error: `Account is currently active on another device. Logout there first.` 
                 }, 403);
               }
             }
 
-            // Proceed with login, update session record
             await DB.prepare("INSERT OR REPLACE INTO `sessions` (userId, userName, role, storeId, lastActive, deviceId) VALUES (?, ?, ?, ?, ?, ?)")
               .bind(userId, user.name, user.role, null, Date.now(), deviceId || 'unknown')
               .run();
@@ -164,7 +164,6 @@ export const onRequestPost = async (context: { env: Env; request: Request }): Pr
           let val = data[k];
           if (val === undefined) return null;
 
-          // Type Coercion for Numeric Fields
           const numericFields = [
             'id', 'userId', 'storeId', 'shiftId', 'categoryId', 'createdAt', 'openedAt', 'closedAt', 
             'timestamp', 'price', 'cost', 'total', 'subtotal', 'tax', 'serviceCharge', 

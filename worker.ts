@@ -3,7 +3,7 @@
  * Updated for Numerical ID Schema and Robust Error Handling
  */
 
-const WORKER_VERSION = '1.0.5';
+const WORKER_VERSION = '1.0.6';
 
 interface Env {
   DB: any;
@@ -98,6 +98,7 @@ export default {
               const user = results[0];
               const userId = user.id;
 
+              // GLOBAL SESSION LOCK: Reject if active on another device (< 2 mins heartbeat)
               const { results: sessionResults } = await DB.prepare("SELECT * FROM `sessions` WHERE `userId` = ?").bind(userId).run();
               if (sessionResults && sessionResults.length > 0) {
                 const activeSession = sessionResults[0];
@@ -105,11 +106,12 @@ export default {
                 if (now - activeSession.lastActive < 120000 && activeSession.deviceId !== deviceId) {
                   return jsonResponse({ 
                     success: false, 
-                    error: `User is already active on another device. Please logout from other devices first.` 
+                    error: `Username is active on another terminal. Log out there first or wait 2 minutes for auto-expiry.` 
                   }, 403);
                 }
               }
 
+              // Update session on login
               await DB.prepare("INSERT OR REPLACE INTO `sessions` (userId, userName, role, storeId, lastActive, deviceId) VALUES (?, ?, ?, ?, ?, ?)")
                 .bind(userId, user.name, user.role, null, Date.now(), deviceId || 'unknown')
                 .run();
