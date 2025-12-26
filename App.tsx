@@ -288,10 +288,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
     return actions.filter(action => {
         if (!action.featureFlag) return true;
-        // Robust check for false/0 (disabled) while allowing undefined/null/true/1 to show by default
+        // Robust check for false/0/string "0" to ensure consistent visibility after cloud sync/re-login
         // @ts-ignore
         const val = store[action.featureFlag];
-        if (val === false || val === 0 || val === '0') return false;
+        if (val === false || val === 0 || val === '0' || val === null || val === undefined) return false;
         return true;
     });
   };
