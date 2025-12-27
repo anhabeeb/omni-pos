@@ -180,11 +180,11 @@ export default function Quotations() {
       const isCompany = !!quote.customerTin;
       const customerBlock = (settings.showCustomerDetails && (quote.customerName || quote.customerPhone || quote.customerTin)) ? `
           <div style="margin-bottom: 30px; text-align: left; padding: 15px; border: 1px solid #eee; border-radius: 8px; background: #fafafa;">
-              <div style="font-weight: bold; text-transform: uppercase; font-size: ${paperSizeKey === 'thermal' ? '12px' : '11px'}; color: #888; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Quotation For:</div>
-              ${isCompany && quote.customerName ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '22px' : '18px'}; font-weight: bold;">${quote.customerName}</div>` : ''}
-              ${quote.customerAddress ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '15px' : '13px'}; margin-top: 5px; color: #444;"><strong>Address:</strong> ${quote.customerAddress}</div>` : ''}
-              ${quote.customerPhone ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '15px' : '13px'}; color: #444;"><strong>Phone:</strong> ${quote.customerPhone}</div>` : ''}
-              ${quote.customerTin ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '15px' : '13px'}; color: #444;"><strong>TIN:</strong> ${quote.customerTin}</div>` : ''}
+              <div style="font-weight: bold; text-transform: uppercase; font-size: ${paperSizeKey === 'thermal' ? '10px' : '9px'}; color: #888; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Quotation For:</div>
+              ${isCompany && quote.customerName ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '18px' : '16px'}; font-weight: bold;">${quote.customerName}</div>` : ''}
+              ${quote.customerAddress ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '13px' : '11px'}; margin-top: 5px; color: #444;"><strong>Address:</strong> ${quote.customerAddress}</div>` : ''}
+              ${quote.customerPhone ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '13px' : '11px'}; color: #444;"><strong>Phone:</strong> ${quote.customerPhone}</div>` : ''}
+              ${quote.customerTin ? `<div style="font-size: ${paperSizeKey === 'thermal' ? '13px' : '11px'}; color: #444;"><strong>TIN:</strong> ${quote.customerTin}</div>` : ''}
           </div>
       ` : '';
 

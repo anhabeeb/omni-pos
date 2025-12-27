@@ -283,12 +283,12 @@ export default function StoreHistory() {
 
     const isCompany = !!order.customerTin;
     const customerBlock = (settings.showCustomerDetails && (order.customerName || order.customerPhone || order.customerTin)) ? `
-      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.25em' : '0.9em'}; text-align: left;">
+      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.05em' : '0.8em'}; text-align: left;">
         <div style="font-weight: bold; font-size: 1.1em; border-bottom: 1px dashed #ccc; margin-bottom: 5px; padding-bottom: 2px;">CUSTOMER DETAILS</div>
         ${isCompany && order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
-        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
-        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
-        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
+        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
+        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
+        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
       </div>
     ` : '';
 
