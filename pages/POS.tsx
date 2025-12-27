@@ -613,10 +613,11 @@ export default function POS() {
         </div>
     `;
 
+    const isCompany = !!order.customerTin;
     const customerBlock = (settings.showCustomerDetails && (order.customerName || order.customerPhone || order.customerTin)) ? `
       <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.25em' : '0.9em'}; text-align: left;">
         <div style="font-weight: bold; font-size: 1.1em; border-bottom: 1px dashed #ccc; margin-bottom: 5px; padding-bottom: 2px;">CUSTOMER DETAILS</div>
-        ${order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
+        ${isCompany && order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
         ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
         ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
         ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
@@ -1107,9 +1108,11 @@ export default function POS() {
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
                                               <td className="p-3">
-                                                  <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">
-                                                      {order.customerName || 'Walk-in'}
-                                                  </div>
+                                                  {order.customerTin ? (
+                                                      <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">
+                                                          {order.customerName}
+                                                      </div>
+                                                  ) : null}
                                                   {order.customerAddress && (
                                                       <div className="text-[9px] text-gray-500 font-medium lowercase truncate max-w-[150px]">
                                                           {order.customerAddress}
@@ -1118,6 +1121,11 @@ export default function POS() {
                                                   {order.customerPhone && (
                                                       <div className="text-[9px] text-gray-400 font-bold mt-0.5">
                                                           {order.customerPhone}
+                                                      </div>
+                                                  )}
+                                                  {!order.customerName && !order.customerPhone && (
+                                                      <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">
+                                                          Walk-in
                                                       </div>
                                                   )}
                                               </td>
@@ -1208,10 +1216,12 @@ export default function POS() {
                                                   {selectedCustomer.type === 'COMPANY' ? 'Company Account' : 'Individual'}
                                               </span>
                                           </div>
-                                          <div className="font-black text-[11px] dark:text-white truncate uppercase flex items-center gap-1.5 mt-1">
-                                              {selectedCustomer.type === 'COMPANY' ? <Building2 size={12} className="text-blue-600"/> : <UserIcon size={12} className="text-blue-600"/>}
-                                              {selectedCustomer.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer.name}
-                                          </div>
+                                          {selectedCustomer.type === 'COMPANY' && (
+                                            <div className="font-black text-[11px] dark:text-white truncate uppercase flex items-center gap-1.5 mt-1">
+                                                <Building2 size={12} className="text-blue-600"/>
+                                                {selectedCustomer.companyName}
+                                            </div>
+                                          )}
                                           <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
                                               <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
                                               <span className="truncate">{formatAddress(selectedCustomer)}</span>
