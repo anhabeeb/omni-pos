@@ -29,7 +29,9 @@ import {
   Save,
   Store as StoreIcon,
   Table as TableIcon,
-  XCircle
+  XCircle,
+  Clock,
+  Navigation
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -52,7 +54,6 @@ export default function POS() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'ALL'>('ALL');
   const [activeTab, setActiveTab] = useState<'MENU' | 'ACTIVE' | 'HELD' | 'HISTORY'>('MENU');
   
-  // UI Mode: SIMPLE (Card-based/Grid) vs DETAIL (List-centric based on image)
   const [viewMode, setViewMode] = useState<'SIMPLE' | 'DETAIL'>('SIMPLE');
   
   const [menuScale, setMenuScale] = useState(1);
@@ -62,10 +63,7 @@ export default function POS() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Sidebar state
   const [isCartMetadataCollapsed, setIsCartMetadataCollapsed] = useState(false);
-
-  // State to track if the current cart is an edit of an existing order
   const [resumedOrder, setResumedOrder] = useState<Order | null>(null);
 
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
@@ -88,7 +86,6 @@ export default function POS() {
   const [paymentRef, setPaymentRef] = useState('');
   const [paymentError, setPaymentError] = useState('');
 
-  // Split Payment State
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [splitPayment1, setSplitPayment1] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string, ref: string }>({ method: 'CASH', amount: '', ref: '' });
   const [splitPayment2, setSplitPayment2] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER', amount: string, ref: string }>({ method: 'CASH', amount: '', ref: '' });
@@ -455,9 +452,6 @@ export default function POS() {
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
-  /**
-   * Fix: Added generateReceiptHtml helper for POS receipts
-   */
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
     const settings: PrintSettings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
@@ -585,9 +579,6 @@ export default function POS() {
     </html>`;
   };
 
-  /**
-   * Fix: Implemented previewHtml and other missing handlers
-   */
   const previewHtml = useMemo(() => {
     if (previewOrder) return generateReceiptHtml(previewOrder, false, previewPaperSize);
     return '';
@@ -698,14 +689,17 @@ export default function POS() {
   );
 
   const renderDetailView = () => (
-    <div className="flex flex-col h-full bg-[#f0f0f0] p-4 text-[#333]">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
       {/* Top Bar: Enter Item(s) */}
-      <div className="flex items-center gap-2 mb-4 bg-white border border-[#ccc] p-1 shadow-sm">
-        <div className="text-xs font-bold px-2">Enter Item(s)</div>
-        <div className="flex-1 relative">
+      <div className="flex flex-col md:flex-row items-center gap-3 mb-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-2xl shadow-sm">
+        <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 px-2 shrink-0">Enter Item(s)</div>
+        <div className="flex-1 relative w-full">
+           <div className="absolute left-3 top-2.5 text-gray-400">
+             <Search size={18}/>
+           </div>
            <input 
-             className="w-full bg-[#ffffe0] border border-[#999] px-2 py-1 text-sm outline-none focus:border-blue-500"
-             placeholder="< Type/Scan item info here >"
+             className="w-full bg-blue-50/30 dark:bg-blue-900/10 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-4 py-2 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+             placeholder="< Type or Scan item info here >"
              value={searchTerm}
              onChange={e => {
                 setSearchTerm(e.target.value);
@@ -714,106 +708,136 @@ export default function POS() {
              }}
            />
            {searchTerm && (
-             <div className="absolute top-full left-0 w-full bg-white border shadow-lg z-50 max-h-48 overflow-y-auto">
+             <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-50 mt-1 max-h-48 overflow-y-auto">
                {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                 <button key={p.id} onClick={() => { addToCart(p); setSearchTerm(''); }} className="w-full text-left p-2 hover:bg-blue-100 border-b text-xs uppercase font-bold">{p.name} - {store?.currency}{p.price.toFixed(2)}</button>
+                 <button key={p.id} onClick={() => { addToCart(p); setSearchTerm(''); }} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 border-b last:border-0 border-gray-100 dark:border-gray-700 text-xs uppercase font-black text-gray-700 dark:text-gray-300 flex justify-between">
+                   <span>{p.name}</span>
+                   <span className="text-blue-600 dark:text-blue-400">{store?.currency}{p.price.toFixed(2)}</span>
+                 </button>
                ))}
              </div>
            )}
         </div>
-        <button className="bg-[#e1e1e1] border border-[#999] px-4 py-1 text-xs font-bold shadow-sm hover:bg-[#d1d1d1]">Find Item(s)</button>
+        <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1 rounded-xl border dark:border-gray-700 shrink-0">
+          {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t) => (
+              <button 
+                key={t} 
+                onClick={() => setOrderType(t)} 
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-400'}`}
+              >
+                  {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Take' : 'Ship'}
+              </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Item List Table */}
-      <div className="flex-1 bg-white border border-[#ccc] overflow-hidden flex flex-col mb-4 shadow-inner">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[11px] font-bold">
-            <thead className="bg-[#e1e1e1] border-b border-[#999] sticky top-0">
-              <tr className="text-left text-[#555]">
-                <th className="p-2 border-r border-[#ccc] w-16">Item #</th>
-                <th className="p-2 border-r border-[#ccc]">Item Name</th>
-                <th className="p-2 border-r border-[#ccc] text-center w-16">Qty</th>
-                <th className="p-2 border-r border-[#ccc] text-right w-24">Price</th>
-                <th className="p-2 text-right w-24">Total</th>
+      <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden flex flex-col mb-4 shadow-sm">
+        <div className="overflow-x-auto flex-1 custom-scrollbar">
+          <table className="w-full border-collapse">
+            <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+              <tr className="text-left">
+                <th className="p-3 text-[10px] font-black uppercase text-gray-500 tracking-widest w-16">Item #</th>
+                <th className="p-3 text-[10px] font-black uppercase text-gray-500 tracking-widest">Description</th>
+                <th className="p-3 text-[10px] font-black uppercase text-gray-500 tracking-widest text-center w-24">Qty</th>
+                <th className="p-3 text-[10px] font-black uppercase text-gray-500 tracking-widest text-right w-24">Price</th>
+                <th className="p-3 text-[10px] font-black uppercase text-gray-500 tracking-widest text-right w-24">Line Total</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {cart.map((item, idx) => (
-                <tr key={idx} className="border-b border-[#eee] hover:bg-blue-50 group">
-                  <td className="p-2 border-r border-[#eee] font-mono text-[#777]">{item.productId}</td>
-                  <td className="p-2 border-r border-[#eee] uppercase">{item.productName}</td>
-                  <td className="p-2 border-r border-[#eee] text-center">
-                    <div className="flex items-center justify-center gap-2">
-                       <button onClick={() => updateQuantity(item.productId, -1)} className="text-red-500 hover:scale-110 opacity-0 group-hover:opacity-100 transition-opacity"><XCircle size={14}/></button>
-                       {item.quantity}
-                       <button onClick={() => updateQuantity(item.productId, 1)} className="text-blue-500 hover:scale-110 opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14}/></button>
+                <tr key={idx} className="hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors group">
+                  <td className="p-3 font-mono text-xs text-gray-400 font-bold">#{item.productId}</td>
+                  <td className="p-3 font-black text-xs text-gray-800 dark:text-gray-200 uppercase tracking-tight">{item.productName}</td>
+                  <td className="p-3 text-center">
+                    <div className="flex items-center justify-center gap-3">
+                       <button onClick={() => updateQuantity(item.productId, -1)} className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all opacity-0 group-hover:opacity-100"><XCircle size={16}/></button>
+                       <span className="font-black text-sm dark:text-white">{item.quantity}</span>
+                       <button onClick={() => updateQuantity(item.productId, 1)} className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Plus size={16}/></button>
                     </div>
                   </td>
-                  <td className="p-2 border-r border-[#eee] text-right">{store?.currency}{item.price.toFixed(2)}</td>
-                  <td className="p-2 text-right">{store?.currency}{(item.price * item.quantity).toFixed(2)}</td>
+                  <td className="p-3 text-right font-bold text-gray-600 dark:text-gray-400">{store?.currency}{item.price.toFixed(2)}</td>
+                  <td className="p-3 text-right font-black text-blue-600 dark:text-blue-400">{store?.currency}{(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
               ))}
+              {cart.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center text-gray-300 dark:text-gray-700">
+                      <ShoppingCart size={48} strokeWidth={1} className="opacity-20 mb-2" />
+                      <p className="font-black text-[10px] uppercase tracking-[0.3em]">Transaction Empty</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Bottom Section: Customer and Totals */}
-      <div className="grid grid-cols-2 gap-4 h-40">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Customer Info Box */}
-        <div className="bg-white border border-[#ccc] p-3 flex flex-col">
-          <div className="text-[10px] uppercase font-black text-gray-500 mb-2">Customer Info</div>
-          <div className="flex gap-1 mb-2">
-            <input 
-              className="flex-1 border border-[#ccc] px-2 py-1 text-xs font-bold bg-[#f9f9f9]" 
-              placeholder="Find Customer..." 
-              value={customerSearch}
-              onChange={e => {setCustomerSearch(e.target.value); setShowCustomerResults(true);}}
-            />
-            <button className="bg-[#e1e1e1] border border-[#999] px-3 py-1 text-[10px] font-bold" onClick={() => setShowCustomerResults(true)}>Find</button>
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl flex flex-col shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-[10px] uppercase font-black text-gray-400 tracking-[0.2em]">Customer Information</div>
+            {selectedCustomer && <button onClick={() => {setSelectedCustomer(null); setCustomerSearch('');}} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded-lg transition-colors"><X size={14}/></button>}
+          </div>
+          <div className="flex gap-2 mb-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
+              <input 
+                className="w-full bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-xl pl-8 pr-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+                placeholder="Find customer record..." 
+                value={customerSearch}
+                onChange={e => {setCustomerSearch(e.target.value); setShowCustomerResults(true);}}
+                onFocus={() => setShowCustomerResults(true)}
+              />
+            </div>
+            <button className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95" onClick={() => setIsCustomerModalOpen(true)}><UserPlus size={18}/></button>
           </div>
           {showCustomerResults && customerSearch && (
               <div className="relative">
-                  <div className="absolute bottom-full left-0 w-full bg-white border shadow-xl z-50 mb-1 max-h-32 overflow-y-auto">
+                  <div className="absolute bottom-full left-0 w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl z-50 mb-2 max-h-32 overflow-y-auto">
                     {customers.filter(c => (c.name||'').toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)).map(c => (
-                        <button key={c.id} onClick={() => {setSelectedCustomer(c); setCustomerSearch(c.name||c.phone); setShowCustomerResults(false);}} className="w-full text-left p-2 hover:bg-blue-50 border-b text-[10px] uppercase font-bold">{c.name} ({c.phone})</button>
+                        <button key={c.id} onClick={() => {setSelectedCustomer(c); setCustomerSearch(c.name||c.phone); setShowCustomerResults(false);}} className="w-full text-left p-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 border-b last:border-0 border-gray-100 dark:border-gray-700 text-[10px] uppercase font-black text-gray-700 dark:text-gray-300">{c.name} ({c.phone})</button>
                     ))}
                   </div>
               </div>
           )}
-          <div className="text-[11px] font-bold text-[#444] mt-1 space-y-1">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800/80">
             {selectedCustomer ? (
-                <>
-                  <div className="flex justify-between"><span>Name:</span><span className="text-[#333] uppercase">{selectedCustomer.name}</span></div>
-                  <div className="flex justify-between"><span>Phone:</span><span className="text-[#333]">{selectedCustomer.phone}</span></div>
-                  <div className="flex justify-between"><span>Points:</span><span className="text-blue-600">0.00</span></div>
-                </>
-            ) : <div className="text-gray-400 italic">No customer selected</div>}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase"><span>Full Name</span><span className="text-gray-800 dark:text-white font-black">{selectedCustomer.name}</span></div>
+                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase"><span>Contact No</span><span className="text-gray-800 dark:text-white font-black font-mono tracking-tighter">{selectedCustomer.phone}</span></div>
+                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase"><span>Account Type</span><span className="text-blue-600 dark:text-blue-400 font-black">{selectedCustomer.type}</span></div>
+                </div>
+            ) : <div className="h-full flex items-center justify-center text-[10px] text-gray-400 font-black uppercase tracking-widest opacity-60">Anonymous Account</div>}
           </div>
         </div>
 
         {/* Totals Box */}
-        <div className="bg-white border border-[#ccc] p-3 flex flex-col justify-between">
-           <div className="space-y-1">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
+           <div className="space-y-2">
              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">SubTotal</span>
-                <div className="border border-[#ccc] px-2 py-1 w-24 text-right bg-[#f9f9f9] font-mono text-[11px]">{store?.currency}{totals.subtotal.toFixed(2)}</div>
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal Amount</span>
+                <div className="text-right dark:text-white font-mono font-black text-xs">{store?.currency}{totals.subtotal.toFixed(2)}</div>
              </div>
              <div className="flex justify-between items-center">
                 <div className="flex items-center gap-1">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Disc %</span>
-                    <input type="number" className="w-12 border border-[#ccc] px-1 text-center bg-[#f9f9f9] text-[10px]" value={discountPercent} onChange={e => setDiscountPercent(parseFloat(e.target.value) || 0)} />
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Discount (%)</span>
+                    <input type="number" className="w-12 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-1 text-center font-black text-[10px] dark:text-white" value={discountPercent} onChange={e => setDiscountPercent(parseFloat(e.target.value) || 0)} />
                 </div>
-                <div className="border border-[#ccc] px-2 py-1 w-24 text-right bg-[#f9f9f9] font-mono text-[11px]">{store?.currency}{totals.discountAmount.toFixed(2)}</div>
+                <div className="text-right text-red-500 font-mono font-black text-xs">-{store?.currency}{totals.discountAmount.toFixed(2)}</div>
              </div>
              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Tax ({store?.taxRate}%)</span>
-                <div className="border border-[#ccc] px-2 py-1 w-24 text-right bg-[#f9f9f9] font-mono text-[11px]">{store?.currency}{totals.tax.toFixed(2)}</div>
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Taxes (GST {store?.taxRate}%)</span>
+                <div className="text-right dark:text-white font-mono font-black text-xs">{store?.currency}{totals.tax.toFixed(2)}</div>
              </div>
            </div>
-           <div className="flex justify-between items-end mt-2">
-              <span className="text-sm font-black text-blue-800 uppercase">Total</span>
-              <div className="bg-black text-[#00ff00] font-mono text-2xl px-4 py-1 leading-none shadow-inner border-2 border-[#333]">
+           <div className="flex justify-between items-end mt-4 pt-4 border-t dark:border-gray-800">
+              <span className="text-sm font-black text-blue-600 uppercase tracking-tighter">Grand Total</span>
+              <div className="bg-black dark:bg-gray-950 text-[#00ff00] font-mono text-3xl px-6 py-2 leading-none shadow-inner border-2 border-gray-800 dark:border-gray-900 rounded-xl select-none">
                 {store?.currency}{totals.total.toFixed(2)}
               </div>
            </div>
@@ -821,12 +845,12 @@ export default function POS() {
       </div>
 
       {/* Detail Footer Buttons */}
-      <div className="flex justify-between items-center mt-4">
-        <button onClick={handleSendToHold} className="flex items-center gap-2 bg-[#e1e1e1] border border-[#999] px-6 py-2 text-xs font-bold shadow-sm hover:bg-[#d1d1d1]"><PauseCircle size={16}/> Hold Receipt</button>
-        <div className="flex gap-2">
-            <button onClick={handleCheckout} className="flex items-center gap-2 bg-[#e1e1e1] border border-[#999] px-8 py-2 text-xs font-bold shadow-sm hover:bg-[#d1d1d1] text-green-700"><DollarSign size={18}/> Take Payment</button>
-            <button onClick={handleSendToKitchen} className="flex items-center gap-2 bg-[#e1e1e1] border border-[#999] px-6 py-2 text-xs font-bold shadow-sm hover:bg-[#d1d1d1] text-orange-700"><ChefHat size={18}/> Save Sale</button>
-            <button onClick={clearCart} className="flex items-center gap-2 bg-[#e1e1e1] border border-[#999] px-6 py-2 text-xs font-bold shadow-sm hover:bg-[#d1d1d1] text-red-700"><XCircle size={18}/> Cancel</button>
+      <div className="flex flex-wrap md:flex-nowrap justify-between items-center gap-3 mt-4">
+        <button onClick={handleSendToHold} disabled={cart.length === 0} className="flex-1 flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-orange-600 transition-all active:scale-95 disabled:opacity-30"><PauseCircle size={18}/> Hold Receipt</button>
+        <div className="flex gap-3 w-full md:w-auto">
+            <button onClick={handleCheckout} disabled={cart.length === 0} className="flex-1 md:px-10 flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-30"><DollarSign size={18}/> Take Payment</button>
+            <button onClick={handleSendToKitchen} disabled={cart.length === 0} className="flex-1 md:px-8 flex items-center justify-center gap-2 bg-emerald-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/30 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-30"><ChefHat size={18}/> Save Sale</button>
+            <button onClick={clearCart} className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl hover:bg-red-100 transition-all active:scale-95"><XCircle size={20}/></button>
         </div>
       </div>
     </div>
@@ -852,7 +876,7 @@ export default function POS() {
                   ))}
                   <div className="mx-2 w-px bg-gray-200 dark:bg-gray-700 my-1" />
                   <button onClick={() => { setViewMode(viewMode === 'SIMPLE' ? 'DETAIL' : 'SIMPLE'); resetOrderUI(); }} className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-900 transition-all hover:bg-blue-100 flex items-center gap-2">
-                    {viewMode === 'SIMPLE' ? <StoreIcon size={14}/> : <LayoutGrid size={14}/>} Switch to {viewMode === 'SIMPLE' ? 'Detail' : 'Simple'} View
+                    {viewMode === 'SIMPLE' ? <StoreIcon size={14}/> : <LayoutGrid size={14}/>} {viewMode === 'SIMPLE' ? 'Detail View' : 'Simple View'}
                   </button>
                   <div className="mx-2 w-px bg-gray-200 dark:bg-gray-700 my-1" />
                   {shift ? (
@@ -883,28 +907,33 @@ export default function POS() {
                                   <tbody className="divide-y dark:divide-gray-700">
                                       {activeOrders.map(order => (
                                           <tr key={order.id} className="hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                                              <td className="p-4 font-mono font-black text-blue-600">#{order.orderNumber}</td>
-                                              <td className="p-4 text-xs font-bold text-gray-400">{new Date(order.createdAt).toLocaleTimeString()}</td>
+                                              <td className="p-4 font-mono font-black text-blue-600 dark:text-blue-400">#{order.orderNumber}</td>
+                                              <td className="p-4 text-xs font-bold text-gray-400 flex items-center gap-1.5"><Clock size={12}/> {new Date(order.createdAt).toLocaleTimeString()}</td>
                                               <td className="p-4">
-                                                  <div className="text-xs font-black dark:text-white uppercase">{order.customerName || 'Standard Order'}</div>
-                                                  {order.tableNumber && <div className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Table {order.tableNumber}</div>}
+                                                  <div className="text-xs font-black dark:text-white uppercase flex items-center gap-1.5"><UserIcon size={12} className="text-blue-500"/> {order.customerName || 'Standard Order'}</div>
+                                                  {order.tableNumber && <div className="text-[10px] text-blue-500 font-bold uppercase mt-0.5 ml-4.5">Table {order.tableNumber}</div>}
                                               </td>
-                                              <td className="p-4"><span className="text-[10px] font-black uppercase px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">{order.orderType}</span></td>
-                                              <td className="p-4 text-right font-black dark:text-white">{store?.currency}{order.total.toFixed(2)}</td>
+                                              <td className="p-4">
+                                                <div className="flex items-center gap-1.5 text-[10px] font-black uppercase px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 w-fit">
+                                                  {order.orderType === OrderType.DINE_IN ? <Utensils size={10}/> : order.orderType === OrderType.TAKEAWAY ? <ShoppingBag size={10}/> : <Navigation size={10}/>}
+                                                  {order.orderType}
+                                                </div>
+                                              </td>
+                                              <td className="p-4 text-right font-black dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
                                               <td className="p-4 text-center">
-                                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
+                                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
                                               </td>
                                               <td className="p-4 text-right">
-                                                  <div className="flex justify-end gap-1">
-                                                      <button onClick={() => resumeOrder(order)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16}/></button>
-                                                      <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg"><PauseCircle size={16}/></button>
-                                                      <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><Printer size={16}/></button>
-                                                      <button onClick={() => {setOrderToSettle(order); setIsPaymentModalOpen(true);}} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg"><DollarSign size={16}/></button>
+                                                  <div className="flex justify-end gap-1.5">
+                                                      <button onClick={() => resumeOrder(order)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all" title="Edit"><Edit size={18}/></button>
+                                                      <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-all" title="Hold"><PauseCircle size={18}/></button>
+                                                      <button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all" title="Print"><Printer size={18}/></button>
+                                                      <button onClick={() => {setOrderToSettle(order); setIsPaymentModalOpen(true);}} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 transition-all" title="Checkout"><DollarSign size={18}/></button>
                                                   </div>
                                               </td>
                                           </tr>
                                       ))}
-                                      {activeOrders.length === 0 && <tr><td colSpan={7} className="p-10 text-center text-gray-400 italic font-bold">No active tickets</td></tr>}
+                                      {activeOrders.length === 0 && <tr><td colSpan={7} className="p-20 text-center text-gray-300 italic font-black uppercase tracking-[0.2em] opacity-40">No active tickets</td></tr>}
                                   </tbody>
                               </table>
                           </div>
@@ -924,32 +953,31 @@ export default function POS() {
                                       {heldOrders.map(order => (
                                           <tr key={order.id} className="hover:bg-orange-50/50 dark:hover:bg-orange-900/10 transition-colors">
                                               <td className="p-4 font-mono font-black text-orange-600">#{order.orderNumber}</td>
-                                              <td className="p-4 text-xs font-bold text-gray-400">{new Date(order.createdAt).toLocaleTimeString()}</td>
+                                              <td className="p-4 text-xs font-bold text-gray-400 flex items-center gap-1.5"><Clock size={12}/> {new Date(order.createdAt).toLocaleTimeString()}</td>
                                               <td className="p-4">
-                                                  <div className="text-xs font-black dark:text-white uppercase">{order.customerName || 'Unnamed Order'}</div>
-                                                  <div className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">{order.orderType}</div>
+                                                  <div className="text-xs font-black dark:text-white uppercase flex items-center gap-1.5"><UserIcon size={12} className="text-orange-500"/> {order.customerName || 'Unnamed Order'}</div>
+                                                  <div className="text-[10px] text-gray-400 font-bold uppercase mt-0.5 ml-4.5">{order.orderType}</div>
                                               </td>
-                                              <td className="p-4 text-right font-black dark:text-white">{store?.currency}{order.total.toFixed(2)}</td>
+                                              <td className="p-4 text-right font-black dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
                                               <td className="p-4 text-right">
-                                                  <button onClick={() => handleActivateOrder(order)} className="flex items-center gap-2 ml-auto px-4 py-2 bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 shadow-lg shadow-orange-500/20 active:scale-95 transition-all">
+                                                  <button onClick={() => handleActivateOrder(order)} className="flex items-center gap-2 ml-auto px-4 py-2 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 shadow-xl shadow-orange-500/20 active:scale-95 transition-all">
                                                       <Play size={12}/> Activate Order
                                                   </button>
                                               </td>
                                           </tr>
                                       ))}
-                                      {heldOrders.length === 0 && <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic font-bold">No saved tickets</td></tr>}
+                                      {heldOrders.length === 0 && <tr><td colSpan={5} className="p-20 text-center text-gray-300 italic font-black uppercase tracking-[0.2em] opacity-40">No saved tickets</td></tr>}
                                   </tbody>
                               </table>
                           </div>
                       ) : (
-                          <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100"><tr className="text-[9px] font-black uppercase text-gray-400 tracking-widest"><th className="p-3">Time</th><th className="p-3">Ticket</th><th className="p-3">Summary</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-gray-50 dark:divide-gray-700">{historyOrders.map((order: Order) => (<tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"><td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td><td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td><td className="p-3"><div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">{order.customerName || 'Walk-in'}</div></td><td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td><td className="p-3 text-right"><button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button></td></tr>))}</tbody></table></div>
+                          <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800"><tr className="text-[10px] font-black uppercase text-gray-400 tracking-widest"><th className="p-3">Time</th><th className="p-3">Ticket</th><th className="p-3">Summary</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-gray-50 dark:divide-gray-700">{historyOrders.map((order: Order) => (<tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"><td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td><td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td><td className="p-3"><div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">{order.customerName || 'Walk-in'}</div></td><td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td><td className="p-3 text-right"><button onClick={() => {setPreviewOrder(order); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Reprint"><Printer size={18}/></button></td></tr>))}</tbody></table></div>
                       )}
                   </div>
               )}
           </div>
       </div>
 
-      {/* Detail View has its own sidebar/UI, but Simple View uses this aside */}
       {viewMode === 'SIMPLE' && (
       <aside className="w-full lg:w-[380px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl overflow-hidden h-full rounded-3xl">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
@@ -977,9 +1005,9 @@ export default function POS() {
 
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100">
-                  <div className="p-6 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/50"><div className="flex items-center gap-4"><Printer size={24} className="text-blue-600"/><div><h2 className="text-xl font-black dark:text-white uppercase tracking-tighter">Receipt Preview: #{previewOrder.orderNumber}</h2></div></div><button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full"><X size={24}/></button></div>
-                  <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto"><div className="bg-white shadow-2xl h-fit rounded p-1 border"><iframe srcDoc={previewHtml} className="w-[320px] h-[1000px] border-none" title="Receipt Preview" /></div></div>
+              <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700">
+                  <div className="p-6 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/50"><div className="flex items-center gap-4"><Printer size={24} className="text-blue-600"/><div><h2 className="text-xl font-black dark:text-white uppercase tracking-tighter">Receipt Preview: #{previewOrder.orderNumber}</h2></div></div><button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button></div>
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto custom-scrollbar"><div className="bg-white shadow-2xl h-fit rounded p-1 border"><iframe srcDoc={previewHtml} className="w-[320px] h-[1000px] border-none" title="Receipt Preview" /></div></div>
                   <div className="p-6 border-t flex flex-wrap justify-end gap-3 bg-white dark:bg-gray-900"><button onClick={() => setPrintModalOpen(false)} className="px-6 py-3 text-xs font-black uppercase text-gray-500">Close</button><button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl hover:bg-blue-700">Execute Print</button></div>
               </div>
           </div>
@@ -989,7 +1017,7 @@ export default function POS() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30"><h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><UserIcon className="text-blue-600" /> Add New Customer</h2><button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24}/></button></div>
-                  <form onSubmit={handleQuickAddCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto"><div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-2"><button type="button" onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})} className={`flex-1 py-2.5 text-xs font-black uppercase rounded-lg ${newCustData.type === 'INDIVIDUAL' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Individual</button><button type="button" onClick={() => setNewCustData({...newCustData, type: 'COMPANY'})} className={`flex-1 py-2.5 text-xs font-black uppercase rounded-lg ${newCustData.type === 'COMPANY' ? 'bg-white shadow text-purple-600' : 'text-gray-500'}`}>Company</button></div>
+                  <form onSubmit={handleQuickAddCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar"><div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-2"><button type="button" onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})} className={`flex-1 py-2.5 text-xs font-black uppercase rounded-lg ${newCustData.type === 'INDIVIDUAL' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Individual</button><button type="button" onClick={() => setNewCustData({...newCustData, type: 'COMPANY'})} className={`flex-1 py-2.5 text-xs font-black uppercase rounded-lg ${newCustData.type === 'COMPANY' ? 'bg-white shadow text-purple-600' : 'text-gray-500'}`}>Company</button></div>
                       {newCustData.type === 'COMPANY' && (<div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl space-y-4 border border-purple-100"><input placeholder="Company Name *" className="w-full p-2.5 border border-purple-200 rounded-xl bg-white dark:bg-gray-700 font-bold outline-none" value={newCustData.companyName || ''} onChange={(e) => setNewCustData({...newCustData, companyName: e.target.value})} required={newCustData.type === 'COMPANY'} /><input placeholder="TIN *" className="w-full p-2.5 border border-purple-200 rounded-xl bg-white dark:bg-gray-700 font-mono outline-none" value={newCustData.tin || ''} onChange={(e) => setNewCustData({...newCustData, tin: e.target.value})} required={newCustData.type === 'COMPANY'} /></div>)}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><input placeholder="Full Name" className="w-full p-2.5 border border-gray-300 rounded-xl bg-white dark:bg-gray-700 font-bold outline-none" value={newCustData.name || ''} onChange={(e) => setNewCustData({...newCustData, name: e.target.value})} required={newCustData.type === 'COMPANY'} /><input placeholder="Phone *" className="w-full p-2.5 border border-gray-300 rounded-xl bg-white dark:bg-gray-700 font-mono outline-none" value={newCustData.phone || ''} onChange={(e) => setNewCustData({...newCustData, phone: e.target.value})} required /></div>
                       <div className="border-t pt-6 space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><input placeholder="Building / House *" className="w-full p-2.5 border border-gray-300 rounded-xl bg-white dark:bg-gray-700 outline-none" value={newCustData.type === 'INDIVIDUAL' ? newCustData.houseName : newCustData.buildingName} onChange={(e) => setNewCustData(newCustData.type === 'INDIVIDUAL' ? {...newCustData, houseName: e.target.value} : {...newCustData, buildingName: e.target.value})} required /><input placeholder="Street *" className="w-full p-2.5 border border-gray-300 rounded-xl bg-white dark:bg-gray-700 outline-none" value={newCustData.type === 'INDIVIDUAL' ? newCustData.streetName : newCustData.street} onChange={(e) => setNewCustData(newCustData.type === 'INDIVIDUAL' ? {...newCustData, streetName: e.target.value} : {...newCustData, street: e.target.value})} required /></div><input placeholder="Island / Atoll *" className="w-full p-2.5 border border-gray-300 rounded-xl bg-white dark:bg-gray-700 outline-none" value={newCustData.island || ''} onChange={(e) => setNewCustData({...newCustData, island: e.target.value})} required /></div>
@@ -1001,15 +1029,15 @@ export default function POS() {
 
       {isShiftModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in border border-gray-100 flex flex-col"><div className="p-8 border-b dark:border-gray-700 flex justify-between items-center"><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">{shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>} Register</h2><button onClick={() => setIsShiftModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button></div>
-                  <div className="p-10 space-y-8 overflow-y-auto"><div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">{shift ? 'Closing Cash' : 'Float'}</p><div className="grid grid-cols-3 gap-3">{DENOMINATIONS.slice(0, 6).map((d: number) => (<div key={d} className="flex flex-col gap-1.5"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">{store?.currency}{d}</span><input type="number" min="0" placeholder="0" className="w-full p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-black dark:text-white text-center shadow-sm" value={denominations[d] || ''} onChange={(e) => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}/></div>))}</div></div><div className="flex flex-col items-center py-6 border-y dark:border-gray-800"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Calculated Total</p><p className="text-5xl font-black dark:text-white tracking-tighter text-blue-600">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div>{shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}<div className="flex gap-4"><button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase text-gray-400 hover:text-gray-800">Discard</button>{shift ? (<button type="button" onClick={() => setIsShiftConfirmOpen(true)} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-red-700">End Shift</button>) : (<button type="button" onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-700">Open Station</button>)}</div></div>
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in border border-gray-100 dark:border-gray-700 flex flex-col"><div className="p-8 border-b dark:border-gray-700 flex justify-between items-center"><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">{shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>} Register</h2><button onClick={() => setIsShiftModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button></div>
+                  <div className="p-10 space-y-8 overflow-y-auto"><div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-800"><p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">{shift ? 'Closing Cash' : 'Float'}</p><div className="grid grid-cols-3 gap-3">{DENOMINATIONS.slice(0, 6).map((d: number) => (<div key={d} className="flex flex-col gap-1.5"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">{store?.currency}{d}</span><input type="number" min="0" placeholder="0" className="w-full p-3 bg-white dark:bg-gray-800 border-none rounded-xl text-xs font-black dark:text-white text-center shadow-sm" value={denominations[d] || ''} onChange={(e) => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}/></div>))}</div></div><div className="flex flex-col items-center py-6 border-y dark:border-gray-800"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Calculated Total</p><p className="text-5xl font-black dark:text-white tracking-tighter text-blue-600">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div>{shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}<div className="flex gap-4"><button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase text-gray-400 hover:text-gray-800">Discard</button>{shift ? (<button type="button" onClick={() => setIsShiftConfirmOpen(true)} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-red-700">End Shift</button>) : (<button type="button" onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-700">Open Station</button>)}</div></div>
               </div>
           </div>
       )}
 
       {isShiftConfirmOpen && shift && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[400] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 p-10 rounded-[3rem] w-full max-md shadow-2xl border border-red-100 text-center animate-in zoom-in-95 duration-300"><div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 rounded-[2rem] flex items-center justify-center text-red-600 mx-auto mb-8 shadow-inner"><Lock size={48}/></div><h2 className="text-3xl font-black dark:text-white mb-3 uppercase tracking-tighter">Finalize Shift End</h2><p className="text-gray-400 font-bold text-sm mb-10 leading-relaxed uppercase tracking-widest max-w-xs mx-auto">This will audit all tallies and lock the station.</p><div className="grid grid-cols-2 gap-6 mb-10"><div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 text-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</p><p className="text-2xl font-black text-white">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p></div><div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-700 text-center"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Actual</p><p className="text-2xl font-black text-blue-700 dark:text-blue-100">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div></div><div className="flex flex-col gap-4"><button onClick={() => { setIsShiftConfirmOpen(false); executeCloseShift(); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-red-700 transition-all">Confirm Closure</button><button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-400 font-black text-xs uppercase tracking-widest">Cancel</button></div></div>
+              <div className="bg-white dark:bg-gray-800 p-10 rounded-[3rem] w-full max-md shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-in zoom-in-95 duration-300"><div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 rounded-[2rem] flex items-center justify-center text-red-600 mx-auto mb-8 shadow-inner"><Lock size={48}/></div><h2 className="text-3xl font-black dark:text-white mb-3 uppercase tracking-tighter">Finalize Shift End</h2><p className="text-gray-400 font-bold text-sm mb-10 leading-relaxed uppercase tracking-widest max-w-xs mx-auto">This will audit all tallies and lock the station.</p><div className="grid grid-cols-2 gap-6 mb-10"><div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 text-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</p><p className="text-2xl font-black text-white">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p></div><div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-700 text-center"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Actual</p><p className="text-2xl font-black text-blue-700 dark:text-blue-100">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div></div><div className="flex flex-col gap-4"><button onClick={() => { setIsShiftConfirmOpen(false); executeCloseShift(); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-red-700 transition-all">Confirm Closure</button><button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-400 font-black text-xs uppercase tracking-widest">Cancel</button></div></div>
           </div>
       )}
     </div>
