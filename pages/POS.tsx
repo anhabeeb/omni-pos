@@ -54,6 +54,9 @@ export default function POS() {
   // State for toggling actions in Active orders tab
   const [selectedActiveOrderId, setSelectedActiveOrderId] = useState<number | null>(null);
 
+  // State to track if the current cart is an edit of an existing order
+  const [resumedOrder, setResumedOrder] = useState<Order | null>(null);
+
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
     name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
   });
@@ -117,7 +120,8 @@ export default function POS() {
     customer: `pos_customer_${storeId}`,
     table: `pos_table_${storeId}`,
     note: `pos_note_${storeId}`,
-    discount: `pos_discount_${storeId}`
+    discount: `pos_discount_${storeId}`,
+    resumed: `pos_resumed_${storeId}`
   });
 
   useEffect(() => {
@@ -139,8 +143,9 @@ export default function POS() {
         localStorage.setItem(keys.table, tableNumber);
         localStorage.setItem(keys.note, orderNote);
         localStorage.setItem(keys.discount, discountPercent.toString());
+        localStorage.setItem(keys.resumed, JSON.stringify(resumedOrder));
     }
-  }, [cart, orderType, selectedCustomer, tableNumber, orderNote, discountPercent, currentStoreId]);
+  }, [cart, orderType, selectedCustomer, tableNumber, orderNote, discountPercent, resumedOrder, currentStoreId]);
 
   useEffect(() => {
       const handleClickOutside = () => {
@@ -170,6 +175,7 @@ export default function POS() {
       const savedTable = localStorage.getItem(keys.table);
       const savedNote = localStorage.getItem(keys.note);
       const savedDiscount = localStorage.getItem(keys.discount);
+      const savedResumed = localStorage.getItem(keys.resumed);
 
       if (savedCart) setCart(JSON.parse(savedCart));
       if (savedType) setOrderType(savedType as OrderType);
@@ -183,6 +189,9 @@ export default function POS() {
       if (savedTable) setTableNumber(savedTable);
       if (savedNote) setOrderNote(savedNote);
       if (savedDiscount) setDiscountPercent(parseFloat(savedDiscount) || 0);
+      if (savedResumed) {
+          try { setResumedOrder(JSON.parse(savedResumed)); } catch(e) {}
+      }
   };
 
   const loadData = async () => {
@@ -245,6 +254,7 @@ export default function POS() {
     setOrderNote(''); 
     setOrderType(OrderType.DINE_IN); 
     setDiscountPercent(0);
+    setResumedOrder(null);
     if (currentStoreId) {
         const keys = getStorageKeys(currentStoreId);
         localStorage.removeItem(keys.cart);
@@ -252,6 +262,7 @@ export default function POS() {
         localStorage.removeItem(keys.table);
         localStorage.removeItem(keys.note);
         localStorage.removeItem(keys.discount);
+        localStorage.removeItem(keys.resumed);
     }
   };
 
@@ -263,24 +274,42 @@ export default function POS() {
 
   const resumeOrder = async (order: Order) => {
     if (!shift) { showToast("Register is closed. Please open shift first.", "ERROR"); setIsShiftModalOpen(true); return; }
-    setCart(order.items); setOrderType(order.orderType); setDiscountPercent(order.discountPercent || 0);
+    
+    // Capture the original order state for preservation
+    setResumedOrder(order);
+    
+    setCart(order.items); 
+    setOrderType(order.orderType); 
+    setDiscountPercent(order.discountPercent || 0);
+    
     if (order.tableNumber) setTableNumber(order.tableNumber);
     if (order.note) setOrderNote(order.note);
-    if (order.customerName) {
-        const found = customers.find((c: Customer) => c.name === order.customerName);
-        if (found) { setSelectedCustomer(found); setCustomerSearch(found.name); }
-        else setCustomerSearch(order.customerName);
+    
+    // Restore customer selection accurately
+    if (order.customerPhone) {
+        const found = customers.find((c: Customer) => c.phone === order.customerPhone);
+        if (found) { 
+            setSelectedCustomer(found); 
+            setCustomerSearch(found.name || found.phone); 
+        } else {
+            setCustomerSearch(order.customerName || order.customerPhone);
+        }
+    } else {
+        setSelectedCustomer(null);
+        setCustomerSearch(order.customerName || '');
     }
+
     if (currentStoreId) {
+        // We delete it from the active view but we kept its ID in resumedOrder state
         await db.deleteOrder(currentStoreId, order.id);
         db.logActivity({
             storeId: currentStoreId, userId: user?.id || 0, userName: user?.name || '',
             action: 'ORDER_CREATE',
-            description: `Order #${order.orderNumber} resumed from memory/hold`
+            description: `Order #${order.orderNumber} pulled from active tab for editing`
         });
     }
     setActiveTab('MENU');
-    showToast(`Order #${order.orderNumber} resumed in Menu`);
+    showToast(`Editing Order #${order.orderNumber}`, "INFO");
   };
 
   const handleHoldActiveOrder = async (order: Order, e: React.MouseEvent) => {
@@ -328,36 +357,43 @@ export default function POS() {
       setIsSaving(true);
       
       const newOrderData: Order = {
-          id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id,
-          items: [...cart], subtotal: totals.subtotal, 
+          // Use original ID and Order Number if we are editing an existing order
+          id: resumedOrder?.id || 0, 
+          orderNumber: resumedOrder?.orderNumber || '', 
+          storeId: currentStoreId, 
+          shiftId: shift.id,
+          items: [...cart], 
+          subtotal: totals.subtotal, 
           discountPercent: discountPercent, 
           discountAmount: totals.discountAmount,
-          tax: totals.tax, serviceCharge: totals.serviceCharge,
-          total: totals.total, orderType, status: OrderStatus.PENDING, 
-          // Fix: Bypass KOT if disabled by setting status to SERVED immediately (Paylater mode)
+          tax: totals.tax, 
+          serviceCharge: totals.serviceCharge,
+          total: totals.total, 
+          orderType, 
+          status: resumedOrder?.status || OrderStatus.PENDING, 
           kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
           tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
           note: orderNote, 
-          // For companies, prioritize company name on the order ticket
-          customerName: (selectedCustomer?.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer?.name) || selectedCustomer?.name, 
+          customerName: (selectedCustomer?.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer?.name) || selectedCustomer?.name || customerSearch, 
           customerPhone: selectedCustomer?.phone, 
           customerTin: selectedCustomer?.tin,
           customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
-          createdBy: user.id, createdAt: Date.now()
+          createdBy: resumedOrder?.createdBy || user.id, 
+          createdAt: resumedOrder?.createdAt || Date.now()
       } as Order;
 
       resetOrderUI();
       setActiveTab('ACTIVE');
-      showToast(isKOTEnabled ? "Sending order to kitchen..." : "Creating order record...", "INFO");
+      showToast(isKOTEnabled ? "Sending order to kitchen..." : "Updating active order...", "INFO");
 
       try {
           const added = await db.addOrder(currentStoreId, newOrderData);
           db.logActivity({
             storeId: currentStoreId, userId: user.id, userName: user.name,
-            action: 'ORDER_CREATE',
-            description: isKOTEnabled ? `New order #${added.orderNumber} sent to kitchen` : `New Pay-later order #${added.orderNumber} created`
+            action: resumedOrder ? 'ORDER_UPDATE' : 'ORDER_CREATE',
+            description: resumedOrder ? `Order #${added.orderNumber} updated` : (isKOTEnabled ? `New order #${added.orderNumber} sent to kitchen` : `New Pay-later order #${added.orderNumber} created`)
           });
-          showToast(isKOTEnabled ? "Order created & sent to kitchen." : "Order recorded.", "SUCCESS");
+          showToast(resumedOrder ? "Order updated successfully." : (isKOTEnabled ? "Order created & sent to kitchen." : "Order recorded."), "SUCCESS");
       } catch (e) {
           console.error(e);
           showToast("Order saved locally", "INFO");
@@ -406,6 +442,125 @@ export default function POS() {
       setSplitPayment1({ method: 'CASH', amount: '', ref: '' });
       setSplitPayment2({ method: 'CASH', amount: '', ref: '' });
       setIsPaymentModalOpen(true);
+  };
+
+  const finalizePayment = async () => {
+      if (!currentStoreId || !user || !shift || isSaving) return;
+      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
+      
+      const transactions: Transaction[] = [];
+
+      if (isSplitMode) {
+          const a1 = parseFloat(splitPayment1.amount) || 0;
+          const a2 = parseFloat(splitPayment2.amount) || 0;
+          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
+              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
+              return;
+          }
+          
+          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
+              setPaymentError("Reference number is mandatory for non-cash split payments.");
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
+          });
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
+          });
+      } else {
+          const tendered = parseFloat(amountTendered) || 0;
+          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
+              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
+              return; 
+          }
+          
+          if (paymentMethod !== 'CASH' && !paymentRef) {
+              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
+              referenceNumber: paymentRef,
+              timestamp: Date.now(), performedBy: user.id, 
+              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
+              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
+          });
+      }
+      
+      setIsSaving(true);
+      
+      // Local captures for the async operation
+      const localCart = [...cart];
+      const localTotals = {...totals};
+      const localNote = orderNote;
+      const localTable = tableNumber;
+      const localType = orderType;
+      const localCust = selectedCustomer;
+      const localDisc = discountPercent;
+      const localResumed = resumedOrder;
+
+      setIsPaymentModalOpen(false);
+      resetOrderUI();
+      showToast("Processing payment...", "INFO");
+
+      try {
+          let finalOrder: Order;
+          if (orderToSettle) {
+              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
+              await db.updateOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_UPDATE',
+                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          } else {
+              finalOrder = { 
+                id: localResumed?.id || 0, 
+                orderNumber: localResumed?.orderNumber || '', 
+                storeId: currentStoreId, 
+                shiftId: shift.id, 
+                items: localCart, 
+                subtotal: localTotals.subtotal, 
+                discountPercent: localDisc,
+                discountAmount: localTotals.discountAmount,
+                tax: localTotals.tax, 
+                serviceCharge: localTotals.serviceCharge, 
+                total: localTotals.total, 
+                orderType: localType, 
+                status: OrderStatus.COMPLETED, 
+                kitchenStatus: 'SERVED', 
+                paymentMethod: isSplitMode ? undefined : paymentMethod, 
+                note: localNote, 
+                transactions, 
+                tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
+                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name || customerSearch, 
+                customerPhone: localCust?.phone, 
+                customerTin: localCust?.tin,
+                customerAddress: localCust ? formatAddress(localCust) : undefined,
+                createdBy: localResumed?.createdBy || user.id, 
+                createdAt: localResumed?.createdAt || Date.now() 
+              } as Order;
+              finalOrder = await db.addOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: localResumed ? 'ORDER_UPDATE' : 'ORDER_CREATE',
+                description: localResumed ? `Order #${finalOrder.orderNumber} updated & settled` : `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          }
+          setOrderToSettle(null); 
+          setPreviewOrder(finalOrder); 
+          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
+          setPrintModalOpen(true);
+          showToast("Payment completed successfully.", "SUCCESS");
+      } catch (e) {
+          console.error(e);
+          showToast("Payment recorded locally", "INFO");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
@@ -705,110 +860,6 @@ export default function POS() {
     }
   };
 
-  const finalizePayment = async () => {
-      if (!currentStoreId || !user || !shift || isSaving) return;
-      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
-      
-      const transactions: Transaction[] = [];
-
-      if (isSplitMode) {
-          const a1 = parseFloat(splitPayment1.amount) || 0;
-          const a2 = parseFloat(splitPayment2.amount) || 0;
-          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
-              return;
-          }
-          
-          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
-              setPaymentError("Reference number is mandatory for non-cash split payments.");
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
-          });
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
-          });
-      } else {
-          const tendered = parseFloat(amountTendered) || 0;
-          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
-              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
-              return; 
-          }
-          
-          if (paymentMethod !== 'CASH' && !paymentRef) {
-              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
-              referenceNumber: paymentRef,
-              timestamp: Date.now(), performedBy: user.id, 
-              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
-              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
-          });
-      }
-      
-      setIsSaving(true);
-      const localCart = [...cart];
-      const localTotals = {...totals};
-      const localNote = orderNote;
-      const localTable = tableNumber;
-      const localType = orderType;
-      const localCust = selectedCustomer;
-      const localDisc = discountPercent;
-
-      setIsPaymentModalOpen(false);
-      resetOrderUI();
-      showToast("Processing payment...", "INFO");
-
-      try {
-          let finalOrder: Order;
-          if (orderToSettle) {
-              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
-              await db.updateOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_UPDATE',
-                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          } else {
-              finalOrder = { 
-                id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
-                items: localCart, 
-                subtotal: localTotals.subtotal, 
-                discountPercent: localDisc,
-                discountAmount: localTotals.discountAmount,
-                tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
-                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitMode ? undefined : paymentMethod, note: localNote, transactions, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
-                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name, 
-                customerPhone: localCust?.phone, 
-                customerTin: localCust?.tin,
-                customerAddress: localCust ? formatAddress(localCust) : undefined,
-                createdBy: user.id, createdAt: Date.now() 
-              } as Order;
-              finalOrder = await db.addOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_CREATE',
-                description: `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          }
-          setOrderToSettle(null); 
-          setPreviewOrder(finalOrder); 
-          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
-          setPrintModalOpen(true);
-          showToast("Payment completed successfully.", "SUCCESS");
-      } catch (e) {
-          console.error(e);
-          showToast("Payment recorded locally", "INFO");
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
           {productList.map((product: Product) => (
@@ -1089,7 +1140,7 @@ export default function POS() {
                   <div>
                       <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-2">
-                          <Hash size={11} /> Ticket Queue {nextOrderNum}
+                          <Hash size={11} /> Ticket Queue {resumedOrder ? resumedOrder.orderNumber : nextOrderNum}
                       </div>
                   </div>
                   {cart.length > 0 && (
@@ -1270,7 +1321,7 @@ export default function POS() {
                   <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center">
                       <div>
                         <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter">Settlement Center</h2>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Ticket: {orderToSettle ? `#${orderToSettle.orderNumber}` : `New Terminal Sale`}</p>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Ticket: {orderToSettle ? `#${orderToSettle.orderNumber}` : (resumedOrder ? `#${resumedOrder.orderNumber}` : `New Terminal Sale`)}</p>
                       </div>
                       <button onClick={() => setIsPaymentModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                         <X size={24} className="text-gray-400" />
