@@ -393,7 +393,10 @@ export default function POS() {
       showToast(isKOTEnabled ? "Sending order to kitchen..." : "Updating active order...", "INFO");
 
       try {
-          const added = await db.addOrder(currentStoreId, newOrderData);
+          const added = (newOrderData.id && newOrderData.id !== 0) 
+            ? (await db.updateOrder(currentStoreId, newOrderData), newOrderData)
+            : await db.addOrder(currentStoreId, newOrderData);
+
           db.logActivity({
             storeId: currentStoreId, userId: user.id, userName: user.name,
             action: resumedOrder ? 'ORDER_UPDATE' : 'ORDER_CREATE',
@@ -525,20 +528,29 @@ export default function POS() {
             transactions: [...(targetOrder.transactions || []), ...transactions]
         };
 
-        const result = await db.addOrder(currentStoreId, completedOrder);
+        // CRITICAL FIX: If the order has an existing ID, use db.updateOrder to overwrite the pending record.
+        // This prevents the order from appearing back in the Active tab.
+        if (completedOrder.id && completedOrder.id !== 0) {
+            await db.updateOrder(currentStoreId, completedOrder);
+        } else {
+            const added = await db.addOrder(currentStoreId, completedOrder);
+            completedOrder.id = added.id;
+            completedOrder.orderNumber = added.orderNumber;
+        }
+
         db.logActivity({
             storeId: currentStoreId, userId: user.id, userName: user.name,
             action: 'ORDER_UPDATE',
-            description: `Order #${result.orderNumber} settled successfully (${store?.currency}${result.total.toFixed(2)})`
+            description: `Order #${completedOrder.orderNumber} settled successfully (${store?.currency}${completedOrder.total.toFixed(2)})`
         });
 
-        setPreviewOrder(result);
+        setPreviewOrder(completedOrder);
         setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
         setPrintModalOpen(true);
         
         setIsPaymentModalOpen(false);
         resetOrderUI();
-        showToast(`Order #${result.orderNumber} Completed`, "SUCCESS");
+        showToast(`Order #${completedOrder.orderNumber} Completed`, "SUCCESS");
     } catch (e) {
         console.error(e);
         setPaymentError("Database error occurred.");
@@ -615,12 +627,12 @@ export default function POS() {
 
     const isCompany = !!order.customerTin;
     const customerBlock = (settings.showCustomerDetails && (order.customerName || order.customerPhone || order.customerTin)) ? `
-      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.05em' : '0.8em'}; text-align: left;">
+      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '0.9em' : '0.75em'}; text-align: left;">
         <div style="font-weight: bold; font-size: 1.1em; border-bottom: 1px dashed #ccc; margin-bottom: 5px; padding-bottom: 2px;">CUSTOMER DETAILS</div>
         ${isCompany && order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
-        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
-        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
-        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '0.85em' : '0.75em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
+        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '0.8em' : '0.7em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
+        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '0.8em' : '0.7em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
+        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '0.8em' : '0.7em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
       </div>
     ` : '';
 
