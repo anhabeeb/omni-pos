@@ -37,7 +37,6 @@ export default function StoreCustomers() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer>>({
-    name: '', 
     phone: '', 
     type: 'INDIVIDUAL', 
     companyName: '', 
@@ -71,15 +70,13 @@ export default function StoreCustomers() {
   const validateForm = () => {
     const type = editingCustomer.type || 'INDIVIDUAL';
     if (type === 'INDIVIDUAL') {
-        const hasPrimaryAddress = editingCustomer.houseName || editingCustomer.address;
-        if (!editingCustomer.phone || !hasPrimaryAddress) {
+        if (!editingCustomer.phone || !editingCustomer.houseName) {
             alert("Phone and Building/House Name are mandatory for individual customers.");
             return false;
         }
     } else {
-        const hasPrimaryAddress = editingCustomer.buildingName || editingCustomer.address;
-        if (!editingCustomer.name || !editingCustomer.companyName || !editingCustomer.tin || !editingCustomer.phone || !hasPrimaryAddress) {
-            alert("All fields (Name, Company, TIN, Phone, Building/Floor) are mandatory for company accounts.");
+        if (!editingCustomer.name || !editingCustomer.companyName || !editingCustomer.tin || !editingCustomer.phone || !editingCustomer.buildingName) {
+            alert("All primary fields are mandatory for company accounts.");
             return false;
         }
     }
@@ -95,12 +92,11 @@ export default function StoreCustomers() {
     const finalCustomer = { ...editingCustomer };
     
     if (finalCustomer.type === 'INDIVIDUAL') {
-        finalCustomer.name = undefined; // Individual records don't strictly need names now
+        finalCustomer.name = undefined; 
         finalCustomer.companyName = undefined;
         finalCustomer.tin = undefined;
         finalCustomer.buildingName = undefined;
         finalCustomer.street = undefined;
-        finalCustomer.island = undefined;
         finalCustomer.country = undefined;
     } else {
         finalCustomer.houseName = undefined;
@@ -123,7 +119,6 @@ export default function StoreCustomers() {
 
   const resetForm = () => {
     setEditingCustomer({ 
-        name: '', 
         phone: '', 
         type: 'INDIVIDUAL', 
         companyName: '', 
@@ -192,18 +187,12 @@ export default function StoreCustomers() {
 
   const handleDownloadTemplate = () => {
     const templateData = [{
-        'Name': '',
         'Phone': '+960 7771234',
         'Type': 'INDIVIDUAL',
-        'Company Name': '',
-        'TIN': '',
         'House Name': 'Rose Villa',
         'Street Name': 'Orchid Magu',
-        'Building Name': '',
-        'Street': '',
         'Island': 'Male',
         'Country': 'Maldives',
-        'Additional Address': ''
     }];
 
     const ws = utils.json_to_sheet(templateData);
@@ -275,15 +264,16 @@ export default function StoreCustomers() {
     const nameMatch = (c.name || '').toLowerCase().includes(term);
     const phoneMatch = c.phone.includes(term);
     const companyMatch = c.companyName?.toLowerCase().includes(term);
-    return nameMatch || phoneMatch || companyMatch;
+    const islandMatch = c.island?.toLowerCase().includes(term);
+    return nameMatch || phoneMatch || companyMatch || islandMatch;
   });
 
   const getFormattedAddress = (c: Customer) => {
       if (c.type === 'INDIVIDUAL') {
-          const parts = [c.houseName, c.streetName, c.address].filter(Boolean);
+          const parts = [c.houseName, c.streetName, c.island].filter(Boolean);
           return parts.length > 0 ? parts.join(', ') : '-';
       } else {
-          const parts = [c.buildingName, c.street, c.island, c.country, c.address].filter(Boolean);
+          const parts = [c.buildingName, c.street, c.island, c.country].filter(Boolean);
           return parts.length > 0 ? parts.join(', ') : '-';
       }
   };
@@ -315,7 +305,7 @@ export default function StoreCustomers() {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-            <input type="text" placeholder="Search by name, phone, or company..." className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Search by name, phone, or address..." className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
         </div>
         
@@ -374,7 +364,7 @@ export default function StoreCustomers() {
                   <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl space-y-4 border border-purple-100 dark:border-purple-800">
                       <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Company Name *</label><input placeholder="e.g. Acme Corp" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.companyName} onChange={e => setEditingCustomer({...editingCustomer, companyName: e.target.value})} required /></div>
                       <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax ID (TIN) *</label><input placeholder="e.g. 123-456-789" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.tin} onChange={e => setEditingCustomer({...editingCustomer, tin: e.target.value})} required /></div>
-                      <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Contact Representative Name *</label><input placeholder="Full Name" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.name} onChange={e => setEditingCustomer({...editingCustomer, name: e.target.value})} required /></div>
+                      <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Representative Name *</label><input placeholder="Full Name" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.name} onChange={e => setEditingCustomer({...editingCustomer, name: e.target.value})} required /></div>
                   </div>
               )}
 

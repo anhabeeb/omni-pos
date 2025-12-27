@@ -52,7 +52,7 @@ export default function POS() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'ALL'>('ALL');
-  const [activeTab, setActiveTab] = useState<'MENU' | 'ACTIVE' | 'HELD' | 'HISTORY'>('MENU');
+  const [activeTab, setActiveTab] = useState<'SALES' | 'ACTIVE' | 'HELD' | 'HISTORY'>('SALES');
   
   const [viewMode, setViewMode] = useState<'SIMPLE' | 'DETAIL'>('SIMPLE');
   
@@ -67,7 +67,7 @@ export default function POS() {
   const [resumedOrder, setResumedOrder] = useState<Order | null>(null);
 
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
-    name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
+    phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
   });
 
   const [cart, setCart] = useState<OrderItem[]>([]);
@@ -108,16 +108,16 @@ export default function POS() {
 
   const isKOTEnabled = useMemo(() => {
     if (!store) return true;
-    const val = (store as any).useKOT;
+    const val = store.useKOT;
     if (val === false || (val as any) === 0 || (val as any) === '0' || val === null || val === undefined) return false;
     return true;
   }, [store]);
 
   const formatAddress = (c: Customer) => {
     if (c.type === 'INDIVIDUAL') {
-        return [c.houseName, c.streetName, c.address].filter(Boolean).join(', ');
+        return [c.houseName, c.streetName, c.island].filter(Boolean).join(', ');
     } else {
-        return [c.buildingName, c.street, c.island, c.country, c.address].filter(Boolean).join(', ');
+        return [c.buildingName, c.street, c.island, c.country].filter(Boolean).join(', ');
     }
   };
 
@@ -307,7 +307,7 @@ export default function POS() {
             description: `Order #${order.orderNumber} pulled from active tab for editing`
         });
     }
-    setActiveTab('MENU');
+    setActiveTab('SALES');
     showToast(`Editing Order #${order.orderNumber}`, "INFO");
   };
 
@@ -609,7 +609,7 @@ export default function POS() {
         setCustomerSearch(added.name || added.phone);
         setIsCustomerModalOpen(false);
         setNewCustData({
-            name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
+            phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
         });
         showToast("Customer added successfully", "SUCCESS");
     } catch (e) {
@@ -915,7 +915,7 @@ export default function POS() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
               <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
                   {[
-                    { id: 'MENU', label: 'SALES' },
+                    { id: 'SALES', label: 'SALES' },
                     { id: 'ACTIVE', label: 'ACTIVE', count: activeOrders.length, badgeColor: 'bg-yellow-400 text-yellow-900' },
                     { id: 'HELD', label: 'HELD', count: heldOrders.length, badgeColor: 'bg-orange-500 text-white' },
                     { id: 'HISTORY', label: 'HISTORY' }
@@ -938,7 +938,7 @@ export default function POS() {
           </div>
 
           <div className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden">
-              {activeTab === 'MENU' ? (viewMode === 'SIMPLE' ? renderSimpleMenu() : renderDetailView()) : (
+              {activeTab === 'SALES' ? (viewMode === 'SIMPLE' ? renderSimpleMenu() : renderDetailView()) : (
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700">
                       {activeTab === 'ACTIVE' ? (
                           <div className="overflow-x-auto">
@@ -1028,7 +1028,7 @@ export default function POS() {
           </div>
       </div>
 
-      {viewMode === 'SIMPLE' && (
+      {viewMode === 'SIMPLE' && activeTab === 'SALES' && (
       <aside className="w-full lg:w-[380px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl overflow-hidden h-full rounded-3xl">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
               <div className="flex justify-between items-center">
@@ -1038,7 +1038,7 @@ export default function POS() {
                   </div>
                   <div className="flex items-center gap-2"><button onClick={() => setIsCartMetadataCollapsed(!isCartMetadataCollapsed)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all">{isCartMetadataCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}</button>{cart.length > 0 && (<button onClick={clearCart} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={20} /></button>)}</div>
               </div>
-              {!isCartMetadataCollapsed && (<div className="space-y-4 animate-in slide-in-from-top-2 duration-300"><div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">{[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (<button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>{t === OrderType.DINE_IN ? 'Dine In' : t === OrderType.TAKEAWAY ? 'Take Away' : 'Delivery'}</button>))}</div><div className="space-y-3"><div className="relative group"><div className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors"><Search size={18} /></div><input type="text" placeholder="Find Customer..." className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" value={customerSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} onFocus={() => setShowCustomerResults(true)} /><button onClick={() => { setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95"><UserPlus size={16}/></button>{showCustomerResults && customerSearch && !selectedCustomer && (<div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">{customers.filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)).map(c => (<button key={c.id} onClick={() => {setSelectedCustomer(c); setCustomerSearch(c.name || c.phone); setShowCustomerResults(false);}} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3"><div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name ? c.name[0] : '#'}</div><div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name || c.phone}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div></button>))}</div>)}</div>{selectedCustomer && (
+              {!isCartMetadataCollapsed && (<div className="space-y-4 animate-in slide-in-from-top-2 duration-300"><div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">{[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (<button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>{t === OrderType.DINE_IN ? 'Dine In' : t === OrderType.TAKEAWAY ? 'Take Away' : 'Delivery'}</button>))}</div><div className="space-y-3"><div className="relative group"><div className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors"><Search size={18} /></div><input type="text" placeholder="Find Customer..." className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" value={customerSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} onFocus={() => setShowCustomerResults(true)} /><button onClick={() => { setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95"><UserPlus size={16}/></button>{showCustomerResults && customerSearch && !selectedCustomer && (<div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">{customers.filter(c => (c.phone).includes(customerSearch)).map(c => (<button key={c.id} onClick={() => {setSelectedCustomer(c); setCustomerSearch(c.name || c.phone); setShowCustomerResults(false);}} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3"><div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.phone[0]}</div><div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name || c.phone}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div></button>))}</div>)}</div>{selectedCustomer && (
                 <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30">
                   <div className="flex justify-between items-start">
                     <div className="space-y-1 overflow-hidden">
@@ -1070,7 +1070,7 @@ export default function POS() {
       {printModalOpen && previewOrder && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[250] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-4xl h-[90vh] flex flex-col rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700">
-                  <div className="p-6 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/50"><div className="flex items-center gap-4"><Printer size={24} className="text-blue-600"/><div><h2 className="text-xl font-black dark:text-white uppercase tracking-tighter">Receipt Preview: #{previewOrder.orderNumber}</h2></div></div><button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button></div>
+                  <div className="p-6 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/50"><div className="flex items-center gap-4"><Printer size={24} className="text-blue-600"/><div><h2 className="text-xl font-black dark:text-white uppercase tracking-tighter">Receipt Preview: #{previewOrder.orderNumber}</h2></div></div><button onClick={() => setPrintModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full"><X size={24}/></button></div>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-8 flex justify-center overflow-auto custom-scrollbar"><div className="bg-white shadow-2xl h-fit rounded p-1 border"><iframe srcDoc={previewHtml} className="w-[320px] h-[1000px] border-none" title="Receipt Preview" /></div></div>
                   <div className="p-6 border-t flex flex-wrap justify-end gap-3 bg-white dark:bg-gray-900"><button onClick={() => setPrintModalOpen(false)} className="px-6 py-3 text-xs font-black uppercase text-gray-500">Close</button><button onClick={handlePrintFinal} className="px-12 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl hover:bg-blue-700">Execute Print</button></div>
               </div>
@@ -1080,7 +1080,7 @@ export default function POS() {
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30"><h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><UserIcon className="text-blue-600" /> Add New Customer</h2><button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24}/></button></div>
+                  <div className="p-8 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30"><h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><UserIcon className="text-blue-600" /> Add New Customer</h2><button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={24}/></button></div>
                   <form onSubmit={handleQuickAddCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
                       <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-2">
                         <button type="button" onClick={() => setNewCustData({...newCustData, type: 'INDIVIDUAL'})} className={`flex-1 py-2.5 text-xs font-black uppercase rounded-lg ${newCustData.type === 'INDIVIDUAL' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Individual</button>
@@ -1119,15 +1119,15 @@ export default function POS() {
 
       {isShiftModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in border border-gray-100 flex flex-col"><div className="p-8 border-b dark:border-gray-700 flex justify-between items-center"><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">{shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>} Register</h2><button onClick={() => setIsShiftModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button></div>
-                  <div className="p-10 space-y-8 overflow-y-auto"><div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">{shift ? 'Closing Cash' : 'Float'}</p><div className="grid grid-cols-3 gap-3">{DENOMINATIONS.slice(0, 6).map((d: number) => (<div key={d} className="flex flex-col gap-1.5"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">{store?.currency}{d}</span><input type="number" min="0" placeholder="0" className="w-full p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-black dark:text-white text-center shadow-sm" value={denominations[d] || ''} onChange={(e) => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}/></div>))}</div></div><div className="flex flex-col items-center py-6 border-y dark:border-gray-800"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Calculated Total</p><p className="text-5xl font-black dark:text-white tracking-tighter text-blue-600">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div>{shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}<div className="flex gap-4"><button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase text-gray-400 hover:text-gray-800">Discard</button>{shift ? (<button type="button" onClick={() => setIsShiftConfirmOpen(true)} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-red-700">End Shift</button>) : (<button type="button" onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-700">Open Station</button>)}</div></div>
+              <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in border border-gray-100 dark:border-gray-700 flex flex-col"><div className="p-8 border-b dark:border-gray-700 flex justify-between items-center"><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter flex items-center gap-3">{shift ? <Lock className="text-red-500"/> : <Unlock className="text-emerald-500"/>} Register</h2><button onClick={() => setIsShiftModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button></div>
+                  <div className="p-10 space-y-8 overflow-y-auto"><div className="bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-800"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">{shift ? 'Closing Cash' : 'Float'}</p><div className="grid grid-cols-3 gap-3">{DENOMINATIONS.slice(0, 6).map((d: number) => (<div key={d} className="flex flex-col gap-1.5"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">{store?.currency}{d}</span><input type="number" min="0" placeholder="0" className="w-full p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-black dark:text-white text-center shadow-sm" value={denominations[d] || ''} onChange={(e) => setDenominations({...denominations, [d]: parseInt(e.target.value) || 0})}/></div>))}</div></div><div className="flex flex-col items-center py-6 border-y dark:border-gray-800"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Calculated Total</p><p className="text-5xl font-black dark:text-white tracking-tighter text-blue-600">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div>{shiftError && <p className="text-red-500 text-xs font-black uppercase text-center animate-bounce">{shiftError}</p>}<div className="flex gap-4"><button type="button" onClick={() => setIsShiftModalOpen(false)} className="px-4 py-5 text-xs font-black uppercase text-gray-400 hover:text-gray-800">Discard</button>{shift ? (<button type="button" onClick={() => setIsShiftConfirmOpen(true)} className="flex-1 py-5 bg-red-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-red-700">End Shift</button>) : (<button type="button" onClick={handleOpenShift} className="flex-1 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase shadow-2xl hover:bg-emerald-700">Open Station</button>)}</div></div>
               </div>
           </div>
       )}
 
       {isShiftConfirmOpen && shift && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[400] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 p-10 rounded-[3rem] w-full max-md shadow-2xl border border-red-100 text-center animate-in zoom-in-95 duration-300"><div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 rounded-[2rem] flex items-center justify-center text-red-600 mx-auto mb-8 shadow-inner"><Lock size={48}/></div><h2 className="text-3xl font-black dark:text-white mb-3 uppercase tracking-tighter">Finalize Shift End</h2><p className="text-gray-400 font-bold text-sm mb-10 leading-relaxed uppercase tracking-widest max-w-xs mx-auto">This will audit all tallies and lock the station.</p><div className="grid grid-cols-2 gap-6 mb-10"><div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 text-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</p><p className="text-2xl font-black text-white">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p></div><div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-700 text-center"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Actual</p><p className="text-2xl font-black text-blue-700 dark:text-blue-100">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div></div><div className="flex flex-col gap-4"><button onClick={() => { setIsShiftConfirmOpen(false); executeCloseShift(); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-red-700 transition-all">Confirm Closure</button><button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-400 font-black text-xs uppercase tracking-widest">Cancel</button></div></div>
+              <div className="bg-white dark:bg-gray-800 p-10 rounded-[3rem] w-full max-md shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-in zoom-in-95 duration-300"><div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 rounded-[2rem] flex items-center justify-center text-red-600 mx-auto mb-8 shadow-inner"><Lock size={48}/></div><h2 className="text-3xl font-black dark:text-white mb-3 uppercase tracking-tighter">Finalize Shift End</h2><p className="text-gray-400 font-bold text-sm mb-10 leading-relaxed uppercase tracking-widest max-w-xs mx-auto">This will audit all tallies and lock the station.</p><div className="grid grid-cols-2 gap-6 mb-10"><div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 text-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected</p><p className="text-2xl font-black text-white">{store?.currency}{(shift.expectedCash || 0).toFixed(2)}</p></div><div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-700 text-center"><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Actual</p><p className="text-2xl font-black text-blue-700 dark:text-blue-100">{store?.currency}{calculateDenomTotal().toFixed(2)}</p></div></div><div className="flex flex-col gap-4"><button onClick={() => { setIsShiftConfirmOpen(false); executeCloseShift(); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-red-700 transition-all">Confirm Closure</button><button onClick={() => setIsShiftConfirmOpen(false)} className="w-full py-4 text-gray-400 font-black text-xs uppercase tracking-widest">Cancel</button></div></div>
           </div>
       )}
     </div>
