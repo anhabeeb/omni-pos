@@ -24,7 +24,11 @@ import {
   ChevronDown,
   Building2,
   ChevronUp,
-  Settings2
+  Settings2,
+  LayoutGrid,
+  // Fix: Added missing Save icon import to resolve "Cannot find name 'Save'" error on line 1398
+  Save,
+  Store as StoreIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -40,12 +44,15 @@ export default function POS() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [sessionUsers, setSessionUsers] = useState<User[]>([]);
   const [shift, setShift] = useState<RegisterShift | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'ALL'>('ALL');
   const [activeTab, setActiveTab] = useState<'MENU' | 'ACTIVE' | 'HELD' | 'HISTORY'>('MENU');
+  
+  // UI Mode: RESTAURANT (Table-based) vs RETAIL (Counter-based)
+  const [viewMode, setViewMode] = useState<'RESTAURANT' | 'RETAIL'>('RESTAURANT');
   
   const [menuScale, setMenuScale] = useState(1);
   const [toast, setToast] = useState<{ message: string, type: 'SUCCESS' | 'ERROR' | 'INFO' } | null>(null);
@@ -68,7 +75,7 @@ export default function POS() {
   });
 
   const [cart, setCart] = useState<OrderItem[]>([]);
-  const [orderType, setOrderType] = useState<OrderType>(OrderType.DINE_IN);
+  const [orderType, setOrderType] = useState<OrderType>(OrderType.TAKEAWAY); // Default to takeaway for retail
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [tableNumber, setTableNumber] = useState('');
   const [orderNote, setOrderNote] = useState('');
@@ -127,7 +134,8 @@ export default function POS() {
     table: `pos_table_${storeId}`,
     note: `pos_note_${storeId}`,
     discount: `pos_discount_${storeId}`,
-    resumed: `pos_resumed_${storeId}`
+    resumed: `pos_resumed_${storeId}`,
+    viewMode: `pos_view_${storeId}`
   });
 
   useEffect(() => {
@@ -150,8 +158,9 @@ export default function POS() {
         localStorage.setItem(keys.note, orderNote);
         localStorage.setItem(keys.discount, discountPercent.toString());
         localStorage.setItem(keys.resumed, JSON.stringify(resumedOrder));
+        localStorage.setItem(keys.viewMode, viewMode);
     }
-  }, [cart, orderType, selectedCustomer, tableNumber, orderNote, discountPercent, resumedOrder, currentStoreId]);
+  }, [cart, orderType, selectedCustomer, tableNumber, orderNote, discountPercent, resumedOrder, currentStoreId, viewMode]);
 
   useEffect(() => {
       const handleClickOutside = () => {
@@ -182,6 +191,7 @@ export default function POS() {
       const savedNote = localStorage.getItem(keys.note);
       const savedDiscount = localStorage.getItem(keys.discount);
       const savedResumed = localStorage.getItem(keys.resumed);
+      const savedView = localStorage.getItem(keys.viewMode);
 
       if (savedCart) setCart(JSON.parse(savedCart));
       if (savedType) setOrderType(savedType as OrderType);
@@ -198,6 +208,7 @@ export default function POS() {
       if (savedResumed) {
           try { setResumedOrder(JSON.parse(savedResumed)); } catch(e) {}
       }
+      if (savedView) setViewMode(savedView as any);
   };
 
   const loadData = async () => {
@@ -219,7 +230,7 @@ export default function POS() {
       setProducts((pList as Product[]).filter((p: Product) => p.isAvailable));
       setCategories((cList as Category[]).sort((a: Category, b: Category) => (a.orderId || 0) - (b.orderId || 0)));
       setCustomers(custs as Customer[]);
-      setUsers(uList as User[]);
+      setSessionUsers(uList as User[]);
       setNextOrderNum(orderNum as string);
       setShift(activeShift as RegisterShift | null);
 
@@ -258,7 +269,7 @@ export default function POS() {
     setCustomerSearch(''); 
     setTableNumber(''); 
     setOrderNote(''); 
-    setOrderType(OrderType.DINE_IN); 
+    setOrderType(viewMode === 'RESTAURANT' ? OrderType.DINE_IN : OrderType.TAKEAWAY); 
     setDiscountPercent(0);
     setResumedOrder(null);
     if (currentStoreId) {
@@ -349,7 +360,7 @@ export default function POS() {
         showToast(`Customer required for ${orderType === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}`, "ERROR");
         return false;
     }
-    if (orderType === OrderType.DINE_IN && !tableNumber) {
+    if (viewMode === 'RESTAURANT' && orderType === OrderType.DINE_IN && !tableNumber) {
         showToast("Table number required for Dine-in", "ERROR");
         return false;
     }
@@ -377,8 +388,8 @@ export default function POS() {
           total: totals.total, 
           orderType, 
           status: resumedOrder?.status || OrderStatus.PENDING, 
-          kitchenStatus: isKOTEnabled ? 'PENDING' : 'SERVED',
-          tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
+          kitchenStatus: (isKOTEnabled && viewMode === 'RESTAURANT') ? 'PENDING' : 'SERVED',
+          tableNumber: (viewMode === 'RESTAURANT' && orderType === OrderType.DINE_IN) ? tableNumber : undefined,
           note: orderNote, 
           customerName: (selectedCustomer?.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer?.name) || selectedCustomer?.name || customerSearch, 
           customerPhone: selectedCustomer?.phone, 
@@ -390,7 +401,7 @@ export default function POS() {
 
       resetOrderUI();
       setActiveTab('ACTIVE');
-      showToast(isKOTEnabled ? "Sending order to kitchen..." : "Updating active order...", "INFO");
+      showToast(isKOTEnabled && viewMode === 'RESTAURANT' ? "Sending order to kitchen..." : "Saving open sale...", "INFO");
 
       try {
           const added = (newOrderData.id && newOrderData.id !== 0) 
@@ -402,7 +413,7 @@ export default function POS() {
             action: resumedOrder ? 'ORDER_UPDATE' : 'ORDER_CREATE',
             description: resumedOrder ? `Order #${added.orderNumber} updated` : (isKOTEnabled ? `New order #${added.orderNumber} sent to kitchen` : `New Pay-later order #${added.orderNumber} created`)
           });
-          showToast(resumedOrder ? "Order updated successfully." : (isKOTEnabled ? "Order created & sent to kitchen." : "Order recorded."), "SUCCESS");
+          showToast(resumedOrder ? "Order updated successfully." : (isKOTEnabled && viewMode === 'RESTAURANT' ? "Order created & sent to kitchen." : "Order recorded."), "SUCCESS");
       } catch (e) {
           console.error(e);
           showToast("Order saved locally", "INFO");
@@ -420,7 +431,7 @@ export default function POS() {
       const taxRate = store?.taxRate || 0;
       const serviceChargeRate = store?.serviceChargeRate || 0;
       
-      const serviceCharge = (orderType === OrderType.DINE_IN) ? (subtotalAfterDiscount * serviceChargeRate) / 100 : 0;
+      const serviceCharge = (orderType === OrderType.DINE_IN && viewMode === 'RESTAURANT') ? (subtotalAfterDiscount * serviceChargeRate) / 100 : 0;
       const tax = ((subtotalAfterDiscount + serviceCharge) * taxRate) / 100;
       
       return { 
@@ -431,7 +442,7 @@ export default function POS() {
           serviceCharge, 
           total: subtotalAfterDiscount + tax + serviceCharge 
       };
-  }, [cart, store, orderType, discountPercent]);
+  }, [cart, store, orderType, discountPercent, viewMode]);
 
   const handleCheckout = () => {
       if (cart.length === 0) return;
@@ -453,7 +464,6 @@ export default function POS() {
       setIsPaymentModalOpen(true);
   };
 
-  // Fix: Implemented the missing finalizePayment function to handle order settlement and fix the 'Cannot find name' error.
   const finalizePayment = async () => {
     if (!currentStoreId || !user || !shift || isSaving) return;
     
@@ -475,7 +485,7 @@ export default function POS() {
         customerPhone: selectedCustomer?.phone,
         customerTin: selectedCustomer?.tin,
         customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
-        tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
+        tableNumber: (viewMode === 'RESTAURANT' && orderType === OrderType.DINE_IN) ? tableNumber : undefined,
         note: orderNote,
         createdBy: resumedOrder?.createdBy || user.id,
         createdAt: resumedOrder?.createdAt || Date.now()
@@ -528,8 +538,6 @@ export default function POS() {
             transactions: [...(targetOrder.transactions || []), ...transactions]
         };
 
-        // CRITICAL FIX: If the order has an existing ID, use db.updateOrder to overwrite the pending record.
-        // This prevents the order from appearing back in the Active tab.
         if (completedOrder.id && completedOrder.id !== 0) {
             await db.updateOrder(currentStoreId, completedOrder);
         } else {
@@ -619,8 +627,8 @@ export default function POS() {
                 ${settings.showDate !== false ? `<div><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleDateString()}</div>` : ''}
             </div>
             <div style="text-align: right;">
-                ${settings.showCashierName ? `<div><strong>BY:</strong> ${users.find((u: User) => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
-                ${settings.showCustomerDetails && order.tableNumber ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
+                ${settings.showCashierName ? `<div><strong>BY:</strong> ${sessionUsers.find((u: User) => u.id === order.createdBy)?.name || 'Staff'}</div>` : ''}
+                ${(settings.showCustomerDetails && order.tableNumber && viewMode === 'RESTAURANT') ? `<div><strong>TABLE:</strong> ${order.tableNumber}</div>` : ''}
             </div>
         </div>
     `;
@@ -739,7 +747,7 @@ export default function POS() {
   const previewHtml = useMemo(() => { 
     if (previewOrder) return generateReceiptHtml(previewOrder, false, previewPaperSize); 
     return ''; 
-  }, [previewOrder, store, users, previewPaperSize]);
+  }, [previewOrder, store, sessionUsers, previewPaperSize, viewMode]);
   
   const getIframeWidth = () => {
     const paperSize = previewPaperSize;
@@ -905,8 +913,8 @@ export default function POS() {
               <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
                   {[
                     { id: 'MENU', label: 'MENU' },
-                    { id: 'ACTIVE', label: 'ACTIVE', count: activeOrders.length, badgeColor: 'bg-yellow-400 text-yellow-900' },
-                    { id: 'HELD', label: 'HELD', count: heldOrders.length, badgeColor: 'bg-orange-500 text-white' },
+                    { id: 'ACTIVE', label: viewMode === 'RESTAURANT' ? 'ACTIVE' : 'OPEN SALES', count: activeOrders.length, badgeColor: 'bg-yellow-400 text-yellow-900' },
+                    { id: 'HELD', label: viewMode === 'RESTAURANT' ? 'HELD' : 'SAVED', count: heldOrders.length, badgeColor: 'bg-orange-500 text-white' },
                     { id: 'HISTORY', label: 'HISTORY' }
                   ].map((tab: { id: string, label: string, count?: number, badgeColor?: string }) => (
                       <button 
@@ -923,6 +931,19 @@ export default function POS() {
                       </button>
                   ))}
                   <div className="mx-2 w-px bg-gray-200 dark:bg-gray-700 my-1" />
+                  
+                  {/* View Mode Switcher Button */}
+                  <button 
+                    onClick={() => { setViewMode(viewMode === 'RESTAURANT' ? 'RETAIL' : 'RESTAURANT'); resetOrderUI(); }}
+                    className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-900 transition-all hover:bg-blue-100 flex items-center gap-2"
+                    title={viewMode === 'RESTAURANT' ? "Switch to Retail Layout" : "Switch to Restaurant Layout"}
+                  >
+                    {viewMode === 'RESTAURANT' ? <Utensils size={14}/> : <StoreIcon size={14}/>}
+                    {viewMode} Mode
+                  </button>
+
+                  <div className="mx-2 w-px bg-gray-200 dark:bg-gray-700 my-1" />
+
                   {shift ? (
                       <button onClick={() => setIsShiftModalOpen(true)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 transition-all hover:bg-red-100 flex items-center gap-2">
                           <Lock size={14}/> End Shift #{shift.shiftNumber}
@@ -943,7 +964,7 @@ export default function POS() {
                               <Search className="absolute left-4 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={16}/>
                               <input 
                                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold dark:text-white shadow-sm transition-all text-sm" 
-                                  placeholder="Search menu items..." 
+                                  placeholder={viewMode === 'RESTAURANT' ? "Search menu items..." : "Search products by name or barcode..."}
                                   value={searchTerm} 
                                   onChange={e => setSearchTerm(e.target.value)} 
                               />
@@ -1000,17 +1021,17 @@ export default function POS() {
                                               <h3 className="font-black dark:text-white text-base tracking-tighter text-blue-600 uppercase leading-none">#{order.orderNumber}</h3>
                                               <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{new Date(order.createdAt).toLocaleTimeString()}</p>
                                           </div>
-                                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>
+                                          {viewMode === 'RESTAURANT' && <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest ${order.kitchenStatus === 'READY' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{order.kitchenStatus || 'Pending'}</span>}
                                       </div>
                                       
                                       <div className="text-[9px] font-black uppercase text-gray-500 mb-2 tracking-tighter space-y-1.5">
                                           <div className="flex items-center gap-2">
                                               <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400">{order.orderType}</span>
-                                              {order.tableNumber && <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 px-1.5 py-0.5 rounded">Table {order.tableNumber}</span>}
+                                              {(viewMode === 'RESTAURANT' && order.tableNumber) && <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 px-1.5 py-0.5 rounded">Table {order.tableNumber}</span>}
                                           </div>
                                           
                                           {(order.customerName || order.customerPhone) && (
-                                              <div className="bg-gray-50/50 dark:bg-gray-900/30 p-2 rounded-xl border border-gray-100 dark:border-gray-800 mt-1">
+                                              <div className="bg-gray-50/50 dark:bg-gray-900/30 p-2 rounded-xl border border-gray-100 dark:border-gray-700 mt-1">
                                                   <div className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                                                       <UserIcon size={10} className="text-blue-500" />
                                                       {order.customerName}
@@ -1160,9 +1181,9 @@ export default function POS() {
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 space-y-4 shrink-0">
               <div className="flex justify-between items-center">
                   <div>
-                      <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">Order Details</h2>
+                      <h2 className="font-black text-xl dark:text-white tracking-tighter uppercase leading-none">{viewMode === 'RESTAURANT' ? 'Order Details' : 'Cart Summary'}</h2>
                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-2">
-                          <Hash size={11} /> Ticket Queue {resumedOrder ? resumedOrder.orderNumber : nextOrderNum}
+                          <Hash size={11} /> {viewMode === 'RESTAURANT' ? 'Ticket Queue' : 'Terminal Sale'} {resumedOrder ? resumedOrder.orderNumber : nextOrderNum}
                       </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1184,7 +1205,10 @@ export default function POS() {
               {!isCartMetadataCollapsed && (
                   <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
                       <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">
-                          {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (
+                          {(viewMode === 'RESTAURANT' 
+                            ? [OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY] 
+                            : [OrderType.TAKEAWAY, OrderType.DELIVERY]
+                          ).map((t: OrderType) => (
                               <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
                                   {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}
                               </button>
@@ -1252,7 +1276,7 @@ export default function POS() {
                               </div>
                           )}
 
-                          {orderType === OrderType.DINE_IN && (
+                          {(viewMode === 'RESTAURANT' && orderType === OrderType.DINE_IN) && (
                               <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1.5 px-4 rounded-2xl shadow-sm">
                                   <div className="text-gray-400">
                                       <Tag size={16}/>
@@ -1368,9 +1392,9 @@ export default function POS() {
                   <button 
                       onClick={handleSendToKitchen} 
                       disabled={cart.length === 0} 
-                      className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] disabled:opacity-30 ${isKOTEnabled ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xl shadow-orange-500/20'}`}
+                      className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] disabled:opacity-30 ${isKOTEnabled && viewMode === 'RESTAURANT' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xl shadow-orange-500/20'}`}
                   >
-                      {isKOTEnabled ? <><ChefHat size={18}/> KOT</> : <><History size={18}/> Paylater</>}
+                      {viewMode === 'RESTAURANT' ? (isKOTEnabled ? <><ChefHat size={18}/> KOT</> : <><History size={18}/> Paylater</>) : <><Save size={18}/> Save Sale</>}
                   </button>
                   <button 
                       onClick={handleCheckout} 
