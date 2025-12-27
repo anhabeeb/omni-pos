@@ -714,7 +714,7 @@ export default function POS() {
            </div>
            <input 
              className="w-full bg-blue-50/30 dark:bg-blue-900/10 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-4 py-2 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-             placeholder="< Type or Scan item info here >"
+             placeholder="< Search Menu >"
              value={searchTerm}
              onChange={e => {
                 setSearchTerm(e.target.value);
