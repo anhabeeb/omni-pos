@@ -614,12 +614,12 @@ export default function POS() {
     `;
 
     const customerBlock = (settings.showCustomerDetails && (order.customerName || order.customerPhone || order.customerTin)) ? `
-      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: 0.9em; text-align: left;">
+      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.25em' : '0.9em'}; text-align: left;">
         <div style="font-weight: bold; font-size: 1.1em; border-bottom: 1px dashed #ccc; margin-bottom: 5px; padding-bottom: 2px;">CUSTOMER DETAILS</div>
         ${order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
-        ${order.customerAddress ? `<div style="font-size: 0.85em; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
-        ${order.customerPhone ? `<div style="font-size: 0.85em;"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
-        ${order.customerTin ? `<div style="font-size: 0.85em;"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
+        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
+        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
+        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
       </div>
     ` : '';
 
@@ -1002,15 +1002,15 @@ export default function POS() {
                                                       <UserIcon size={10} className="text-blue-500" />
                                                       {order.customerName}
                                                   </div>
-                                                  {order.customerPhone && (
-                                                      <div className="flex items-center gap-1.5 text-gray-500 mt-0.5">
-                                                          <Phone size={10} /> {order.customerPhone}
-                                                      </div>
-                                                  )}
                                                   {order.customerAddress && (
                                                       <div className="flex items-start gap-1.5 text-gray-500 mt-0.5 leading-tight">
                                                           <MapPin size={10} className="shrink-0 mt-0.5" />
                                                           <span className="truncate">{order.customerAddress}</span>
+                                                      </div>
+                                                  )}
+                                                  {order.customerPhone && (
+                                                      <div className="flex items-center gap-1.5 text-gray-500 mt-0.5">
+                                                          <Phone size={10} /> {order.customerPhone}
                                                       </div>
                                                   )}
                                               </div>
@@ -1106,7 +1106,21 @@ export default function POS() {
                                           <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                                               <td className="p-3 text-[11px] font-bold text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                                               <td className="p-3 font-mono font-black text-blue-600 text-xs">#{order.orderNumber}</td>
-                                              <td className="p-3 text-[11px] font-bold dark:text-gray-400 truncate max-w-[150px] uppercase">{order.customerName || order.customerPhone || `Walk-in`}</td>
+                                              <td className="p-3">
+                                                  <div className="text-[11px] font-black dark:text-white uppercase tracking-tight leading-none mb-1">
+                                                      {order.customerName || 'Walk-in'}
+                                                  </div>
+                                                  {order.customerAddress && (
+                                                      <div className="text-[9px] text-gray-500 font-medium lowercase truncate max-w-[150px]">
+                                                          {order.customerAddress}
+                                                      </div>
+                                                  )}
+                                                  {order.customerPhone && (
+                                                      <div className="text-[9px] text-gray-400 font-bold mt-0.5">
+                                                          {order.customerPhone}
+                                                      </div>
+                                                  )}
+                                              </td>
                                               <td className="p-3 text-right font-black text-sm dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</td>
                                               <td className="p-3 text-right">
                                                   <button onClick={() => {setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true);}} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer size={16}/></button>
@@ -1198,15 +1212,13 @@ export default function POS() {
                                               {selectedCustomer.type === 'COMPANY' ? <Building2 size={12} className="text-blue-600"/> : <UserIcon size={12} className="text-blue-600"/>}
                                               {selectedCustomer.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer.name}
                                           </div>
+                                          <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
+                                              <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
+                                              <span className="truncate">{formatAddress(selectedCustomer)}</span>
+                                          </div>
                                           <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-bold">
                                               <Phone size={10} /> {selectedCustomer.phone}
                                           </div>
-                                          {selectedCustomer.type === 'INDIVIDUAL' && (
-                                              <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
-                                                  <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
-                                                  <span className="truncate">{formatAddress(selectedCustomer)}</span>
-                                              </div>
-                                          )}
                                       </div>
                                       <button 
                                           onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch(''); }}

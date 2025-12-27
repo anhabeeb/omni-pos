@@ -282,12 +282,12 @@ export default function StoreHistory() {
     `;
 
     const customerBlock = (settings.showCustomerDetails && (order.customerName || order.customerPhone || order.customerTin)) ? `
-      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: 0.9em; text-align: left;">
+      <div style="margin-top: 10px; border: 1px dashed #ccc; padding: 10px; font-size: ${paperSize === 'thermal' ? '1.25em' : '0.9em'}; text-align: left;">
         <div style="font-weight: bold; font-size: 1.1em; border-bottom: 1px dashed #ccc; margin-bottom: 5px; padding-bottom: 2px;">CUSTOMER DETAILS</div>
         ${order.customerName ? `<div><strong>Name:</strong> ${order.customerName}</div>` : ''}
-        ${order.customerAddress ? `<div style="font-size: 0.85em; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
-        ${order.customerPhone ? `<div style="font-size: 0.85em;"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
-        ${order.customerTin ? `<div style="font-size: 0.85em;"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
+        ${order.customerAddress ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'}; color: #333;"><strong>Address:</strong> ${order.customerAddress}</div>` : ''}
+        ${order.customerPhone ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>Phone:</strong> ${order.customerPhone}</div>` : ''}
+        ${order.customerTin ? `<div style="font-size: ${paperSize === 'thermal' ? '1em' : '0.85em'};"><strong>TIN:</strong> ${order.customerTin}</div>` : ''}
       </div>
     ` : '';
 
@@ -502,7 +502,7 @@ export default function StoreHistory() {
             </div>
         ) : (
             <div className="overflow-x-auto">
-                <table className="w-full text-left">
+                <table className="w-full text-left min-w-[800px]">
                     <thead className="bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
                         <tr>
                             <th className="p-4 text-[10px] font-black uppercase text-gray-500">Shift</th>
@@ -524,8 +524,10 @@ export default function StoreHistory() {
                                     <div className="text-[10px] text-gray-400">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 </td>
                                 <td className="p-4">
-                                    <div className="text-sm font-bold dark:text-white">{o.customerName || o.customerPhone || 'Walk-in'}</div>
-                                    {o.tableNumber && <div className="text-[10px] text-gray-500">Table: {o.tableNumber}</div>}
+                                    <div className="text-sm font-bold dark:text-white">{o.customerName || 'Walk-in'}</div>
+                                    {o.customerAddress && <div className="text-[10px] text-gray-500 font-medium italic lowercase truncate max-w-[200px]">{o.customerAddress}</div>}
+                                    {o.customerPhone && <div className="text-[10px] text-gray-400 font-bold">{o.customerPhone}</div>}
+                                    {o.tableNumber && <div className="text-[10px] text-blue-500 font-black">Table: {o.tableNumber}</div>}
                                 </td>
                                 <td className="p-4 text-right font-black dark:text-white">{store?.currency}{o.total.toFixed(2)}</td>
                                 <td className="p-4">
@@ -564,7 +566,9 @@ export default function StoreHistory() {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="space-y-1">
                               <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Customer Context</p>
-                              <p className="font-bold dark:text-white uppercase text-blue-600">{viewOrder.customerName || viewOrder.customerPhone || 'Anonymous Walk-in'}</p>
+                              <p className="font-bold dark:text-white uppercase text-blue-600">{viewOrder.customerName || 'Anonymous Walk-in'}</p>
+                              {viewOrder.customerAddress && <p className="text-xs text-gray-500 dark:text-gray-400">{viewOrder.customerAddress}</p>}
+                              {viewOrder.customerPhone && <p className="text-xs text-gray-500 dark:text-gray-400 font-bold">{viewOrder.customerPhone}</p>}
                               {viewOrder.tableNumber && <p className="text-[10px] font-black text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded w-fit">TABLE: {viewOrder.tableNumber}</p>}
                           </div>
                           <div className="space-y-1 text-right">
