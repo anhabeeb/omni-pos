@@ -74,6 +74,7 @@ export interface ActiveSession {
   role: UserRole;
   storeId: number | null;
   lastActive: number;
+  deviceId?: string;
 }
 
 export interface Employee {
@@ -180,7 +181,7 @@ export type CustomerType = 'INDIVIDUAL' | 'COMPANY';
 
 export interface Customer {
   id: number;
-  name: string;
+  name?: string;
   phone: string;
   type: CustomerType;
   storeId: number;
