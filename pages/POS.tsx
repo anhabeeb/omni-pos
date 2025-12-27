@@ -20,7 +20,8 @@ import {
   ShoppingCart,
   ChevronRight,
   History,
-  Phone
+  Phone,
+  ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -50,6 +51,9 @@ export default function POS() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // State for toggling actions in Active orders tab
+  const [selectedActiveOrderId, setSelectedActiveOrderId] = useState<number | null>(null);
+
   const [newCustData, setNewCustData] = useState<Partial<Customer>>({
     name: '', phone: '', type: 'INDIVIDUAL', companyName: '', tin: '', houseName: '', streetName: '', buildingName: '', street: '', island: '', country: '', address: ''
   });
@@ -404,110 +408,6 @@ export default function POS() {
       setIsPaymentModalOpen(true);
   };
 
-  const finalizePayment = async () => {
-      if (!currentStoreId || !user || !shift || isSaving) return;
-      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
-      
-      const transactions: Transaction[] = [];
-
-      if (isSplitMode) {
-          const a1 = parseFloat(splitPayment1.amount) || 0;
-          const a2 = parseFloat(splitPayment2.amount) || 0;
-          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
-              return;
-          }
-          
-          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
-              setPaymentError("Reference number is mandatory for non-cash split payments.");
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
-          });
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
-          });
-      } else {
-          const tendered = parseFloat(amountTendered) || 0;
-          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
-              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
-              return; 
-          }
-          
-          if (paymentMethod !== 'CASH' && !paymentRef) {
-              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
-              referenceNumber: paymentRef,
-              timestamp: Date.now(), performedBy: user.id, 
-              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
-              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
-          });
-      }
-      
-      setIsSaving(true);
-      const localCart = [...cart];
-      const localTotals = {...totals};
-      const localNote = orderNote;
-      const localTable = tableNumber;
-      const localType = orderType;
-      const localCust = selectedCustomer;
-      const localDisc = discountPercent;
-
-      setIsPaymentModalOpen(false);
-      resetOrderUI();
-      showToast("Processing payment...", "INFO");
-
-      try {
-          let finalOrder: Order;
-          if (orderToSettle) {
-              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
-              await db.updateOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_UPDATE',
-                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          } else {
-              finalOrder = { 
-                id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
-                items: localCart, 
-                subtotal: localTotals.subtotal, 
-                discountPercent: localDisc,
-                discountAmount: localTotals.discountAmount,
-                tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
-                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitMode ? undefined : paymentMethod, note: localNote, transactions, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
-                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name, 
-                customerPhone: localCust?.phone, 
-                customerTin: localCust?.tin,
-                customerAddress: localCust ? formatAddress(localCust) : undefined,
-                createdBy: user.id, createdAt: Date.now() 
-              } as Order;
-              finalOrder = await db.addOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_CREATE',
-                description: `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          }
-          setOrderToSettle(null); 
-          setPreviewOrder(finalOrder); 
-          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
-          setPrintModalOpen(true);
-          showToast("Payment completed successfully.", "SUCCESS");
-      } catch (e) {
-          console.error(e);
-          showToast("Payment recorded locally", "INFO");
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
     const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
@@ -805,6 +705,110 @@ export default function POS() {
     }
   };
 
+  const finalizePayment = async () => {
+      if (!currentStoreId || !user || !shift || isSaving) return;
+      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
+      
+      const transactions: Transaction[] = [];
+
+      if (isSplitMode) {
+          const a1 = parseFloat(splitPayment1.amount) || 0;
+          const a2 = parseFloat(splitPayment2.amount) || 0;
+          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
+              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
+              return;
+          }
+          
+          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
+              setPaymentError("Reference number is mandatory for non-cash split payments.");
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
+          });
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
+          });
+      } else {
+          const tendered = parseFloat(amountTendered) || 0;
+          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
+              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
+              return; 
+          }
+          
+          if (paymentMethod !== 'CASH' && !paymentRef) {
+              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
+              referenceNumber: paymentRef,
+              timestamp: Date.now(), performedBy: user.id, 
+              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
+              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
+          });
+      }
+      
+      setIsSaving(true);
+      const localCart = [...cart];
+      const localTotals = {...totals};
+      const localNote = orderNote;
+      const localTable = tableNumber;
+      const localType = orderType;
+      const localCust = selectedCustomer;
+      const localDisc = discountPercent;
+
+      setIsPaymentModalOpen(false);
+      resetOrderUI();
+      showToast("Processing payment...", "INFO");
+
+      try {
+          let finalOrder: Order;
+          if (orderToSettle) {
+              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
+              await db.updateOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_UPDATE',
+                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          } else {
+              finalOrder = { 
+                id: 0, orderNumber: '', storeId: currentStoreId, shiftId: shift.id, 
+                items: localCart, 
+                subtotal: localTotals.subtotal, 
+                discountPercent: localDisc,
+                discountAmount: localTotals.discountAmount,
+                tax: localTotals.tax, serviceCharge: localTotals.serviceCharge, 
+                total: localTotals.total, orderType: localType, status: OrderStatus.COMPLETED, kitchenStatus: 'SERVED', paymentMethod: isSplitMode ? undefined : paymentMethod, note: localNote, transactions, tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
+                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name, 
+                customerPhone: localCust?.phone, 
+                customerTin: localCust?.tin,
+                customerAddress: localCust ? formatAddress(localCust) : undefined,
+                createdBy: user.id, createdAt: Date.now() 
+              } as Order;
+              finalOrder = await db.addOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_CREATE',
+                description: `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          }
+          setOrderToSettle(null); 
+          setPreviewOrder(finalOrder); 
+          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
+          setPrintModalOpen(true);
+          showToast("Payment completed successfully.", "SUCCESS");
+      } catch (e) {
+          console.error(e);
+          showToast("Payment recorded locally", "INFO");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   const renderProductGrid = (productList: Product[]) => (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
           {productList.map((product: Product) => (
@@ -931,8 +935,14 @@ export default function POS() {
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                       {activeTab === 'ACTIVE' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                              {activeOrders.map((order: Order) => (
-                                  <div key={order.id} onClick={() => resumeOrder(order)} className="bg-white dark:bg-gray-800 p-4 rounded-[2rem] border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
+                              {activeOrders.map((order: Order) => {
+                                  const isSelected = selectedActiveOrderId === order.id;
+                                  return (
+                                  <div 
+                                    key={order.id} 
+                                    onClick={() => setSelectedActiveOrderId(isSelected ? null : order.id)} 
+                                    className={`bg-white dark:bg-gray-800 p-4 rounded-[2rem] border transition-all cursor-pointer flex flex-col group relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 shadow-xl' : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-300'}`}
+                                  >
                                       <div className="flex justify-between items-start mb-2 border-b border-gray-50 dark:border-gray-700 pb-2">
                                           <div>
                                               <h3 className="font-black dark:text-white text-base tracking-tighter text-blue-600 uppercase leading-none">#{order.orderNumber}</h3>
@@ -975,17 +985,50 @@ export default function POS() {
                                           {order.items.slice(0, 3).map((it: OrderItem, idx: number) => <div key={idx} className="text-[11px] font-bold dark:text-gray-400 flex justify-between"><span>{it.productName}</span><span className="text-gray-300">x{it.quantity}</span></div>)}
                                           {order.items.length > 3 && <p className="text-[9px] text-gray-300 italic">+{order.items.length - 3} more...</p>}
                                       </div>
-                                      <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto">
-                                          <div className="flex gap-1.5">
-                                              <button onClick={(e) => { e.stopPropagation(); resumeOrder(order); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={14}/></button>
-                                              <button onClick={(e) => handleHoldActiveOrder(order, e)} className="p-1.5 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-600 hover:text-white transition-all"><PauseCircle size={14}/></button>
-                                              <button onClick={(e) => { e.stopPropagation(); setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true); }} className="p-1.5 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-600 hover:text-white transition-all"><Printer size={14}/></button>
-                                              <button onClick={(e) => handleQuickSettle(order, e)} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><DollarSign size={14}/></button>
+                                      
+                                      <div className="pt-2 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center mt-auto min-h-[40px]">
+                                          <div className="flex-1 flex items-center">
+                                              {isSelected ? (
+                                                  <div className="flex gap-2 animate-in slide-in-from-left-2 duration-200 py-1">
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); resumeOrder(order); }} 
+                                                          className="p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-1.5 font-black text-[8px] uppercase tracking-widest"
+                                                          title="Edit Ticket"
+                                                      >
+                                                          <Edit size={12}/> Edit
+                                                      </button>
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); handleHoldActiveOrder(order, e); setSelectedActiveOrderId(null); }} 
+                                                          className="p-2 bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-500/20 hover:bg-orange-700 transition-all flex items-center gap-1.5 font-black text-[8px] uppercase tracking-widest"
+                                                          title="Move to Held"
+                                                      >
+                                                          <PauseCircle size={12}/> Hold
+                                                      </button>
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); setPreviewOrder(order); setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal'); setPrintModalOpen(true); }} 
+                                                          className="p-2 bg-gray-800 text-white rounded-xl shadow-lg hover:bg-black transition-all flex items-center gap-1.5 font-black text-[8px] uppercase tracking-widest"
+                                                          title="Print Receipt"
+                                                      >
+                                                          <Printer size={12}/> Print
+                                                      </button>
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); handleQuickSettle(order, e); setSelectedActiveOrderId(null); }} 
+                                                          className="p-2 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all flex items-center gap-1.5 font-black text-[8px] uppercase tracking-widest"
+                                                          title="Settle Payment"
+                                                      >
+                                                          <DollarSign size={12}/> Pay
+                                                      </button>
+                                                  </div>
+                                              ) : (
+                                                  <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                      <ChevronRight size={10} className="text-blue-500"/> Tap card for actions
+                                                  </div>
+                                              )}
                                           </div>
-                                          <span className="font-black text-base dark:text-white tracking-tighter">{store?.currency}{order.total.toFixed(2)}</span>
+                                          <span className="font-black text-base dark:text-white tracking-tighter shrink-0">{store?.currency}{order.total.toFixed(2)}</span>
                                       </div>
                                   </div>
-                              ))}
+                              )})}
                               {activeOrders.length === 0 && <div className="col-span-full py-16 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-30">No active tickets</div>}
                           </div>
                       ) : activeTab === 'HELD' ? (
