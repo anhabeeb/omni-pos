@@ -85,62 +85,13 @@ const addToSyncQueue = (action: 'INSERT' | 'UPDATE' | 'DELETE', table: string, d
     setItem('sync_queue', queue);
     
     if (getItem<boolean>('sync_enabled', true)) {
-        processSyncQueue();
+        db.processSyncQueue();
     } else {
         broadcastSyncUpdate();
     }
 };
 
 let isProcessingSync = false;
-const processSyncQueue = async () => {
-    if (isProcessingSync || !navigator.onLine) return;
-    isProcessingSync = true;
-
-    try {
-        while (true) {
-            const currentQueue = getItem<any[]>('sync_queue', []);
-            if (currentQueue.length === 0) break;
-
-            const task = currentQueue[0];
-            try {
-                currentSyncStatus = 'SYNCING';
-                broadcastSyncUpdate();
-
-                const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...task, clientVersion: SYSTEM_VERSION })
-                });
-
-                const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
-                
-                if (result.version) checkSystemVersion(result.version);
-
-                if (!response.ok || !result.success) {
-                    if (result.error?.toLowerCase().includes("column") || result.error?.toLowerCase().includes("table")) {
-                        await db.repairSchema();
-                    }
-                    throw new Error(result.error || `Sync failed with status ${response.status}`);
-                }
-
-                const latestQueue = getItem<any[]>('sync_queue', []);
-                const updatedQueue = latestQueue.filter(t => t.id !== task.id);
-                setItem('sync_queue', updatedQueue);
-                
-                lastSyncError = null;
-                currentSyncStatus = updatedQueue.length > 0 ? 'SYNCING' : 'CONNECTED';
-            } catch (e: any) {
-                lastSyncError = e.message;
-                currentSyncStatus = 'ERROR';
-                broadcastSyncUpdate();
-                break; 
-            }
-        }
-    } finally {
-        isProcessingSync = false;
-        broadcastSyncUpdate();
-    }
-};
 
 const startBackgroundPolling = () => {
     if (autoSyncInterval) clearInterval(autoSyncInterval);
@@ -154,7 +105,7 @@ const startBackgroundPolling = () => {
             if (queue.length === 0) {
                 await db.pullAllFromCloud();
             }
-            processSyncQueue();
+            db.processSyncQueue();
         }
     }, 10000); 
 };
@@ -189,13 +140,63 @@ export const db = {
 
         window.addEventListener('online', () => {
             currentSyncStatus = 'CONNECTED';
-            processSyncQueue();
+            db.processSyncQueue();
             broadcastSyncUpdate();
         });
 
         if (getItem<boolean>('sync_enabled', true)) {
-            processSyncQueue();
+            db.processSyncQueue();
             startBackgroundPolling();
+        }
+    },
+
+    processSyncQueue: async () => {
+        if (isProcessingSync || !navigator.onLine) return;
+        isProcessingSync = true;
+
+        try {
+            while (true) {
+                const currentQueue = getItem<any[]>('sync_queue', []);
+                if (currentQueue.length === 0) break;
+
+                const task = currentQueue[0];
+                try {
+                    currentSyncStatus = 'SYNCING';
+                    broadcastSyncUpdate();
+
+                    const response = await fetch(CLOUDFLARE_CONFIG.SYNC_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...task, clientVersion: SYSTEM_VERSION })
+                    });
+
+                    const result = await response.json().catch(() => ({ success: false, error: `Server Error ${response.status}` }));
+                    
+                    if (result.version) checkSystemVersion(result.version);
+
+                    if (!response.ok || !result.success) {
+                        if (result.error?.toLowerCase().includes("column") || result.error?.toLowerCase().includes("table")) {
+                            await db.repairSchema();
+                        }
+                        throw new Error(result.error || `Sync failed with status ${response.status}`);
+                    }
+
+                    const latestQueue = getItem<any[]>('sync_queue', []);
+                    const updatedQueue = latestQueue.filter(t => t.id !== task.id);
+                    setItem('sync_queue', updatedQueue);
+                    
+                    lastSyncError = null;
+                    currentSyncStatus = updatedQueue.length > 0 ? 'SYNCING' : 'CONNECTED';
+                } catch (e: any) {
+                    lastSyncError = e.message;
+                    currentSyncStatus = 'ERROR';
+                    broadcastSyncUpdate();
+                    break; 
+                }
+            }
+        } finally {
+            isProcessingSync = false;
+            broadcastSyncUpdate();
         }
     },
 
@@ -239,7 +240,7 @@ export const db = {
             setItem('sync_queue', queue);
             lastSyncError = null;
             currentSyncStatus = queue.length > 0 ? 'SYNCING' : 'CONNECTED';
-            if (queue.length > 0) processSyncQueue();
+            if (queue.length > 0) db.processSyncQueue();
             broadcastSyncUpdate();
         }
     },
@@ -266,7 +267,7 @@ export const db = {
     setSyncEnabled: (e: boolean) => {
         setItem('sync_enabled', e);
         if (e) {
-            processSyncQueue();
+            db.processSyncQueue();
             startBackgroundPolling();
         } else {
             if (autoSyncInterval) clearInterval(autoSyncInterval);

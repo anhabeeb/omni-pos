@@ -40,7 +40,9 @@ import {
   Phone,
   Mail,
   FastForward,
-  Hash
+  Hash,
+  CloudOff,
+  Database
 } from 'lucide-react';
 
 import { useAuth } from './AuthContext';
@@ -59,6 +61,55 @@ import StoreHistory from './pages/StoreHistory';
 import Quotations from './pages/Quotations';
 import EmployeeManagement from './pages/EmployeeManagement';
 import SystemLogs from './pages/SystemLogs';
+
+const SyncStatusNotification = () => {
+  const [syncState, setSyncState] = useState({
+    status: 'CONNECTED',
+    pendingCount: 0,
+    error: null as string | null,
+  });
+
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      setSyncState(e.detail);
+    };
+    window.addEventListener('db_sync_update', handleSync);
+    return () => window.removeEventListener('db_sync_update', handleSync);
+  }, []);
+
+  if (syncState.status === 'CONNECTED' && syncState.pendingCount === 0) return null;
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[300] animate-in slide-in-from-right-4">
+       <div className={`px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border-2 ${
+         syncState.status === 'ERROR' ? 'bg-red-600 border-red-400 text-white' : 
+         syncState.status === 'SYNCING' ? 'bg-blue-600 border-blue-400 text-white' :
+         syncState.status === 'OFFLINE' ? 'bg-orange-600 border-orange-400 text-white' :
+         'bg-gray-800 border-gray-700 text-white'
+       }`}>
+         {syncState.status === 'SYNCING' ? <RefreshCw className="animate-spin" size={18} /> : 
+          syncState.status === 'ERROR' ? <AlertCircle size={18} /> : 
+          syncState.status === 'OFFLINE' ? <CloudOff size={18} /> : <Cloud size={18} />}
+         <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+              {syncState.status === 'SYNCING' ? 'Syncing Data' : 
+               syncState.status === 'ERROR' ? 'Sync Failed' : 
+               syncState.status === 'OFFLINE' ? 'Work Offline' : 'Cloud Status'}
+            </span>
+            <span className="text-xs font-bold opacity-80 leading-tight">
+              {syncState.status === 'ERROR' ? (syncState.error || 'System error') : 
+               `${syncState.pendingCount} updates pending`}
+            </span>
+         </div>
+         {syncState.status === 'ERROR' && (
+           <button onClick={() => db.processSyncQueue()} className="ml-2 p-1.5 bg-white/20 hover:bg-white/40 rounded-lg transition-colors">
+              <RefreshCw size={14} />
+           </button>
+         )}
+       </div>
+    </div>
+  );
+};
 
 const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
   const { user, login } = useAuth();
@@ -232,6 +283,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const [stores, setStores] = useState<Store[]>([]);
   const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('CONNECTED');
+  const [pendingSyncs, setPendingSyncs] = useState(0);
+
   const navigate = useNavigate();
   const location = useLocation();
   const storeMenuRef = useRef<HTMLDivElement>(null);
@@ -248,6 +303,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     const handleDbChange = () => loadStores();
     window.addEventListener('db_change_any', handleDbChange);
     
+    const handleSync = (e: any) => {
+        setSyncStatus(e.detail.status);
+        setPendingSyncs(e.detail.pendingCount);
+    };
+    window.addEventListener('db_sync_update', handleSync);
+
     const handleClickOutside = (event: MouseEvent) => {
       if (storeMenuRef.current && !storeMenuRef.current.contains(event.target as Node)) {
         setIsStoreMenuOpen(false);
@@ -257,6 +318,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     
     return () => {
         window.removeEventListener('db_change_any', handleDbChange);
+        window.removeEventListener('db_sync_update', handleSync);
         document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [user]);
@@ -281,7 +343,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       { label: 'Reports', icon: BarChart3, path: '/reports', permission: 'VIEW_REPORTS' },
       { label: 'Customers', icon: UserCircle, path: `/store/${store.id}/customers`, permission: 'MANAGE_CUSTOMERS' },
       { label: 'Inventory', icon: Package, path: `/store/${store.id}/inventory`, permission: 'MANAGE_INVENTORY', featureFlag: 'useInventory' },
-      { label: 'Menu', icon: MenuIcon, path: `/store/${store.id}/menu`, permission: 'MANAGE_INVENTORY' },
+      { label: 'Sales Menu', icon: MenuIcon, path: `/store/${store.id}/menu`, permission: 'MANAGE_INVENTORY' },
       { label: 'Users', icon: Users, path: `/store/${store.id}/staff`, permission: 'MANAGE_STAFF' },
       { label: 'Print Templates', icon: Printer, path: `/store/${store.id}/designer`, permission: 'MANAGE_PRINT_DESIGNER' },
     ];
@@ -301,6 +363,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
+      <SyncStatusNotification />
       
       <header className="h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-50 shrink-0">
         <div className="flex items-center gap-8">
@@ -324,8 +387,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative group">
-            <Cloud size={18} className="text-gray-400" />
+          <div className="relative group flex items-center gap-2">
+            <div className={`p-2 rounded-full transition-all ${
+                syncStatus === 'SYNCING' ? 'bg-blue-100 text-blue-600 animate-pulse' : 
+                syncStatus === 'ERROR' ? 'bg-red-100 text-red-600' : 
+                syncStatus === 'OFFLINE' ? 'bg-orange-100 text-orange-600' :
+                'bg-gray-100 text-gray-400'
+            }`} title={syncStatus}>
+                {syncStatus === 'SYNCING' ? <RefreshCw size={18} className="animate-spin" /> : 
+                 syncStatus === 'ERROR' ? <AlertCircle size={18} /> : 
+                 syncStatus === 'OFFLINE' ? <CloudOff size={18} /> : <Cloud size={18} />}
+            </div>
+            {pendingSyncs > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-blue-600 text-white text-[8px] font-black rounded-full border-2 border-white dark:border-gray-900">
+                    {pendingSyncs}
+                </span>
+            )}
           </div>
 
           <div className="h-8 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
