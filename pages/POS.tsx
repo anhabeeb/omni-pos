@@ -21,7 +21,8 @@ import {
   ChevronRight,
   History,
   Phone,
-  ChevronDown
+  ChevronDown,
+  Building2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -444,125 +445,6 @@ export default function POS() {
       setIsPaymentModalOpen(true);
   };
 
-  const finalizePayment = async () => {
-      if (!currentStoreId || !user || !shift || isSaving) return;
-      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
-      
-      const transactions: Transaction[] = [];
-
-      if (isSplitMode) {
-          const a1 = parseFloat(splitPayment1.amount) || 0;
-          const a2 = parseFloat(splitPayment2.amount) || 0;
-          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
-              return;
-          }
-          
-          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
-              setPaymentError("Reference number is mandatory for non-cash split payments.");
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
-          });
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
-          });
-      } else {
-          const tendered = parseFloat(amountTendered) || 0;
-          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
-              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
-              return; 
-          }
-          
-          if (paymentMethod !== 'CASH' && !paymentRef) {
-              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
-              referenceNumber: paymentRef,
-              timestamp: Date.now(), performedBy: user.id, 
-              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
-              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
-          });
-      }
-      
-      setIsSaving(true);
-      
-      // Local captures for the async operation
-      const localCart = [...cart];
-      const localTotals = {...totals};
-      const localNote = orderNote;
-      const localTable = tableNumber;
-      const localType = orderType;
-      const localCust = selectedCustomer;
-      const localDisc = discountPercent;
-      const localResumed = resumedOrder;
-
-      setIsPaymentModalOpen(false);
-      resetOrderUI();
-      showToast("Processing payment...", "INFO");
-
-      try {
-          let finalOrder: Order;
-          if (orderToSettle) {
-              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
-              await db.updateOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_UPDATE',
-                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          } else {
-              finalOrder = { 
-                id: localResumed?.id || 0, 
-                orderNumber: localResumed?.orderNumber || '', 
-                storeId: currentStoreId, 
-                shiftId: shift.id, 
-                items: localCart, 
-                subtotal: localTotals.subtotal, 
-                discountPercent: localDisc,
-                discountAmount: localTotals.discountAmount,
-                tax: localTotals.tax, 
-                serviceCharge: localTotals.serviceCharge, 
-                total: localTotals.total, 
-                orderType: localType, 
-                status: OrderStatus.COMPLETED, 
-                kitchenStatus: 'SERVED', 
-                paymentMethod: isSplitMode ? undefined : paymentMethod, 
-                note: localNote, 
-                transactions, 
-                tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
-                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name || customerSearch, 
-                customerPhone: localCust?.phone, 
-                customerTin: localCust?.tin,
-                customerAddress: localCust ? formatAddress(localCust) : undefined,
-                createdBy: localResumed?.createdBy || user.id, 
-                createdAt: localResumed?.createdAt || Date.now() 
-              } as Order;
-              finalOrder = await db.addOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: localResumed ? 'ORDER_UPDATE' : 'ORDER_CREATE',
-                description: localResumed ? `Order #${finalOrder.orderNumber} updated & settled` : `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          }
-          setOrderToSettle(null); 
-          setPreviewOrder(finalOrder); 
-          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
-          setPrintModalOpen(true);
-          showToast("Payment completed successfully.", "SUCCESS");
-      } catch (e) {
-          console.error(e);
-          showToast("Payment recorded locally", "INFO");
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
     const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
@@ -752,7 +634,11 @@ export default function POS() {
   };
 
   const filteredCustomers = customers.filter((c: Customer) => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
-  const handleCustomerSelect = (c: Customer) => { setSelectedCustomer(c); setCustomerSearch(c.name || c.phone); setShowCustomerResults(false); };
+  const handleCustomerSelect = (c: Customer) => { 
+      setSelectedCustomer(c); 
+      setCustomerSearch(c.name || c.phone); 
+      setShowCustomerResults(false); 
+  };
 
   const handleQuickAddCustomer = async (e: React.FormEvent) => {
       e.preventDefault(); 
@@ -858,6 +744,125 @@ export default function POS() {
     } finally {
         setIsSaving(false);
     }
+  };
+
+  const finalizePayment = async () => {
+      if (!currentStoreId || !user || !shift || isSaving) return;
+      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
+      
+      const transactions: Transaction[] = [];
+
+      if (isSplitMode) {
+          const a1 = parseFloat(splitPayment1.amount) || 0;
+          const a2 = parseFloat(splitPayment2.amount) || 0;
+          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
+              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
+              return;
+          }
+          
+          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
+              setPaymentError("Reference number is mandatory for non-cash split payments.");
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
+          });
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
+          });
+      } else {
+          const tendered = parseFloat(amountTendered) || 0;
+          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
+              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
+              return; 
+          }
+          
+          if (paymentMethod !== 'CASH' && !paymentRef) {
+              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
+              return;
+          }
+
+          transactions.push({
+              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
+              referenceNumber: paymentRef,
+              timestamp: Date.now(), performedBy: user.id, 
+              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
+              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
+          });
+      }
+      
+      setIsSaving(true);
+      
+      // Local captures for the async operation
+      const localCart = [...cart];
+      const localTotals = {...totals};
+      const localNote = orderNote;
+      const localTable = tableNumber;
+      const localType = orderType;
+      const localCust = selectedCustomer;
+      const localDisc = discountPercent;
+      const localResumed = resumedOrder;
+
+      setIsPaymentModalOpen(false);
+      resetOrderUI();
+      showToast("Processing payment...", "INFO");
+
+      try {
+          let finalOrder: Order;
+          if (orderToSettle) {
+              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
+              await db.updateOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: 'ORDER_UPDATE',
+                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          } else {
+              finalOrder = { 
+                id: localResumed?.id || 0, 
+                orderNumber: localResumed?.orderNumber || '', 
+                storeId: currentStoreId, 
+                shiftId: shift.id, 
+                items: localCart, 
+                subtotal: localTotals.subtotal, 
+                discountPercent: localDisc,
+                discountAmount: localTotals.discountAmount,
+                tax: localTotals.tax, 
+                serviceCharge: localTotals.serviceCharge, 
+                total: localTotals.total, 
+                orderType: localType, 
+                status: OrderStatus.COMPLETED, 
+                kitchenStatus: 'SERVED', 
+                paymentMethod: isSplitMode ? undefined : paymentMethod, 
+                note: localNote, 
+                transactions, 
+                tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
+                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name || customerSearch, 
+                customerPhone: localCust?.phone, 
+                customerTin: localCust?.tin,
+                customerAddress: localCust ? formatAddress(localCust) : undefined,
+                createdBy: localResumed?.createdBy || user.id, 
+                createdAt: localResumed?.createdAt || Date.now() 
+              } as Order;
+              finalOrder = await db.addOrder(currentStoreId, finalOrder);
+              db.logActivity({
+                storeId: currentStoreId, userId: user.id, userName: user.name,
+                action: localResumed ? 'ORDER_UPDATE' : 'ORDER_CREATE',
+                description: localResumed ? `Order #${finalOrder.orderNumber} updated & settled` : `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
+              });
+          }
+          setOrderToSettle(null); 
+          setPreviewOrder(finalOrder); 
+          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
+          setPrintModalOpen(true);
+          showToast("Payment completed successfully.", "SUCCESS");
+      } catch (e) {
+          console.error(e);
+          showToast("Payment recorded locally", "INFO");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const renderProductGrid = (productList: Product[]) => (
@@ -1185,6 +1190,39 @@ export default function POS() {
                           </div>
                       )}
                   </div>
+
+                  {selectedCustomer && (
+                      <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="flex justify-between items-start">
+                              <div className="space-y-1 overflow-hidden">
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded shadow-sm border border-blue-50 dark:border-blue-900">
+                                          {selectedCustomer.type === 'COMPANY' ? 'Company Account' : 'Individual'}
+                                      </span>
+                                  </div>
+                                  <div className="font-black text-[11px] dark:text-white truncate uppercase flex items-center gap-1.5 mt-1">
+                                      {selectedCustomer.type === 'COMPANY' ? <Building2 size={12} className="text-blue-600"/> : <UserIcon size={12} className="text-blue-600"/>}
+                                      {selectedCustomer.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer.name}
+                                  </div>
+                                  <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-bold">
+                                      <Phone size={10} /> {selectedCustomer.phone}
+                                  </div>
+                                  {selectedCustomer.type === 'INDIVIDUAL' && (
+                                      <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
+                                          <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
+                                          <span className="truncate">{formatAddress(selectedCustomer)}</span>
+                                      </div>
+                                  )}
+                              </div>
+                              <button 
+                                  onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch(''); }}
+                                  className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
+                              >
+                                  <X size={14} />
+                              </button>
+                          </div>
+                      </div>
+                  )}
 
                   {orderType === OrderType.DINE_IN && (
                       <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1.5 px-4 rounded-2xl shadow-sm">
