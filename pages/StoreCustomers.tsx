@@ -19,7 +19,8 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
-  X
+  X,
+  Phone
 } from 'lucide-react';
 import { utils, writeFile, read } from 'xlsx';
 
@@ -70,15 +71,15 @@ export default function StoreCustomers() {
   const validateForm = () => {
     const type = editingCustomer.type || 'INDIVIDUAL';
     if (type === 'INDIVIDUAL') {
-        const hasAddress = editingCustomer.houseName || editingCustomer.streetName || editingCustomer.address;
-        if (!editingCustomer.phone || !hasAddress) {
-            alert("Phone and Address are mandatory for individual customers.");
+        const hasPrimaryAddress = editingCustomer.houseName || editingCustomer.address;
+        if (!editingCustomer.phone || !hasPrimaryAddress) {
+            alert("Phone and Building/House Name are mandatory for individual customers.");
             return false;
         }
     } else {
-        const hasAddress = editingCustomer.buildingName || editingCustomer.street || editingCustomer.address;
-        if (!editingCustomer.name || !editingCustomer.companyName || !editingCustomer.tin || !editingCustomer.phone || !hasAddress) {
-            alert("All fields (Name, Company, TIN, Phone, Address) are mandatory for company accounts.");
+        const hasPrimaryAddress = editingCustomer.buildingName || editingCustomer.address;
+        if (!editingCustomer.name || !editingCustomer.companyName || !editingCustomer.tin || !editingCustomer.phone || !hasPrimaryAddress) {
+            alert("All fields (Name, Company, TIN, Phone, Building/Floor) are mandatory for company accounts.");
             return false;
         }
     }
@@ -94,6 +95,7 @@ export default function StoreCustomers() {
     const finalCustomer = { ...editingCustomer };
     
     if (finalCustomer.type === 'INDIVIDUAL') {
+        finalCustomer.name = undefined; // Individual records don't strictly need names now
         finalCustomer.companyName = undefined;
         finalCustomer.tin = undefined;
         finalCustomer.buildingName = undefined;
@@ -190,7 +192,7 @@ export default function StoreCustomers() {
 
   const handleDownloadTemplate = () => {
     const templateData = [{
-        'Name': 'John Doe',
+        'Name': '',
         'Phone': '+960 7771234',
         'Type': 'INDIVIDUAL',
         'Company Name': '',
@@ -202,19 +204,6 @@ export default function StoreCustomers() {
         'Island': 'Male',
         'Country': 'Maldives',
         'Additional Address': ''
-    }, {
-        'Name': 'Jane Smith',
-        'Phone': '+960 7775678',
-        'Type': 'COMPANY',
-        'Company Name': 'Acme Corp',
-        'TIN': '123-456-789',
-        'House Name': '',
-        'Street Name': '',
-        'Building Name': 'Trade Tower',
-        'Street': 'Main Road',
-        'Island': 'Male',
-        'Country': 'Maldives',
-        'Additional Address': 'Apt 4B'
     }];
 
     const ws = utils.json_to_sheet(templateData);
@@ -315,43 +304,10 @@ export default function StoreCustomers() {
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
-          <button 
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
-            title="Download Import Template"
-          >
-            <FileSpreadsheet size={18} /> Template
-          </button>
-          
-          <button 
-            onClick={handleExport}
-            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
-          >
-            <Download size={18} /> Export
-          </button>
-
-          <button 
-            onClick={triggerImport}
-            className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"
-          >
-            <Upload size={18} /> Import
-            <input 
-              ref={fileInputRef} 
-              type="file" 
-              accept=".xlsx, .xls, .csv" 
-              className="hidden" 
-              onChange={handleFileChange} 
-            />
-          </button>
-
-          {hasPermission('MANAGE_CUSTOMERS') && (
-              <button 
-                  onClick={() => { resetForm(); setIsModalOpen(true); }}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap font-bold shadow-sm text-sm"
-              >
-                  <Plus size={18} /> Add Customer
-              </button>
-          )}
+          <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"><FileSpreadsheet size={18} /> Template</button>
+          <button onClick={handleExport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"><Download size={18} /> Export</button>
+          <button onClick={triggerImport} className="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-sm font-bold"><Upload size={18} /> Import<input ref={fileInputRef} type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileChange} /></button>
+          {hasPermission('MANAGE_CUSTOMERS') && <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold shadow-sm text-sm"><Plus size={18} /> Add Customer</button>}
         </div>
       </div>
 
@@ -359,27 +315,14 @@ export default function StoreCustomers() {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search by name, phone, or company..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+            <input type="text" placeholder="Search by name, phone, or company..." className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
         </div>
         
         <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[800px]">
             <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                <th className="p-4 w-16">#</th>
-                <th className="p-4">Customer Details</th>
-                <th className="p-4">Type</th>
-                <th className="p-4">Contact Info</th>
-                <th className="p-4">Address</th>
-                <th className="p-4 text-right">Actions</th>
-                </tr>
+                <tr><th className="p-4 w-16">#</th><th className="p-4">Customer Details</th><th className="p-4">Type</th><th className="p-4">Contact Info</th><th className="p-4">Address</th><th className="p-4 text-right">Actions</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredCustomers.length === 0 ? (
@@ -388,12 +331,10 @@ export default function StoreCustomers() {
                 <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors group">
                     <td className="p-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{index + 1}</td>
                     <td className="p-4">
-                    <div className="font-bold text-gray-900 dark:text-white">{customer.name || 'Anonymous Individual'}</div>
-                    {customer.type === 'COMPANY' && customer.companyName && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
-                            <Building2 size={10} /> {customer.companyName}
-                        </div>
-                    )}
+                      <div className="font-bold text-gray-900 dark:text-white">{customer.name || `Individual (${customer.phone})`}</div>
+                      {customer.type === 'COMPANY' && customer.companyName && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5"><Building2 size={10} /> {customer.companyName}</div>
+                      )}
                     </td>
                     <td className="p-4">
                         {customer.type === 'COMPANY' ? (
@@ -403,19 +344,10 @@ export default function StoreCustomers() {
                         )}
                     </td>
                     <td className="p-4 text-gray-600 dark:text-gray-300 text-sm font-medium">{customer.phone}</td>
-                    <td className="p-4 text-gray-500 dark:text-gray-400 max-w-xs text-xs">
-                        <div className="flex items-start gap-1.5">
-                            <MapPin size={12} className="mt-0.5 flex-shrink-0 text-gray-400" />
-                            <span className="truncate">{getFormattedAddress(customer)}</span>
-                        </div>
-                    </td>
+                    <td className="p-4 text-gray-500 dark:text-gray-400 max-w-xs text-xs"><div className="flex items-start gap-1.5"><MapPin size={12} className="mt-0.5 flex-shrink-0 text-gray-400" /><span className="truncate">{getFormattedAddress(customer)}</span></div></td>
                     <td className="p-4 text-right space-x-1">
-                        <button onClick={() => handleEdit(customer)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Edit">
-                            <Edit2 size={18} />
-                        </button>
-                        <button onClick={() => handleDelete(customer.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Delete">
-                            <Trash2 size={18} />
-                        </button>
+                        <button onClick={() => handleEdit(customer)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 size={18} /></button>
+                        <button onClick={() => handleDelete(customer.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 size={18} /></button>
                     </td>
                 </tr>
                 ))}
@@ -428,179 +360,53 @@ export default function StoreCustomers() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/30">
-              <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
-                <UserIcon className="text-blue-600" />
-                {editingCustomer.id ? 'Edit Customer Profile' : 'Add New Customer'}
-              </h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
+              <h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><UserIcon className="text-blue-600" />{editingCustomer.id ? 'Edit Customer' : 'Add New Customer'}</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"><X size={20} className="text-gray-500" /></button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingCustomer({...editingCustomer, type: 'INDIVIDUAL'})}
-                    className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${editingCustomer.type === 'INDIVIDUAL' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                      Individual
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingCustomer({...editingCustomer, type: 'COMPANY'})}
-                    className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${editingCustomer.type === 'COMPANY' ? 'bg-white dark:bg-gray-600 shadow text-purple-600 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                      Company
-                  </button>
+                  <button type="button" onClick={() => setEditingCustomer({...editingCustomer, type: 'INDIVIDUAL'})} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${editingCustomer.type === 'INDIVIDUAL' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}>Individual</button>
+                  <button type="button" onClick={() => setEditingCustomer({...editingCustomer, type: 'COMPANY'})} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${editingCustomer.type === 'COMPANY' ? 'bg-white dark:bg-gray-600 shadow text-purple-600 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}>Company</button>
               </div>
 
               {editingCustomer.type === 'COMPANY' && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl space-y-4 border border-purple-100 dark:border-purple-800 animate-in slide-in-from-top-2">
-                      <div>
-                        <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Company Entity Name *</label>
-                        <input 
-                            placeholder="e.g. Acme Corp" 
-                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500"
-                            value={editingCustomer.companyName}
-                            onChange={e => setEditingCustomer({...editingCustomer, companyName: e.target.value})}
-                            required={editingCustomer.type === 'COMPANY'}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax Identification Number (TIN) *</label>
-                        <input 
-                            placeholder="e.g. 123-456-789" 
-                            className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500"
-                            value={editingCustomer.tin}
-                            onChange={e => setEditingCustomer({...editingCustomer, tin: e.target.value})}
-                            required={editingCustomer.type === 'COMPANY'}
-                        />
-                      </div>
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl space-y-4 border border-purple-100 dark:border-purple-800">
+                      <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Company Name *</label><input placeholder="e.g. Acme Corp" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.companyName} onChange={e => setEditingCustomer({...editingCustomer, companyName: e.target.value})} required /></div>
+                      <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Tax ID (TIN) *</label><input placeholder="e.g. 123-456-789" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.tin} onChange={e => setEditingCustomer({...editingCustomer, tin: e.target.value})} required /></div>
+                      <div><label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1 ml-1">Contact Representative Name *</label><input placeholder="Full Name" className="w-full p-2.5 border border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-purple-500" value={editingCustomer.name} onChange={e => setEditingCustomer({...editingCustomer, name: e.target.value})} required /></div>
                   </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Contact Full Name {editingCustomer.type === 'COMPANY' ? '*' : '(Optional)'}</label>
-                    <input 
-                        placeholder="Full Name" 
-                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                        value={editingCustomer.name}
-                        onChange={e => setEditingCustomer({...editingCustomer, name: e.target.value})}
-                        required={editingCustomer.type === 'COMPANY'}
-                    />
-                  </div>
-                  
+              <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 ml-1">Phone Number *</label>
-                    <input 
-                        placeholder="Phone Number" 
-                        className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                        value={editingCustomer.phone}
-                        onChange={e => setEditingCustomer({...editingCustomer, phone: e.target.value})}
-                        required
-                    />
+                    <input placeholder="Phone Number" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-blue-500" value={editingCustomer.phone} onChange={e => setEditingCustomer({...editingCustomer, phone: e.target.value})} required />
                   </div>
               </div>
 
               <div className="border-t dark:border-gray-700 pt-6">
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                      <MapPin size={14} /> Address Information *
-                  </h3>
-                  
-                  {editingCustomer.type === 'INDIVIDUAL' ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">House Name / Building *</label>
-                            <input 
-                                required
-                                placeholder="e.g. Rose Villa" 
-                                className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                value={editingCustomer.houseName}
-                                onChange={e => setEditingCustomer({...editingCustomer, houseName: e.target.value})}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name *</label>
-                            <input 
-                                required
-                                placeholder="e.g. Orchid Magu" 
-                                className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                value={editingCustomer.streetName}
-                                onChange={e => setEditingCustomer({...editingCustomer, streetName: e.target.value})}
-                            />
-                          </div>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><MapPin size={14} /> Primary Address *</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">{editingCustomer.type === 'INDIVIDUAL' ? 'Building / House Name *' : 'Building / Floor *'}</label>
+                        <input required placeholder="e.g. Trade Centre" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" value={editingCustomer.type === 'INDIVIDUAL' ? editingCustomer.houseName : editingCustomer.buildingName} onChange={e => setEditingCustomer(editingCustomer.type === 'INDIVIDUAL' ? {...editingCustomer, houseName: e.target.value} : {...editingCustomer, buildingName: e.target.value})} />
                       </div>
-                  ) : (
-                      <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Building / Floor *</label>
-                                <input 
-                                    required
-                                    placeholder="e.g. Trade Centre, 4th Floor" 
-                                    className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editingCustomer.buildingName}
-                                    onChange={e => setEditingCustomer({...editingCustomer, buildingName: e.target.value})}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street *</label>
-                                <input 
-                                    required
-                                    placeholder="e.g. Main Street" 
-                                    className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editingCustomer.street}
-                                    onChange={e => setEditingCustomer({...editingCustomer, street: e.target.value})}
-                                />
-                              </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / Atoll *</label>
-                                <input 
-                                    required
-                                    placeholder="e.g. Male'" 
-                                    className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editingCustomer.island}
-                                    onChange={e => setEditingCustomer({...editingCustomer, island: e.target.value})}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Additional Details</label>
-                                <input 
-                                    placeholder="e.g. Near Market" 
-                                    className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editingCustomer.address}
-                                    onChange={e => setEditingCustomer({...editingCustomer, address: e.target.value})}
-                                />
-                              </div>
-                          </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Street Name</label>
+                        <input placeholder="e.g. Main Street" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" value={editingCustomer.type === 'INDIVIDUAL' ? editingCustomer.streetName : editingCustomer.street} onChange={e => setEditingCustomer(editingCustomer.type === 'INDIVIDUAL' ? {...editingCustomer, streetName: e.target.value} : {...editingCustomer, street: e.target.value})} />
                       </div>
-                  )}
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Island / City *</label>
+                    <input required placeholder="e.g. Male'" className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" value={editingCustomer.island} onChange={e => setEditingCustomer({...editingCustomer, island: e.target.value})} />
+                  </div>
               </div>
             </form>
 
             <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-900/30">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)} 
-                className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSubmit} 
-                disabled={isSaving}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                {isSaving ? <Loader2 className="animate-spin" size={16} /> : null}
-                Save Customer
-              </button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-gray-500 transition-colors">Cancel</button>
+              <button onClick={handleSubmit} disabled={isSaving} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">{isSaving && <Loader2 className="animate-spin" size={16} />}Save Customer</button>
             </div>
           </div>
         </div>
