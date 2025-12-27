@@ -22,7 +22,9 @@ import {
   History,
   Phone,
   ChevronDown,
-  Building2
+  Building2,
+  ChevronUp,
+  Settings2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toJpeg } from 'html-to-image';
@@ -52,6 +54,9 @@ export default function POS() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Sidebar state
+  const [isCartMetadataCollapsed, setIsCartMetadataCollapsed] = useState(false);
+
   // State for toggling actions in Active orders tab
   const [selectedActiveOrderId, setSelectedActiveOrderId] = useState<number | null>(null);
 
@@ -445,6 +450,103 @@ export default function POS() {
       setIsPaymentModalOpen(true);
   };
 
+  // Fix: Implemented the missing finalizePayment function to handle order settlement and fix the 'Cannot find name' error.
+  const finalizePayment = async () => {
+    if (!currentStoreId || !user || !shift || isSaving) return;
+    
+    const targetOrder = orderToSettle || {
+        id: resumedOrder?.id || 0,
+        orderNumber: resumedOrder?.orderNumber || '',
+        storeId: currentStoreId,
+        shiftId: shift.id,
+        items: [...cart],
+        subtotal: totals.subtotal,
+        discountPercent: discountPercent,
+        discountAmount: totals.discountAmount,
+        tax: totals.tax,
+        serviceCharge: totals.serviceCharge,
+        total: totals.total,
+        orderType,
+        status: OrderStatus.PENDING, 
+        customerName: (selectedCustomer?.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer?.name) || selectedCustomer?.name || customerSearch,
+        customerPhone: selectedCustomer?.phone,
+        customerTin: selectedCustomer?.tin,
+        customerAddress: selectedCustomer ? formatAddress(selectedCustomer) : undefined,
+        tableNumber: orderType === OrderType.DINE_IN ? tableNumber : undefined,
+        note: orderNote,
+        createdBy: resumedOrder?.createdBy || user.id,
+        createdAt: resumedOrder?.createdAt || Date.now()
+    } as Order;
+
+    const totalToPay = targetOrder.total;
+    const transactions: Transaction[] = [];
+
+    if (isSplitMode) {
+        const amt1 = parseFloat(splitPayment1.amount) || 0;
+        const amt2 = parseFloat(splitPayment2.amount) || 0;
+        if (Math.abs((amt1 + amt2) - totalToPay) > 0.01) {
+            setPaymentError(`Total split amount (${store?.currency}${ (amt1 + amt2).toFixed(2) }) does not match total due (${store?.currency}${totalToPay.toFixed(2)})`);
+            return;
+        }
+        if (splitPayment1.method !== 'CASH' && !splitPayment1.ref) { setPaymentError("Reference required for Split Part 1"); return; }
+        if (splitPayment2.method !== 'CASH' && !splitPayment2.ref) { setPaymentError("Reference required for Split Part 2"); return; }
+        
+        transactions.push({
+            id: uuid(), type: 'PAYMENT', method: splitPayment1.method, amount: amt1, referenceNumber: splitPayment1.ref,
+            timestamp: Date.now(), performedBy: user.id
+        });
+        transactions.push({
+            id: uuid(), type: 'PAYMENT', method: splitPayment2.method, amount: amt2, referenceNumber: splitPayment2.ref,
+            timestamp: Date.now(), performedBy: user.id
+        });
+    } else {
+        if (paymentMethod !== 'CASH' && !paymentRef) {
+            setPaymentError(`Reference number required for ${paymentMethod}`);
+            return;
+        }
+        const tendered = paymentMethod === 'CASH' ? (parseFloat(amountTendered) || totalToPay) : totalToPay;
+        if (tendered < totalToPay - 0.01) {
+            setPaymentError("Insufficient amount tendered.");
+            return;
+        }
+        transactions.push({
+            id: uuid(), type: 'PAYMENT', method: paymentMethod, amount: totalToPay, referenceNumber: paymentRef,
+            tenderedAmount: tendered, changeAmount: tendered - totalToPay,
+            timestamp: Date.now(), performedBy: user.id
+        });
+    }
+
+    setIsSaving(true);
+    try {
+        const completedOrder: Order = {
+            ...targetOrder,
+            status: OrderStatus.COMPLETED,
+            paymentMethod: isSplitMode ? undefined : paymentMethod, 
+            transactions: [...(targetOrder.transactions || []), ...transactions]
+        };
+
+        const result = await db.addOrder(currentStoreId, completedOrder);
+        db.logActivity({
+            storeId: currentStoreId, userId: user.id, userName: user.name,
+            action: 'ORDER_UPDATE',
+            description: `Order #${result.orderNumber} settled successfully (${store?.currency}${result.total.toFixed(2)})`
+        });
+
+        setPreviewOrder(result);
+        setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
+        setPrintModalOpen(true);
+        
+        setIsPaymentModalOpen(false);
+        resetOrderUI();
+        showToast(`Order #${result.orderNumber} Completed`, "SUCCESS");
+    } catch (e) {
+        console.error(e);
+        setPaymentError("Database error occurred.");
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const generateReceiptHtml = (order: Order, isAutoPrint = false, paperSizeOverride?: string) => {
     if (!store) return '';
     const settings = store.printSettings || { paperSize: 'thermal', fontSize: 'medium' };
@@ -633,6 +735,32 @@ export default function POS() {
     return '320px'; // thermal width
   };
 
+  const renderProductGrid = (productList: Product[]) => (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
+          {productList.map((product: Product) => (
+              <button 
+                  key={product.id} 
+                  onClick={() => addToCart(product)} 
+                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
+              >
+                  <div 
+                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
+                      style={{ height: `${4 * menuScale}rem` }}
+                  >
+                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={product.name} /> : <Utensils size={20 * menuScale}/>}
+                      <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
+                          <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
+                            <Plus size={14}/>
+                          </div>
+                      </div>
+                  </div>
+                  <h3 className="text-[11px] font-black truncate dark:text-white mb-0.5 uppercase tracking-tight leading-tight">{product.name}</h3>
+                  <p className="text-blue-600 dark:text-blue-400 font-black text-xs tracking-tighter">{store?.currency}{product.price.toFixed(2)}</p>
+              </button>
+          ))}
+      </div>
+  );
+
   const filteredCustomers = customers.filter((c: Customer) => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch));
   const handleCustomerSelect = (c: Customer) => { 
       setSelectedCustomer(c); 
@@ -745,151 +873,6 @@ export default function POS() {
         setIsSaving(false);
     }
   };
-
-  const finalizePayment = async () => {
-      if (!currentStoreId || !user || !shift || isSaving) return;
-      const payableTotal = orderToSettle ? orderToSettle.total : totals.total;
-      
-      const transactions: Transaction[] = [];
-
-      if (isSplitMode) {
-          const a1 = parseFloat(splitPayment1.amount) || 0;
-          const a2 = parseFloat(splitPayment2.amount) || 0;
-          if (Math.abs((a1 + a2) - payableTotal) > 0.01) {
-              setPaymentError(`Split total must equal ${store?.currency}${payableTotal.toFixed(2)}`);
-              return;
-          }
-          
-          if ((splitPayment1.method !== 'CASH' && !splitPayment1.ref) || (splitPayment2.method !== 'CASH' && !splitPayment2.ref)) {
-              setPaymentError("Reference number is mandatory for non-cash split payments.");
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a1, method: splitPayment1.method, referenceNumber: splitPayment1.ref, timestamp: Date.now(), performedBy: user.id
-          });
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: a2, method: splitPayment2.method, referenceNumber: splitPayment2.ref, timestamp: Date.now(), performedBy: user.id
-          });
-      } else {
-          const tendered = parseFloat(amountTendered) || 0;
-          if (paymentMethod === 'CASH' && tendered < payableTotal) { 
-              setPaymentError(`Short by ${store?.currency}${(payableTotal - tendered).toFixed(2)}`); 
-              return; 
-          }
-          
-          if (paymentMethod !== 'CASH' && !paymentRef) {
-              setPaymentError(`Reference number is mandatory for ${paymentMethod} payments.`);
-              return;
-          }
-
-          transactions.push({
-              id: uuid(), type: 'PAYMENT', amount: payableTotal, method: paymentMethod,
-              referenceNumber: paymentRef,
-              timestamp: Date.now(), performedBy: user.id, 
-              tenderedAmount: paymentMethod === 'CASH' ? tendered : payableTotal,
-              changeAmount: paymentMethod === 'CASH' ? tendered - payableTotal : 0
-          });
-      }
-      
-      setIsSaving(true);
-      
-      // Local captures for the async operation
-      const localCart = [...cart];
-      const localTotals = {...totals};
-      const localNote = orderNote;
-      const localTable = tableNumber;
-      const localType = orderType;
-      const localCust = selectedCustomer;
-      const localDisc = discountPercent;
-      const localResumed = resumedOrder;
-
-      setIsPaymentModalOpen(false);
-      resetOrderUI();
-      showToast("Processing payment...", "INFO");
-
-      try {
-          let finalOrder: Order;
-          if (orderToSettle) {
-              finalOrder = { ...orderToSettle, status: OrderStatus.COMPLETED, paymentMethod: isSplitMode ? undefined : paymentMethod, transactions: [...(orderToSettle.transactions || []), ...transactions] };
-              await db.updateOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: 'ORDER_UPDATE',
-                description: `Active order #${finalOrder.orderNumber} settled via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          } else {
-              finalOrder = { 
-                id: localResumed?.id || 0, 
-                orderNumber: localResumed?.orderNumber || '', 
-                storeId: currentStoreId, 
-                shiftId: shift.id, 
-                items: localCart, 
-                subtotal: localTotals.subtotal, 
-                discountPercent: localDisc,
-                discountAmount: localTotals.discountAmount,
-                tax: localTotals.tax, 
-                serviceCharge: localTotals.serviceCharge, 
-                total: localTotals.total, 
-                orderType: localType, 
-                status: OrderStatus.COMPLETED, 
-                kitchenStatus: 'SERVED', 
-                paymentMethod: isSplitMode ? undefined : paymentMethod, 
-                note: localNote, 
-                transactions, 
-                tableNumber: localType === OrderType.DINE_IN ? localTable : undefined, 
-                customerName: (localCust?.type === 'COMPANY' ? localCust.companyName : localCust?.name) || localCust?.name || customerSearch, 
-                customerPhone: localCust?.phone, 
-                customerTin: localCust?.tin,
-                customerAddress: localCust ? formatAddress(localCust) : undefined,
-                createdBy: localResumed?.createdBy || user.id, 
-                createdAt: localResumed?.createdAt || Date.now() 
-              } as Order;
-              finalOrder = await db.addOrder(currentStoreId, finalOrder);
-              db.logActivity({
-                storeId: currentStoreId, userId: user.id, userName: user.name,
-                action: localResumed ? 'ORDER_UPDATE' : 'ORDER_CREATE',
-                description: localResumed ? `Order #${finalOrder.orderNumber} updated & settled` : `Quick-sale settled #${finalOrder.orderNumber} via ${isSplitMode ? 'Split' : paymentMethod}`
-              });
-          }
-          setOrderToSettle(null); 
-          setPreviewOrder(finalOrder); 
-          setPreviewPaperSize(store?.printSettings?.paperSize || 'thermal');
-          setPrintModalOpen(true);
-          showToast("Payment completed successfully.", "SUCCESS");
-      } catch (e) {
-          console.error(e);
-          showToast("Payment recorded locally", "INFO");
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
-  const renderProductGrid = (productList: Product[]) => (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 content-start">
-          {productList.map((product: Product) => (
-              <button 
-                  key={product.id} 
-                  onClick={() => addToCart(product)} 
-                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 text-left flex flex-col transition-all active:scale-95 shadow-sm group h-fit overflow-hidden p-2"
-              >
-                  <div 
-                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl mb-2 flex items-center justify-center text-gray-300 overflow-hidden relative"
-                      style={{ height: `${4 * menuScale}rem` }}
-                  >
-                      {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={product.name} /> : <Utensils size={20 * menuScale}/>}
-                      <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors flex items-center justify-center">
-                          <div className="bg-blue-600 text-white p-1.5 rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg">
-                            <Plus size={14}/>
-                          </div>
-                      </div>
-                  </div>
-                  <h3 className="text-[11px] font-black truncate dark:text-white mb-0.5 uppercase tracking-tight leading-tight">{product.name}</h3>
-                  <p className="text-blue-600 dark:text-blue-400 font-black text-xs tracking-tighter">{store?.currency}{product.price.toFixed(2)}</p>
-              </button>
-          ))}
-      </div>
-  );
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-10.5rem)] overflow-hidden relative">
@@ -1148,94 +1131,107 @@ export default function POS() {
                           <Hash size={11} /> Ticket Queue {resumedOrder ? resumedOrder.orderNumber : nextOrderNum}
                       </div>
                   </div>
-                  {cart.length > 0 && (
-                      <button onClick={clearCart} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                          <Trash2 size={20} />
+                  <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setIsCartMetadataCollapsed(!isCartMetadataCollapsed)} 
+                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                        title={isCartMetadataCollapsed ? "Show Order Details" : "Hide Order Details"}
+                      >
+                          {isCartMetadataCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                       </button>
-                  )}
-              </div>
-
-              <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">
-                  {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (
-                      <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
-                          {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}
-                      </button>
-                  ))}
-              </div>
-
-              <div className="space-y-3">
-                  <div className="relative group">
-                      <div className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors">
-                          <Search size={18} />
-                      </div>
-                      <input 
-                          type="text" placeholder="Find Customer..." 
-                          className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" 
-                          value={customerSearch} 
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
-                          onFocus={() => setShowCustomerResults(true)} 
-                      />
-                      <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
-                          <UserPlus size={16}/>
-                      </button>
-                      
-                      {showCustomerResults && customerSearch && !selectedCustomer && (
-                          <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
-                              {(filteredCustomers as Customer[]).map((c: Customer) => (
-                                  <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
-                                      <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name ? c.name[0] : '#'}</div>
-                                      <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name || c.phone}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
-                                  </button>
-                              ))}
-                          </div>
+                      {cart.length > 0 && (
+                          <button onClick={clearCart} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                              <Trash2 size={20} />
+                          </button>
                       )}
                   </div>
-
-                  {selectedCustomer && (
-                      <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-1 duration-200">
-                          <div className="flex justify-between items-start">
-                              <div className="space-y-1 overflow-hidden">
-                                  <div className="flex items-center gap-2">
-                                      <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded shadow-sm border border-blue-50 dark:border-blue-900">
-                                          {selectedCustomer.type === 'COMPANY' ? 'Company Account' : 'Individual'}
-                                      </span>
-                                  </div>
-                                  <div className="font-black text-[11px] dark:text-white truncate uppercase flex items-center gap-1.5 mt-1">
-                                      {selectedCustomer.type === 'COMPANY' ? <Building2 size={12} className="text-blue-600"/> : <UserIcon size={12} className="text-blue-600"/>}
-                                      {selectedCustomer.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer.name}
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-bold">
-                                      <Phone size={10} /> {selectedCustomer.phone}
-                                  </div>
-                                  {selectedCustomer.type === 'INDIVIDUAL' && (
-                                      <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
-                                          <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
-                                          <span className="truncate">{formatAddress(selectedCustomer)}</span>
-                                      </div>
-                                  )}
-                              </div>
-                              <button 
-                                  onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch(''); }}
-                                  className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
-                              >
-                                  <X size={14} />
-                              </button>
-                          </div>
-                      </div>
-                  )}
-
-                  {orderType === OrderType.DINE_IN && (
-                      <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1.5 px-4 rounded-2xl shadow-sm">
-                          <div className="text-gray-400">
-                              <Tag size={16}/>
-                          </div>
-                          <select className="flex-1 bg-transparent text-xs font-black uppercase tracking-widest outline-none dark:text-white py-2" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
-                              <option value="">Table Number</option>
-                              {Array.from({length: store?.numberOfTables || 0}, (_: any, i: number) => (i + 1).toString()).map((num: string) => <option key={num} value={num}>Table {num}</option>)}
-                          </select>
-                      </div>
-                  )}
               </div>
+
+              {!isCartMetadataCollapsed && (
+                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex gap-1.5 bg-gray-100/50 dark:bg-gray-800 p-1.5 rounded-2xl border dark:border-gray-700">
+                          {[OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.DELIVERY].map((t: OrderType) => (
+                              <button key={t} onClick={() => setOrderType(t)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${orderType === t ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
+                                  {t === OrderType.DINE_IN ? 'Dine' : t === OrderType.TAKEAWAY ? 'Takeaway' : 'Delivery'}
+                              </button>
+                          ))}
+                      </div>
+
+                      <div className="space-y-3">
+                          <div className="relative group">
+                              <div className="absolute left-3.5 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors">
+                                  <Search size={18} />
+                              </div>
+                              <input 
+                                  type="text" placeholder="Find Customer..." 
+                                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl text-[11px] font-bold dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" 
+                                  value={customerSearch} 
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerResults(true); }} 
+                                  onFocus={() => setShowCustomerResults(true)} 
+                              />
+                              <button onClick={() => { resetNewCustForm(); setIsCustomerModalOpen(true); }} className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all active:scale-95">
+                                  <UserPlus size={16}/>
+                              </button>
+                              
+                              {showCustomerResults && customerSearch && !selectedCustomer && (
+                                  <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl mt-2 z-[60] max-h-48 overflow-y-auto p-1.5">
+                                      {(filteredCustomers as Customer[]).map((c: Customer) => (
+                                          <button key={c.id} onClick={() => handleCustomerSelect(c)} className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl border-b last:border-0 dark:border-gray-700 flex items-center gap-3">
+                                              <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl flex items-center justify-center font-black text-xs">{c.name ? c.name[0] : '#'}</div>
+                                              <div><div className="font-black text-[11px] dark:text-white uppercase leading-none">{c.name || c.phone}</div><div className="text-[9px] text-gray-500 font-mono mt-1">{c.phone}</div></div>
+                                          </button>
+                                      ))}
+                                  </div>
+                              )}
+                          </div>
+
+                          {selectedCustomer && (
+                              <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-1 duration-200">
+                                  <div className="flex justify-between items-start">
+                                      <div className="space-y-1 overflow-hidden">
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded shadow-sm border border-blue-50 dark:border-blue-900">
+                                                  {selectedCustomer.type === 'COMPANY' ? 'Company Account' : 'Individual'}
+                                              </span>
+                                          </div>
+                                          <div className="font-black text-[11px] dark:text-white truncate uppercase flex items-center gap-1.5 mt-1">
+                                              {selectedCustomer.type === 'COMPANY' ? <Building2 size={12} className="text-blue-600"/> : <UserIcon size={12} className="text-blue-600"/>}
+                                              {selectedCustomer.type === 'COMPANY' ? selectedCustomer.companyName : selectedCustomer.name}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-bold">
+                                              <Phone size={10} /> {selectedCustomer.phone}
+                                          </div>
+                                          {selectedCustomer.type === 'INDIVIDUAL' && (
+                                              <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5 leading-tight font-medium">
+                                                  <MapPin size={10} className="mt-0.5 shrink-0 text-blue-400" /> 
+                                                  <span className="truncate">{formatAddress(selectedCustomer)}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                      <button 
+                                          onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch(''); }}
+                                          className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
+                                      >
+                                          <X size={14} />
+                                      </button>
+                                  </div>
+                              </div>
+                          )}
+
+                          {orderType === OrderType.DINE_IN && (
+                              <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-1.5 px-4 rounded-2xl shadow-sm">
+                                  <div className="text-gray-400">
+                                      <Tag size={16}/>
+                                  </div>
+                                  <select className="flex-1 bg-transparent text-xs font-black uppercase tracking-widest outline-none dark:text-white py-2" value={tableNumber} onChange={e => setTableNumber(e.target.value)}>
+                                      <option value="">Table Number</option>
+                                      {Array.from({length: store?.numberOfTables || 0}, (_: any, i: number) => (i + 1).toString()).map((num: string) => <option key={num} value={num}>Table {num}</option>)}
+                                  </select>
+                              </div>
+                          )}
+                      </div>
+                  </div>
+              )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
